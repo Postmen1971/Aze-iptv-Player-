@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -84,13 +85,14 @@ fun SearchOverlay(app: AppController, onClose: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .fillMaxWidth(0.62f)
+                .widthIn(min = 300.dp)
+                .fillMaxWidth(0.36f)
                 .background(Palette.Panel.copy(alpha = 0.97f))
-                .padding(horizontal = 20.dp, vertical = 18.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Sender suchen", color = Palette.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text("Sender suchen", color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 TvButton("Schließen", onClick = onClose)
             }
             OutlinedTextField(
@@ -132,7 +134,7 @@ fun SearchOverlay(app: AppController, onClose: () -> Unit) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .height(40.dp)
                                 .background(if (focused) Palette.Accent else Palette.Panel.copy(alpha = 0f), RoundedCornerShape(10.dp))
                                 .padding(horizontal = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -140,15 +142,15 @@ fun SearchOverlay(app: AppController, onClose: () -> Unit) {
                             Text(
                                 "${nc.number}",
                                 color = if (focused) Palette.OnAccent else if (playing) Palette.Accent else Palette.TextSoft,
-                                fontSize = 20.sp, fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.End, modifier = Modifier.width(56.dp),
+                                fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.End, modifier = Modifier.width(40.dp),
                             )
                             Spacer(Modifier.width(14.dp))
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     nc.channel.name,
                                     color = if (focused) Palette.OnAccent else Palette.Text,
-                                    fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                                    fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(

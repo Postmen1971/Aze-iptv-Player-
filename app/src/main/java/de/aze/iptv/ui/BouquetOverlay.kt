@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -89,18 +90,19 @@ fun BouquetOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .fillMaxWidth(0.62f)
+                .widthIn(min = 300.dp)
+                .fillMaxWidth(0.36f)
                 .background(E2.Panel),
         ) {
             // Titelleiste
             Row(
-                modifier = Modifier.fillMaxWidth().background(E2.Bar).padding(horizontal = 24.dp, vertical = 14.dp),
+                modifier = Modifier.fillMaxWidth().background(E2.Bar).padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         if (showBouquets) "Bouquets (TV)" else (bouquet?.name ?: "") + " (TV)",
-                        color = E2.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold,
+                        color = E2.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     if (!showBouquets && multi && bouquet?.sourceName != null) {
@@ -143,14 +145,14 @@ fun BouquetOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(44.dp)
+                                        .height(34.dp)
                                         .background(if (focused) E2.Select else E2.Panel.copy(alpha = 0f))
-                                        .padding(horizontal = 16.dp),
+                                        .padding(horizontal = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
                                         (if (fav) "★ " else "") + title,
-                                        color = E2.Text, fontSize = 20.sp,
+                                        color = E2.Text, fontSize = 15.sp,
                                         fontWeight = if (focused) FontWeight.Bold else FontWeight.Normal,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                                         modifier = Modifier.weight(1f),
@@ -190,24 +192,24 @@ fun BouquetOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(44.dp)
+                                        .height(34.dp)
                                         .background(if (focused) E2.Select else E2.Panel.copy(alpha = 0f))
-                                        .padding(horizontal = 16.dp),
+                                        .padding(horizontal = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
                                         "${nc.number}",
                                         color = if (playing) E2.Gold else if (focused) E2.Text else E2.Soft,
-                                        fontSize = 20.sp,
+                                        fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.End,
-                                        modifier = Modifier.width(64.dp),
+                                        modifier = Modifier.width(44.dp),
                                     )
-                                    Spacer(Modifier.width(18.dp))
+                                    Spacer(Modifier.width(10.dp))
                                     Text(
                                         nc.channel.name,
                                         color = if (playing && !focused) E2.Gold else E2.Text,
-                                        fontSize = 20.sp,
+                                        fontSize = 15.sp,
                                         fontWeight = if (focused || playing) FontWeight.Bold else FontWeight.Normal,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -223,8 +225,8 @@ fun BouquetOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
 
             // Tastenleiste unten (wie die Farbtasten-Leiste bei Enigma2)
             Row(
-                modifier = Modifier.fillMaxWidth().background(E2.Bar).padding(horizontal = 20.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(22.dp),
+                modifier = Modifier.fillMaxWidth().background(E2.Bar).padding(horizontal = 12.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (showBouquets) {
                     KeyHint("OK", "Bouquet öffnen")
@@ -249,11 +251,11 @@ private fun KeyHint(key: String, label: String) {
         Text(
             key,
             color = E2.Panel,
-            fontSize = 13.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.background(E2.Soft, androidx.compose.foundation.shape.RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 1.dp),
         )
-        Text("  $label", color = E2.Text, fontSize = 14.sp)
+        Text(" $label", color = E2.Text, fontSize = 11.sp)
     }
 }
 
