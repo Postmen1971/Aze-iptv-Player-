@@ -39,12 +39,14 @@ class Store(context: Context) {
     }
 
     fun favorites(): List<String> {
-        val arr = JSONArray(prefs.getString("favorites", "[]"))
+        // Sender-Links enthalten oft Benutzer und Passwort, deshalb verschlüsselt.
+        val raw = Secure.decrypt(prefs.getString("favorites", "[]")) ?: "[]"
+        val arr = runCatching { JSONArray(raw) }.getOrDefault(JSONArray())
         return (0 until arr.length()).map { arr.getString(it) }
     }
 
     fun saveFavorites(keys: List<String>) {
-        prefs.edit().putString("favorites", JSONArray(keys).toString()).apply()
+        prefs.edit().putString("favorites", Secure.encrypt(JSONArray(keys).toString())).apply()
     }
 
     /** 0 = nur manuell, sonst Stunden (24, 48, 72, 336 = zwei Wochen). */
@@ -128,6 +130,6 @@ class Store(context: Context) {
     }
 
     var lastChannelKey: String?
-        get() = prefs.getString("lastChannel", null)
-        set(v) = prefs.edit().putString("lastChannel", v).apply()
+        get() = Secure.decrypt(prefs.getString("lastChannel", null))
+        set(v) = prefs.edit().putString("lastChannel", v?.let { Secure.encrypt(it) }).apply()
 }

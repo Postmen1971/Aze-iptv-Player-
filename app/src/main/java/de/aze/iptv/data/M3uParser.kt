@@ -8,14 +8,17 @@ object M3uParser {
 
     private val attrRegex = Regex("""([A-Za-z0-9_-]+)="([^"]*)"""")
 
-    fun parse(text: String): List<Channel> {
+    fun parse(text: String): List<Channel> = parse(text.lineSequence())
+
+    /** Zeilenweise lesen – so muss auch eine sehr große Liste nie komplett im Speicher liegen. */
+    fun parse(lines: Sequence<String>): List<Channel> {
         val result = ArrayList<Channel>()
         var name: String? = null
         var group = ""
         var logo: String? = null
         var extGroup: String? = null
 
-        text.lineSequence().forEach { rawLine ->
+        lines.forEach { rawLine ->
             val line = rawLine.trim()
             when {
                 line.isEmpty() -> Unit

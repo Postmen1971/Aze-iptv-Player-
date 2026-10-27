@@ -3,6 +3,7 @@ package de.aze.iptv
 import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import de.aze.iptv.data.Channel
 import de.aze.iptv.data.EditGroup
@@ -21,6 +22,9 @@ import de.aze.iptv.data.Store
 import de.aze.iptv.data.YouTube
 import de.aze.iptv.data.YtEntry
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 /** Zentraler Zustand der App: Quellen, Senderliste, Favoriten, aktueller Sender. */
@@ -33,7 +37,8 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         private set
     var favorites by mutableStateOf(store.favorites())
         private set
-    var lineup by mutableStateOf(Lineup.EMPTY)
+    // referentialEqualityPolicy: große Listen nicht bei jeder Zuweisung Element für Element vergleichen
+    var lineup by mutableStateOf(Lineup.EMPTY, referentialEqualityPolicy())
         private set
     var current by mutableStateOf<NumberedChannel?>(null)
         private set
@@ -67,7 +72,7 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     private var layout: ListLayout = store.layout
 
     /** Alle Gruppen inkl. ausgeblendeter, in der eingestellten Reihenfolge. */
-    var editGroups by mutableStateOf<List<EditGroup>>(emptyList())
+    var editGroups by mutableStateOf<List<EditGroup>>(emptyList(), referentialEqualityPolicy())
         private set
 
     val hiddenChannels: Set<String> get() = layout.hiddenChannels
@@ -168,7 +173,7 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         scope.launch {
             loading = true
             channels = repo.loadCached(sources)
-            rebuild(restoreKey = store.lastChannelKey)
+            rebuild(restoreKey = store.lastChannelKey).join()
             loading = false
             if (needsRefresh()) refreshNow()
         }
@@ -194,7 +199,7 @@ class AppController(context: Context, private val scope: CoroutineScope) {
                 lastRefresh = now
                 store.lastRefresh = now
             }
-            rebuild(restoreKey = current?.channel?.key)
+            rebuild(restoreKey = current?.channel?.key).join()
             loading = false
             message = if (errors.isEmpty()) "Senderliste aktualisiert: ${lineup.all.size} Sender" else errors.joinToString("\n")
         }
@@ -240,13 +245,27 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         rebuild(restoreKey = current?.channel?.key)
     }
 
-    private fun rebuild(restoreKey: String?) {
+    private var rebuildJob: Job? = null
+
+    /**
+     * Nummerierung und Gruppen neu berechnen – im Hintergrund, damit die Oberfläche bei
+     * großen Listen (zehntausende Sender) nicht hängt.
+     */
+    private fun rebuild(restoreKey: String?): Job {
         // YouTube-Gruppe kommt direkt nach den Favoriten (in "Senderliste bearbeiten" verschiebbar).
         val all = youtube.map { it.toChannel() } + channels
         val named = sources + PlaylistSource(YouTube.SOURCE, "YouTube", SourceType.M3U, "")
-        lineup = Numbering.build(all, favorites, named, layout)
-        editGroups = Numbering.arrange(all, named, layout)
-        current = restoreKey?.let { lineup.byKey[it] } ?: current?.let { lineup.byKey[it.channel.key] } ?: lineup.all.firstOrNull()
+        val favs = favorites
+        val lay = layout
+        rebuildJob?.cancel()
+        return scope.launch {
+            val (lu, eg) = withContext(Dispatchers.Default) {
+                Numbering.build(all, favs, named, lay) to Numbering.arrange(all, named, lay)
+            }
+            lineup = lu
+            editGroups = eg
+            current = restoreKey?.let { lu.byKey[it] } ?: current?.let { lu.byKey[it.channel.key] } ?: lu.all.firstOrNull()
+        }.also { rebuildJob = it }
     }
 
     /** Der zuletzt geschaute Sender (für OK = zurückspringen). */

@@ -35,7 +35,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
@@ -86,6 +90,12 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
             .setReadTimeoutMs(20_000)
         ExoPlayer.Builder(context)
             .setRenderersFactory(DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+            // Audio-Fokus: bei Anrufen/anderen Apps leiser bzw. Pause, wie es Android erwartet
+            .setAudioAttributes(
+                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
+                true,
+            )
+            .setHandleAudioBecomingNoisy(true)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .setLoadControl(PlaybackConfig.loadControl(context, level))
             .build()
@@ -117,6 +127,18 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
                 tracksVersion++
             }
 
+            override fun onPlaybackStateChanged(state: Int) {
+                // Manche Live-Streams "enden" einfach (Verbindung vom Server getrennt): neu verbinden.
+                if (state == Player.STATE_ENDED && player.currentMediaItem != null) {
+                    retryJob?.cancel()
+                    retryJob = scope.launch {
+                        delay(1_000)
+                        player.seekToDefaultPosition()
+                        player.prepare()
+                    }
+                }
+            }
+
             override fun onPlayerError(error: PlaybackException) {
                 noPicture = true
                 retryJob?.cancel()
@@ -141,19 +163,49 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
         }
     }
 
+    // App im Hintergrund (Home-Taste, Bildschirmschoner): Wiedergabe stoppen, beim Zurückkommen neu laden.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var resumeTick by remember { mutableIntStateOf(0) }
+    var inBackground by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner, player) {
+        var stopped = false
+        val obs = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    stopped = true
+                    inBackground = true
+                    retryJob?.cancel()
+                    player.stop()
+                }
+                Lifecycle.Event.ON_START -> if (stopped) {
+                    stopped = false
+                    inBackground = false
+                    resumeTick++
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(obs)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(obs) }
+    }
+
     val currentKey = app.current?.channel?.key
-    LaunchedEffect(currentKey, player) {
+    LaunchedEffect(currentKey, player, resumeTick) {
         val ch = app.current?.channel ?: return@LaunchedEffect
         retryJob?.cancel()
         retries = 0
         noPicture = true
         ytError = null
+        // Altes Programm sofort anhalten, damit beim schnellen Durchschalten nichts nachläuft.
+        player.stop()
         if (YouTube.isYouTube(ch.url)) {
-            // YouTube läuft im eigenen Player (WebView); den normalen Player anhalten.
-            player.stop()
+            // YouTube läuft im eigenen Player (WebView); den normalen Player leeren.
             player.clearMediaItems()
             return@LaunchedEffect
         }
+        // Kurz warten: wer mehrfach schnell ▲/▼ drückt, lädt nur den Sender, bei dem er stehen bleibt.
+        // (Ein neuer Tastendruck bricht diese Wartezeit ab.)
+        delay(220)
         // Bevorzugte Tonsprache und Untertitel-Wahl gelten für jeden neuen Sender.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .clearOverrides()
@@ -307,6 +359,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
         }
         val ytUrl = app.current?.channel?.url?.takeIf { YouTube.isYouTube(it) }
         if (ytUrl != null) {
+            // Im Hintergrund wird der YouTube-Player entfernt, damit kein Ton weiterläuft.
+            if (!inBackground) 
             key(ytUrl) {
                 YouTubeView(
                     url = ytUrl,

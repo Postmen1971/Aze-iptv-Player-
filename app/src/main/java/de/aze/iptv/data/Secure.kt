@@ -22,8 +22,11 @@ object Secure {
     private const val ALIAS = "aze_iptv_secret"
     private const val PREFIX = "enc1:"
 
+    @Volatile private var cached: SecretKey? = null
+
     private fun key(): SecretKey? {
         if (Build.VERSION.SDK_INT < 23) return null
+        cached?.let { return it }
         return runCatching {
             val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.secretKey ?: run {
@@ -37,7 +40,7 @@ object Secure {
                 )
                 gen.generateKey()
             }
-        }.getOrNull()
+        }.getOrNull().also { cached = it }
     }
 
     fun encrypt(plain: String): String {
