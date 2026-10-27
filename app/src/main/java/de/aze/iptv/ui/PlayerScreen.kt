@@ -202,8 +202,16 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
             .background(Color.Black)
             .focusRequester(focus)
             .onKeyEvent { e ->
-                if (overlay || quickMenu || search) return@onKeyEvent false
                 val code = e.nativeKeyEvent.keyCode
+                // Ziffern in der Senderliste: Liste schließen und direkt wählen (wie bei Enigma2).
+                if (overlay && e.type == KeyEventType.KeyDown &&
+                    (code in AndroidKeyEvent.KEYCODE_0..AndroidKeyEvent.KEYCODE_9 || code in AndroidKeyEvent.KEYCODE_NUMPAD_0..AndroidKeyEvent.KEYCODE_NUMPAD_9)
+                ) {
+                    overlay = false
+                    typeDigit(if (code <= AndroidKeyEvent.KEYCODE_9) code - AndroidKeyEvent.KEYCODE_0 else code - AndroidKeyEvent.KEYCODE_NUMPAD_0)
+                    return@onKeyEvent true
+                }
+                if (overlay || quickMenu || search) return@onKeyEvent false
                 val isOk = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
                     code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
 
@@ -245,8 +253,24 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
                     AndroidKeyEvent.KEYCODE_GUIDE -> {
                         overlay = true; true
                     }
-                    AndroidKeyEvent.KEYCODE_LAST_CHANNEL -> {
+                    AndroidKeyEvent.KEYCODE_LAST_CHANNEL, AndroidKeyEvent.KEYCODE_MEDIA_REWIND -> {
                         app.playPrevious(); true
+                    }
+                    AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD, AndroidKeyEvent.KEYCODE_TV_INPUT -> {
+                        overlay = true; true
+                    }
+                    // Farbtasten (falls vorhanden): Rot Senderliste, Grün Schnellmenü, Gelb Suche, Blau Einstellungen
+                    AndroidKeyEvent.KEYCODE_PROG_RED -> {
+                        overlay = true; true
+                    }
+                    AndroidKeyEvent.KEYCODE_PROG_GREEN -> {
+                        quickMenu = true; true
+                    }
+                    AndroidKeyEvent.KEYCODE_PROG_YELLOW -> {
+                        search = true; true
+                    }
+                    AndroidKeyEvent.KEYCODE_PROG_BLUE -> {
+                        onOpenSettings(); true
                     }
                     AndroidKeyEvent.KEYCODE_MENU, AndroidKeyEvent.KEYCODE_INFO,
                     AndroidKeyEvent.KEYCODE_CAPTIONS -> {

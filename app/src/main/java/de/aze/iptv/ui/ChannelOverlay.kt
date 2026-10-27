@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
@@ -55,7 +56,9 @@ import de.aze.iptv.AppController
  */
 @Composable
 fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -> Unit, onSearch: () -> Unit) {
-    BackHandler(onBack = onClose)
+    // Zurück / Links in der Senderliste: Gruppenübersicht; Zurück in der Übersicht: schließen.
+    var showGroups by remember { mutableStateOf(false) }
+    BackHandler { if (showGroups) onClose() else showGroups = true }
 
     val filter = app.playlistFilter
     val multi = app.sources.size > 1
@@ -100,6 +103,62 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                 })
             }
 
+            if (showGroups) {
+                Text("Gruppen", color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
+                val gState = rememberLazyListState(initialFirstVisibleItemIndex = (groupIndex - 5).coerceAtLeast(0))
+                val gFirst = remember { FocusRequester() }
+                LazyColumn(
+                    state = gState,
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                    modifier = Modifier.onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { onClose(); true } else false
+                    },
+                ) {
+                    itemsIndexed(groups) { i, g ->
+                        Focusable(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(if (i == groupIndex) Modifier.focusRequester(gFirst) else Modifier)
+                                .onPreviewKeyEvent { e ->
+                                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) {
+                                        groupIndex = i; showGroups = false; true
+                                    } else false
+                                },
+                            onClick = {
+                                groupIndex = i
+                                showGroups = false
+                            },
+                        ) { focused ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(34.dp)
+                                    .background(if (focused) Palette.Accent else if (i == groupIndex) Palette.Raised else Palette.PanelDark.copy(alpha = 0f), RoundedCornerShape(7.dp))
+                                    .padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        (if (g.isFavorites) "★ " else "") + g.name,
+                                        color = if (focused) Palette.OnAccent else Palette.Text,
+                                        fontSize = 15.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (multi && filter == null && g.sourceName != null) {
+                                        Text(g.sourceName, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 10.sp, maxLines = 1)
+                                    }
+                                }
+                                Text(g.range, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+                LaunchedEffect(Unit) {
+                    withFrameNanos { }
+                    runCatching { gFirst.requestFocus() }
+                    firstOpen = 0
+                }
+            } else {
             // Gruppenkopf: ◀ Name ▶
             Focusable(
                 modifier = Modifier.fillMaxWidth().focusRequester(headFocus),
@@ -144,10 +203,8 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                 )
                 LaunchedEffect(Unit) {
                     withFrameNanos { }
-                    if (firstOpen == 1) {
-                        runCatching { headFocus.requestFocus() }
-                        firstOpen = 0
-                    }
+                    runCatching { headFocus.requestFocus() }
+                    firstOpen = 0
                 }
             } else {
                 key(groupIndex) {
@@ -160,8 +217,9 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                         modifier = Modifier.onPreviewKeyEvent { e ->
                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (e.key) {
-                                Key.DirectionLeft -> { switchGroup(-1); true }
-                                Key.DirectionRight -> { switchGroup(+1); true }
+                                Key.DirectionLeft -> { showGroups = true; true }
+                                Key.DirectionRight, Key.MediaFastForward -> { switchGroup(+1); true }
+                                Key.MediaRewind -> { switchGroup(-1); true }
                                 else -> false
                             }
                         },
@@ -213,6 +271,7 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                         firstOpen = 0
                     }
                 }
+            }
             }
         }
         // Rest bleibt Bild; Tippen schließt die Liste.
