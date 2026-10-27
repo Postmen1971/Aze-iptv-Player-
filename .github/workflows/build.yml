@@ -44,19 +44,19 @@ jobs:
         run: |
           if [ -z "$KEYSTORE_FILE" ]; then unset KEYSTORE_FILE; fi
           gradle :app:assembleRelease --stacktrace
-          cp app/build/outputs/apk/release/app-release.apk "AzeIPTV-1.0.${GITHUB_RUN_NUMBER}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "Aze-IPTV-Player-1.0.${GITHUB_RUN_NUMBER}.apk"
 
       - name: Test-APK ablegen
         uses: actions/upload-artifact@v4
         with:
-          name: AzeIPTV-1.0.${{ github.run_number }}
-          path: AzeIPTV-*.apk
+          name: Aze-IPTV-Player-1.0.${{ github.run_number }}
+          path: Aze-IPTV-Player-*.apk
 
       - name: Release veröffentlichen
         if: steps.key.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Aze IPTV 1.0.${{ github.run_number }}
+          name: Aze-IPTV-Player 1.0.${{ github.run_number }}
           body: ${{ github.event.head_commit.message }}
-          files: AzeIPTV-*.apk
+          files: Aze-IPTV-Player-*.apk

@@ -1,4 +1,4 @@
-# Aze IPTV Player
+# Aze-IPTV-Player
 
 IPTV-Player für Android (Handy, Tablet, Android TV, Fire TV Stick), ab Android 5.0.
 
@@ -17,7 +17,7 @@ Geplant: Filme & Serien im TiviMate-Stil, YouTube-Live als eigene Gruppe, Eingab
 
 ## Installieren
 
-1. Unter **Releases** die neueste `AzeIPTV-….apk` herunterladen.
+1. Unter **Releases** die neueste `Aze-IPTV-Player-….apk` herunterladen.
 2. Fire TV: App „Downloader“ nutzen und „Apps unbekannter Herkunft“ für Downloader erlauben.
 
 ## Build

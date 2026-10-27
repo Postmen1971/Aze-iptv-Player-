@@ -222,7 +222,7 @@ private fun UpdateSection() {
                         try {
                             val apk = Updater.download(context, rel) { p -> status = "Lade herunter … $p %" }
                             status = if (Updater.install(context, apk)) "Installation gestartet."
-                            else "Bitte erlauben, dass Aze IPTV Apps installieren darf, dann erneut auf Installieren drücken."
+                            else "Bitte erlauben, dass Aze-IPTV-Player Apps installieren darf, dann erneut auf Installieren drücken."
                         } catch (e: Exception) {
                             status = "Download fehlgeschlagen: ${e.message}"
                         }
@@ -240,7 +240,7 @@ private fun UpdateSection() {
 private fun AboutSection() {
     Section("Über") {
         Text(
-            "Aze IPTV ist ein Player und liefert selbst keine Sender oder Inhalte. " +
+            "Aze-IPTV-Player ist ein Player und liefert selbst keine Sender oder Inhalte. " +
                 "Bitte nur Playlists verwenden, für die du die Nutzungsrechte hast.",
             color = Palette.TextSoft, fontSize = 15.sp,
         )
