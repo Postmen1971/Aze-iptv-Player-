@@ -66,6 +66,12 @@ private val intervals = listOf(0 to "Nur manuell", 24 to "24 Std.", 48 to "48 St
 
 @Composable
 fun SettingsScreen(app: AppController, onClose: () -> Unit) {
+    var editingList by remember { mutableStateOf(false) }
+    if (editingList) {
+        ListEditor(app, onClose = { editingList = false })
+        return
+    }
+
     // PIN ändern: 1 = neue PIN eingeben, 2 = wiederholen
     var pinStep by remember { mutableStateOf(0) }
     var newPin by remember { mutableStateOf("") }
@@ -117,7 +123,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             PhoneInputSection(app)
             PlaylistSection(app)
             RefreshSection(app)
-            PlaybackSection(app)
+            PlaybackSection(app, onEditList = { editingList = true })
             FavoritesSection(app)
             NetworkSection(app)
             Section("Sicherheit") {
@@ -294,7 +300,7 @@ private fun PhoneInputSection(app: AppController) {
 }
 
 @Composable
-private fun PlaybackSection(app: AppController) {
+private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
     Section("Senderliste") {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Modern", selected = !app.enigmaStyle, onClick = { app.updateListStyle(false) })
@@ -309,6 +315,7 @@ private fun PlaybackSection(app: AppController) {
             },
             color = Palette.TextMuted, fontSize = 15.sp,
         )
+        TvButton("Senderliste bearbeiten (Gruppen und Sender sortieren, ausblenden)", onClick = onEditList)
     }
     Section("Wiedergabe") {
         Text("Puffer", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -501,7 +508,7 @@ private fun InputRow(
 }
 
 @Composable
-private fun InputDialog(
+internal fun InputDialog(
     label: String,
     initial: String,
     password: Boolean,

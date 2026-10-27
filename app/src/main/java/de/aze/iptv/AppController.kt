@@ -5,7 +5,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import de.aze.iptv.data.Channel
+import de.aze.iptv.data.EditGroup
 import de.aze.iptv.data.Lineup
+import de.aze.iptv.data.ListLayout
 import de.aze.iptv.data.Network
 import de.aze.iptv.data.ProxySettings
 import de.aze.iptv.player.AspectMode
@@ -55,6 +57,69 @@ class AppController(context: Context, private val scope: CoroutineScope) {
 
     init {
         Network.applyProxy(proxy)
+    }
+
+    // ---- Senderliste bearbeiten (wie Bouquet-Bearbeitung bei Enigma2) ----
+
+    private var layout: ListLayout = store.layout
+
+    /** Alle Gruppen inkl. ausgeblendeter, in der eingestellten Reihenfolge. */
+    var editGroups by mutableStateOf<List<EditGroup>>(emptyList())
+        private set
+
+    val hiddenChannels: Set<String> get() = layout.hiddenChannels
+
+    private fun saveLayout(l: ListLayout) {
+        layout = l
+        store.layout = l
+        rebuild(restoreKey = current?.channel?.key)
+    }
+
+    fun moveGroup(key: String, delta: Int) {
+        val keys = editGroups.map { it.key }.toMutableList()
+        val i = keys.indexOf(key)
+        val j = i + delta
+        if (i < 0 || j !in keys.indices) return
+        keys[i] = keys[j].also { keys[j] = keys[i] }
+        saveLayout(layout.copy(groupOrder = keys))
+    }
+
+    fun toggleGroupHidden(key: String) {
+        val h = layout.hiddenGroups
+        saveLayout(layout.copy(hiddenGroups = if (key in h) h - key else h + key))
+    }
+
+    fun renameGroup(key: String, name: String) {
+        val trimmed = name.trim()
+        val original = editGroups.firstOrNull { it.key == key }?.originalName
+        val names = if (trimmed.isEmpty() || trimmed == original) layout.groupNames - key else layout.groupNames + (key to trimmed)
+        saveLayout(layout.copy(groupNames = names))
+    }
+
+    fun moveChannel(groupKey: String, channelKey: String, delta: Int) {
+        val group = editGroups.firstOrNull { it.key == groupKey } ?: return
+        val keys = group.channels.map { it.key }.toMutableList()
+        val i = keys.indexOf(channelKey)
+        val j = i + delta
+        if (i < 0 || j !in keys.indices) return
+        keys[i] = keys[j].also { keys[j] = keys[i] }
+        saveLayout(layout.copy(channelOrder = layout.channelOrder + (groupKey to keys)))
+    }
+
+    fun toggleChannelHidden(channelKey: String) {
+        val h = layout.hiddenChannels
+        saveLayout(layout.copy(hiddenChannels = if (channelKey in h) h - channelKey else h + channelKey))
+    }
+
+    /** Eigene Anordnung einer Gruppe verwerfen. */
+    fun resetGroup(groupKey: String) {
+        saveLayout(
+            layout.copy(
+                channelOrder = layout.channelOrder - groupKey,
+                hiddenChannels = layout.hiddenChannels - editGroups.firstOrNull { it.key == groupKey }?.channels?.map { it.key }.orEmpty().toSet(),
+                groupNames = layout.groupNames - groupKey,
+            )
+        )
     }
 
     /** Senderliste im Enigma2-Stil (Bouquets) statt der modernen Ansicht. */
@@ -133,7 +198,8 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     }
 
     private fun rebuild(restoreKey: String?) {
-        lineup = Numbering.build(channels, favorites, sources)
+        lineup = Numbering.build(channels, favorites, sources, layout)
+        editGroups = Numbering.arrange(channels, sources, layout)
         current = restoreKey?.let { lineup.byKey[it] } ?: current?.let { lineup.byKey[it.channel.key] } ?: lineup.all.firstOrNull()
     }
 

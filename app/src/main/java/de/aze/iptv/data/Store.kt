@@ -60,6 +60,11 @@ class Store(context: Context) {
         get() = prefs.getString("buffer", null)
         set(v) = prefs.edit().putString("buffer", v).apply()
 
+    /** Eigene Anordnung/Ausblendungen. Verschlüsselt, weil Sender-Links Zugangsdaten enthalten können. */
+    var layout: ListLayout
+        get() = ListLayout.fromJson(Secure.decrypt(prefs.getString("layout", null)))
+        set(v) = prefs.edit().putString("layout", Secure.encrypt(v.toJson())).apply()
+
     /** "MODERN" oder "ENIGMA" */
     var listStyle: String?
         get() = prefs.getString("listStyle", null)
