@@ -1,0 +1,336 @@
+package de.aze.iptv.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import de.aze.iptv.AppController
+import de.aze.iptv.BuildConfig
+import de.aze.iptv.data.PlaylistSource
+import de.aze.iptv.data.SourceType
+import de.aze.iptv.update.Release
+import de.aze.iptv.update.Updater
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+
+private val intervals = listOf(0 to "Nur manuell", 24 to "24 Std.", 48 to "48 Std.", 72 to "72 Std.", 336 to "2 Wochen")
+
+@Composable
+fun SettingsScreen(app: AppController, onClose: () -> Unit) {
+    BackHandler(onBack = onClose)
+    val scroll = rememberScrollState()
+    val firstFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+
+    Box(modifier = Modifier.fillMaxSize().background(Palette.Ground), contentAlignment = Alignment.TopCenter) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 920.dp)
+                .fillMaxWidth()
+                .verticalScroll(scroll)
+                .padding(horizontal = 24.dp, vertical = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Einstellungen", color = Palette.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                TvButton("Zurück zum Fernsehen", modifier = Modifier.focusRequester(firstFocus), onClick = onClose)
+            }
+
+            app.message?.let {
+                Text(it, color = Palette.TextSoft, fontSize = 16.sp)
+            }
+
+            PlaylistSection(app)
+            RefreshSection(app)
+            FavoritesSection(app)
+            UpdateSection()
+            AboutSection()
+        }
+    }
+}
+
+@Composable
+private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Palette.Panel, RoundedCornerShape(16.dp))
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(title, color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        content()
+    }
+}
+
+@Composable
+private fun PlaylistSection(app: AppController) {
+    Section("Playlists") {
+        if (app.sources.isEmpty()) {
+            Text("Noch keine Playlist. Füge unten einen M3U-Link oder Server + Login hinzu.", color = Palette.TextMuted, fontSize = 16.sp)
+        }
+        app.sources.forEach { src ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(src.name, color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (src.type == SourceType.M3U) "M3U-Link" else "Server + Login", color = Palette.TextMuted, fontSize = 14.sp)
+                }
+                TvButton("Löschen", danger = true, onClick = { app.removeSource(src) })
+            }
+        }
+
+        var mode by remember { mutableStateOf(SourceType.M3U) }
+        var name by remember { mutableStateOf("") }
+        var url by remember { mutableStateOf("") }
+        var user by remember { mutableStateOf("") }
+        var pass by remember { mutableStateOf("") }
+
+        Text("Playlist hinzufügen", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("M3U-Link", selected = mode == SourceType.M3U, onClick = { mode = SourceType.M3U })
+            TvButton("Server + Login", selected = mode == SourceType.XTREAM, onClick = { mode = SourceType.XTREAM })
+        }
+        InputRow("Name", name, placeholder = "z. B. Mein Anbieter") { name = it }
+        if (mode == SourceType.M3U) {
+            InputRow("M3U-Link (komplett)", url, placeholder = "http://…", keyboard = KeyboardType.Uri) { url = it }
+        } else {
+            InputRow("Server-Adresse", url, placeholder = "http://server:port", keyboard = KeyboardType.Uri) { url = it }
+            InputRow("Benutzer", user) { user = it }
+            InputRow("Passwort", pass, password = true) { pass = it }
+        }
+        val valid = url.isNotBlank() && (mode == SourceType.M3U || (user.isNotBlank() && pass.isNotBlank()))
+        TvButton(if (valid) "Speichern und laden" else "Speichern und laden (Angaben fehlen)", onClick = {
+            if (!valid) return@TvButton
+            app.addSource(
+                PlaylistSource(
+                    id = UUID.randomUUID().toString(),
+                    name = name.ifBlank { if (mode == SourceType.M3U) "Playlist" else "Anbieter" },
+                    type = mode,
+                    url = url.trim(),
+                    user = user.trim(),
+                    pass = pass,
+                )
+            )
+            name = ""; url = ""; user = ""; pass = ""
+        })
+    }
+}
+
+@Composable
+private fun RefreshSection(app: AppController) {
+    Section("Senderliste aktualisieren") {
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            intervals.forEach { (hours, label) ->
+                TvButton(label, selected = app.refreshHours == hours, onClick = { app.updateRefreshHours(hours) })
+            }
+        }
+        val last = if (app.lastRefresh > 0) SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY).format(Date(app.lastRefresh)) else "noch nie"
+        Text("Zuletzt aktualisiert: $last", color = Palette.TextMuted, fontSize = 15.sp)
+        TvButton(if (app.loading) "Wird aktualisiert …" else "Jetzt aktualisieren", onClick = { app.refreshNow() })
+    }
+}
+
+@Composable
+private fun FavoritesSection(app: AppController) {
+    Section("Favoriten (Nummer 1, 2, 3 …)") {
+        val favs = app.lineup.groups.firstOrNull { it.isFavorites }?.channels.orEmpty()
+        if (favs.isEmpty()) {
+            Text("In der Senderliste OK lang drücken (Touch: lange tippen), um einen Favoriten hinzuzufügen.", color = Palette.TextMuted, fontSize = 16.sp)
+        }
+        favs.forEach { nc ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("${nc.number}", color = Palette.Accent, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.widthIn(min = 40.dp))
+                Text(nc.channel.name, color = Palette.Text, fontSize = 18.sp, modifier = Modifier.weight(1f))
+                TvButton("▲", onClick = { app.moveFavorite(nc.channel, -1) })
+                TvButton("▼", onClick = { app.moveFavorite(nc.channel, +1) })
+                TvButton("Entfernen", danger = true, onClick = { app.toggleFavorite(nc.channel) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateSection() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<String?>(null) }
+    var release by remember { mutableStateOf<Release?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    Section("App-Update") {
+        Text("Installiert: Version ${BuildConfig.VERSION_NAME}", color = Palette.TextSoft, fontSize = 16.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Nach Update suchen", onClick = {
+                if (busy) return@TvButton
+                busy = true
+                status = "Suche …"
+                scope.launch {
+                    try {
+                        release = Updater.check()
+                        status = release?.let { "Neue Version ${it.versionName} verfügbar." } ?: "Die App ist aktuell."
+                    } catch (e: Exception) {
+                        status = "Update-Prüfung fehlgeschlagen: ${e.message}"
+                    }
+                    busy = false
+                }
+            })
+            release?.let { rel ->
+                TvButton("Version ${rel.versionName} installieren", onClick = {
+                    if (busy) return@TvButton
+                    busy = true
+                    scope.launch {
+                        try {
+                            val apk = Updater.download(context, rel) { p -> status = "Lade herunter … $p %" }
+                            status = if (Updater.install(context, apk)) "Installation gestartet."
+                            else "Bitte erlauben, dass Aze IPTV Apps installieren darf, dann erneut auf Installieren drücken."
+                        } catch (e: Exception) {
+                            status = "Download fehlgeschlagen: ${e.message}"
+                        }
+                        busy = false
+                    }
+                })
+            }
+        }
+        status?.let { Text(it, color = Palette.TextMuted, fontSize = 15.sp) }
+        release?.notes?.takeIf { it.isNotBlank() }?.let { Text("Neu: $it", color = Palette.TextMuted, fontSize = 15.sp) }
+    }
+}
+
+@Composable
+private fun AboutSection() {
+    Section("Über") {
+        Text(
+            "Aze IPTV ist ein Player und liefert selbst keine Sender oder Inhalte. " +
+                "Bitte nur Playlists verwenden, für die du die Nutzungsrechte hast.",
+            color = Palette.TextSoft, fontSize = 15.sp,
+        )
+        Text(
+            "Verwendete Open-Source-Bausteine: AndroidX Media3 (Wiedergabe), Jetpack Compose (Oberfläche), " +
+                "AndroidX Core/Activity/Lifecycle und Kotlin Coroutines – jeweils unter der Apache License 2.0 " +
+                "(apache.org/licenses/LICENSE-2.0).",
+            color = Palette.TextMuted, fontSize = 14.sp,
+        )
+    }
+}
+
+/** Eingabezeile, die per OK ein Eingabefenster öffnet – so springt die Tastatur auf dem TV nicht ungewollt auf. */
+@Composable
+private fun InputRow(
+    label: String,
+    value: String,
+    placeholder: String = "",
+    password: Boolean = false,
+    keyboard: KeyboardType = KeyboardType.Text,
+    onChange: (String) -> Unit,
+) {
+    var editing by remember { mutableStateOf(false) }
+    Focusable(modifier = Modifier.fillMaxWidth(), onClick = { editing = true }) { focused ->
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .background(if (focused) Palette.Accent else Palette.Raised, RoundedCornerShape(10.dp))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            Text(label, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 13.sp)
+            val shown = when {
+                value.isEmpty() -> placeholder.ifEmpty { "–" }
+                password -> "•".repeat(value.length.coerceAtMost(12))
+                else -> value
+            }
+            Text(shown, color = if (focused) Palette.OnAccent else if (value.isEmpty()) Palette.TextMuted else Palette.Text, fontSize = 17.sp, maxLines = 1)
+        }
+    }
+    if (editing) {
+        InputDialog(label, value, password, keyboard, onDone = {
+            onChange(it)
+            editing = false
+        }, onCancel = { editing = false })
+    }
+}
+
+@Composable
+private fun InputDialog(
+    label: String,
+    initial: String,
+    password: Boolean,
+    keyboard: KeyboardType,
+    onDone: (String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    var text by remember { mutableStateOf(initial) }
+    val focus = remember { FocusRequester() }
+    Dialog(onDismissRequest = onCancel) {
+        Column(
+            modifier = Modifier
+                .widthIn(max = 640.dp)
+                .fillMaxWidth()
+                .background(Palette.Panel, RoundedCornerShape(16.dp))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(label, color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                singleLine = true,
+                visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboard, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onDone(text) }),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Palette.Text,
+                    unfocusedTextColor = Palette.Text,
+                    focusedBorderColor = Palette.Accent,
+                    unfocusedBorderColor = Palette.Line,
+                    cursorColor = Palette.Accent,
+                ),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton("Übernehmen", onClick = { onDone(text) })
+                TvButton("Abbrechen", onClick = onCancel)
+            }
+        }
+    }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+}
