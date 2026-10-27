@@ -95,6 +95,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
     var notFound by remember { mutableStateOf<String?>(null) }
     var overlay by remember { mutableStateOf(false) }
     var quickMenu by remember { mutableStateOf(false) }
+    var search by remember { mutableStateOf(false) }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
@@ -181,8 +182,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
         }
     }
 
-    LaunchedEffect(overlay, quickMenu) {
-        if (!overlay && !quickMenu) runCatching { focus.requestFocus() }
+    LaunchedEffect(overlay, quickMenu, search) {
+        if (!overlay && !quickMenu && !search) runCatching { focus.requestFocus() }
     }
 
     Box(
@@ -191,7 +192,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
             .background(Color.Black)
             .focusRequester(focus)
             .onKeyEvent { e ->
-                if (overlay || quickMenu) return@onKeyEvent false
+                if (overlay || quickMenu || search) return@onKeyEvent false
                 val code = e.nativeKeyEvent.keyCode
                 val isOk = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
                     code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
@@ -240,6 +241,9 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
                     AndroidKeyEvent.KEYCODE_MENU, AndroidKeyEvent.KEYCODE_INFO,
                     AndroidKeyEvent.KEYCODE_CAPTIONS -> {
                         quickMenu = true; true
+                    }
+                    AndroidKeyEvent.KEYCODE_SEARCH -> {
+                        search = true; true
                     }
                     AndroidKeyEvent.KEYCODE_SETTINGS -> {
                         onOpenSettings(); true
@@ -297,7 +301,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
         val corner: (@Composable () -> Unit)? = when {
             digits.isNotEmpty() -> { { Text(digits, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             notFound != null -> { { Text(notFound ?: "", color = Palette.Live, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
-            noPicture && cur != null && !overlay -> {
+            noPicture && cur != null && !overlay && !search -> {
                 {
                     Row {
                         Text("${cur.number}", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -322,11 +326,19 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
                 overlay = false
                 onOpenSettings()
             }
-            if (app.enigmaStyle) {
-                BouquetOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings)
-            } else {
-                ChannelOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings)
+            val openSearch = {
+                overlay = false
+                search = true
             }
+            if (app.enigmaStyle) {
+                BouquetOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch)
+            } else {
+                ChannelOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch)
+            }
+        }
+
+        if (search) {
+            SearchOverlay(app = app, onClose = { search = false })
         }
 
         if (quickMenu) {

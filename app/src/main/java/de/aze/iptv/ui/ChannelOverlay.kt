@@ -48,7 +48,7 @@ import de.aze.iptv.AppController
  * OK = abspielen, OK lang = Favorit an/aus.
  */
 @Composable
-fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -> Unit) {
+fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -> Unit, onSearch: () -> Unit) {
     BackHandler(onBack = onClose)
 
     val lineup = app.lineup
@@ -88,6 +88,8 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text("GRUPPEN", color = Palette.TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                TvButton("Suchen", onClick = onSearch)
+                Spacer(Modifier.width(6.dp))
                 TvButton("Einstellungen", onClick = onOpenSettings)
             }
             if (multi) {
