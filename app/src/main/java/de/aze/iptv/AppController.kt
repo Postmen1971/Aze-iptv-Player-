@@ -6,6 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import de.aze.iptv.data.Channel
 import de.aze.iptv.data.Lineup
+import de.aze.iptv.data.Network
+import de.aze.iptv.data.ProxySettings
+import de.aze.iptv.player.AspectMode
+import de.aze.iptv.player.BufferLevel
 import de.aze.iptv.data.NumberedChannel
 import de.aze.iptv.data.Numbering
 import de.aze.iptv.data.PlaylistSource
@@ -36,7 +40,48 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     var lastRefresh by mutableStateOf(store.lastRefresh)
         private set
 
+    var bufferLevel by mutableStateOf(BufferLevel.of(store.bufferLevel))
+        private set
+    var aspectMode by mutableStateOf(AspectMode.of(store.aspectMode))
+        private set
+    var audioLanguage by mutableStateOf(store.audioLanguage)
+        private set
+    var subtitlesOn by mutableStateOf(store.subtitlesOn)
+        private set
+    var proxy by mutableStateOf(store.proxy)
+        private set
+
     private var channels: List<Channel> = emptyList()
+
+    init {
+        Network.applyProxy(proxy)
+    }
+
+    fun updateBuffer(level: BufferLevel) {
+        bufferLevel = level
+        store.bufferLevel = level.name
+    }
+
+    fun updateAspect(mode: AspectMode) {
+        aspectMode = mode
+        store.aspectMode = mode.name
+    }
+
+    fun updateAudioLanguage(lang: String?) {
+        audioLanguage = lang
+        store.audioLanguage = lang
+    }
+
+    fun updateSubtitles(on: Boolean) {
+        subtitlesOn = on
+        store.subtitlesOn = on
+    }
+
+    fun updateProxy(settings: ProxySettings) {
+        proxy = settings
+        store.proxy = settings
+        Network.applyProxy(settings)
+    }
 
     fun start() {
         scope.launch {

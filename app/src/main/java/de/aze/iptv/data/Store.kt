@@ -54,6 +54,36 @@ class Store(context: Context) {
         get() = prefs.getLong("lastRefresh", 0L)
         set(v) = prefs.edit().putLong("lastRefresh", v).apply()
 
+    var bufferLevel: String?
+        get() = prefs.getString("buffer", null)
+        set(v) = prefs.edit().putString("buffer", v).apply()
+
+    var aspectMode: String?
+        get() = prefs.getString("aspect", null)
+        set(v) = prefs.edit().putString("aspect", v).apply()
+
+    /** Bevorzugte Tonspur-Sprache, z. B. "tr" oder "de". */
+    var audioLanguage: String?
+        get() = prefs.getString("audioLang", null)
+        set(v) = prefs.edit().putString("audioLang", v).apply()
+
+    var subtitlesOn: Boolean
+        get() = prefs.getBoolean("subtitles", false)
+        set(v) = prefs.edit().putBoolean("subtitles", v).apply()
+
+    var proxy: ProxySettings
+        get() = ProxySettings(
+            type = runCatching { ProxyType.valueOf(prefs.getString("proxyType", "OFF")!!) }.getOrDefault(ProxyType.OFF),
+            host = prefs.getString("proxyHost", "")!!,
+            port = prefs.getInt("proxyPort", 0),
+            user = prefs.getString("proxyUser", "")!!,
+            pass = prefs.getString("proxyPass", "")!!,
+        )
+        set(v) = prefs.edit()
+            .putString("proxyType", v.type.name).putString("proxyHost", v.host).putInt("proxyPort", v.port)
+            .putString("proxyUser", v.user).putString("proxyPass", v.pass)
+            .apply()
+
     var lastChannelKey: String?
         get() = prefs.getString("lastChannel", null)
         set(v) = prefs.edit().putString("lastChannel", v).apply()
