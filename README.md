@@ -21,6 +21,14 @@ IPTV-Player für Android (Handy, Tablet, Android TV, Fire TV Stick), ab Android 
 - Schnellmenü im Bild (durchsichtige Leiste unten): Bildformat, Tonspur, Untertitel, Puffer
 - Proxy (HTTP/SOCKS5) nur für die App, Anzeige ob ein VPN aktiv ist
 
+### Version 3 – Sicherheit
+
+- Einstellungen mit **PIN** geschützt (Standard `0000`, änderbar; gespeichert nur als Prüfsumme)
+- Playlists und Proxy-Passwort **verschlüsselt** im Android-Schlüsselspeicher (ab Android 6)
+- Links werden nur **gekürzt** angezeigt (`http://server:port/…`)
+- **Keine Backups** in die Cloud oder auf andere Geräte
+- **Playlist vom Handy eingeben:** In den Einstellungen starten, am Handy die angezeigte Adresse öffnen und den Code vom Fernseher eingeben. Nur im Heimnetz, höchstens 5 Minuten, schließt sich nach der Eingabe.
+
 ### Bedienung
 
 | Taste | Funktion |

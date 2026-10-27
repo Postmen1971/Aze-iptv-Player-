@@ -57,6 +57,10 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         Network.applyProxy(proxy)
     }
 
+    fun checkPin(pin: String): Boolean = store.checkPin(pin)
+    fun changePin(pin: String) = store.setPin(pin)
+    val pinIsDefault: Boolean get() = store.pinIsDefault
+
     fun updateBuffer(level: BufferLevel) {
         bufferLevel = level
         store.bufferLevel = level.name

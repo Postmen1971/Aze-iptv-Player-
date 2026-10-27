@@ -15,8 +15,11 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import de.aze.iptv.ui.Palette
+import de.aze.iptv.ui.PinScreen
 import de.aze.iptv.ui.PlayerScreen
 import de.aze.iptv.ui.SettingsScreen
+
+private enum class Screen { PLAYER, PIN, SETTINGS }
 
 class MainActivity : ComponentActivity() {
 
@@ -40,13 +43,23 @@ class MainActivity : ComponentActivity() {
                     onSurface = Palette.Text,
                 ),
             ) {
-                var settings by remember { mutableStateOf(app.sources.isEmpty()) }
-                if (settings) {
-                    SettingsScreen(app, onClose = {
-                        if (app.sources.isEmpty()) finish() else settings = false
+                // Einstellungen sind mit PIN geschützt (Standard 0000).
+                var screen by remember { mutableStateOf(if (app.sources.isEmpty()) Screen.PIN else Screen.PLAYER) }
+                when (screen) {
+                    Screen.PLAYER -> PlayerScreen(app, onOpenSettings = { screen = Screen.PIN })
+                    Screen.PIN -> PinScreen(
+                        title = "PIN für die Einstellungen",
+                        hint = if (app.pinIsDefault) "Standard-PIN: 0000 – bitte in den Einstellungen ändern" else null,
+                        onEntered = { pin ->
+                            val ok = app.checkPin(pin)
+                            if (ok) screen = Screen.SETTINGS
+                            ok
+                        },
+                        onCancel = { if (app.sources.isEmpty()) finish() else screen = Screen.PLAYER },
+                    )
+                    Screen.SETTINGS -> SettingsScreen(app, onClose = {
+                        if (app.sources.isEmpty()) finish() else screen = Screen.PLAYER
                     })
-                } else {
-                    PlayerScreen(app, onOpenSettings = { settings = true })
                 }
             }
         }

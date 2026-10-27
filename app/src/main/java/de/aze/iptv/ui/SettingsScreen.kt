@@ -47,6 +47,9 @@ import de.aze.iptv.data.Network
 import de.aze.iptv.data.PlaylistSource
 import de.aze.iptv.data.ProxySettings
 import de.aze.iptv.data.ProxyType
+import de.aze.iptv.data.PhoneInputServer
+import de.aze.iptv.data.Secure
+import androidx.compose.runtime.DisposableEffect
 import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.BufferLevel
 import kotlinx.coroutines.delay
@@ -63,6 +66,31 @@ private val intervals = listOf(0 to "Nur manuell", 24 to "24 Std.", 48 to "48 St
 
 @Composable
 fun SettingsScreen(app: AppController, onClose: () -> Unit) {
+    // PIN ändern: 1 = neue PIN eingeben, 2 = wiederholen
+    var pinStep by remember { mutableStateOf(0) }
+    var newPin by remember { mutableStateOf("") }
+    if (pinStep > 0) {
+        PinScreen(
+            title = if (pinStep == 1) "Neue PIN eingeben" else "Neue PIN wiederholen",
+            onEntered = { pin ->
+                if (pinStep == 1) {
+                    newPin = pin
+                    pinStep = 2
+                    true
+                } else if (pin == newPin) {
+                    app.changePin(pin)
+                    app.message = "PIN geändert."
+                    pinStep = 0
+                    true
+                } else {
+                    false
+                }
+            },
+            onCancel = { pinStep = 0 },
+        )
+        return
+    }
+
     BackHandler(onBack = onClose)
     val scroll = rememberScrollState()
     val firstFocus = remember { FocusRequester() }
@@ -86,11 +114,26 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 Text(it, color = Palette.TextSoft, fontSize = 16.sp)
             }
 
+            PhoneInputSection(app)
             PlaylistSection(app)
             RefreshSection(app)
             PlaybackSection(app)
             FavoritesSection(app)
             NetworkSection(app)
+            Section("Sicherheit") {
+                Text(
+                    if (app.pinIsDefault) "Die PIN ist noch 0000. Bitte eine eigene PIN festlegen."
+                    else "Die Einstellungen sind mit deiner PIN geschützt.",
+                    color = if (app.pinIsDefault) Palette.Accent else Palette.TextSoft,
+                    fontSize = 16.sp,
+                )
+                Text(
+                    "Zugangsdaten werden verschlüsselt gespeichert, Links nur gekürzt angezeigt, " +
+                        "und die App macht keine Sicherungen in die Cloud oder auf andere Geräte.",
+                    color = Palette.TextMuted, fontSize = 15.sp,
+                )
+                TvButton("PIN ändern", onClick = { pinStep = 1 })
+            }
             UpdateSection()
             AboutSection()
         }
@@ -129,7 +172,11 @@ private fun PlaylistSection(app: AppController) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(src.name, color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    Text(if (src.type == SourceType.M3U) "M3U-Link" else "Server + Login", color = Palette.TextMuted, fontSize = 14.sp)
+                    Text(
+                        (if (src.type == SourceType.M3U) "M3U-Link · " else "Server + Login · ") + Secure.shortUrl(src.url),
+                        color = Palette.TextMuted,
+                        fontSize = 14.sp,
+                    )
                 }
                 if (app.sources.size > 1) {
                     if (i > 0) TvButton("▲", onClick = { app.moveSource(src, -1) })
@@ -194,6 +241,55 @@ private fun RefreshSection(app: AppController) {
         val last = if (app.lastRefresh > 0) SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY).format(Date(app.lastRefresh)) else "noch nie"
         Text("Zuletzt aktualisiert: $last", color = Palette.TextMuted, fontSize = 15.sp)
         TvButton(if (app.loading) "Wird aktualisiert …" else "Jetzt aktualisieren", onClick = { app.refreshNow() })
+    }
+}
+
+@Composable
+private fun PhoneInputSection(app: AppController) {
+    var server by remember { mutableStateOf<PhoneInputServer?>(null) }
+    var address by remember { mutableStateOf<String?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose { server?.stop() }
+    }
+
+    Section("Playlist vom Handy eingeben") {
+        val s = server
+        if (s == null) {
+            Text(
+                "Handy und Fernseher müssen im selben WLAN sein. Die Eingabe ist nur 5 Minuten offen und braucht einen Code.",
+                color = Palette.TextMuted, fontSize = 15.sp,
+            )
+            TvButton("Handy-Eingabe starten", onClick = {
+                val ip = PhoneInputServer.localAddress()
+                if (ip == null) {
+                    app.message = "Keine WLAN-/LAN-Adresse gefunden. Ist das Gerät mit dem Heimnetz verbunden?"
+                    return@TvButton
+                }
+                val srv = PhoneInputServer(
+                    onSource = { src ->
+                        app.addSource(src)
+                        app.message = "Playlist „${src.name}“ vom Handy übernommen."
+                    },
+                    onStopped = { server = null },
+                )
+                if (srv.start()) {
+                    address = "http://$ip:${srv.port}"
+                    server = srv
+                } else {
+                    app.message = "Handy-Eingabe konnte nicht gestartet werden."
+                }
+            })
+        } else {
+            Text("Am Handy im Browser öffnen:", color = Palette.TextSoft, fontSize = 16.sp)
+            Text(address ?: "", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Code:", color = Palette.TextSoft, fontSize = 18.sp)
+                Text(s.code, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            }
+            Text("Schließt sich nach der Eingabe oder nach 5 Minuten von selbst.", color = Palette.TextMuted, fontSize = 15.sp)
+            TvButton("Beenden", onClick = { s.stop() })
+        }
     }
 }
 
@@ -375,6 +471,7 @@ private fun InputRow(
             val shown = when {
                 value.isEmpty() -> placeholder.ifEmpty { "–" }
                 password -> "•".repeat(value.length.coerceAtMost(12))
+                keyboard == KeyboardType.Uri -> Secure.shortUrl(value)
                 else -> value
             }
             Text(shown, color = if (focused) Palette.OnAccent else if (value.isEmpty()) Palette.TextMuted else Palette.Text, fontSize = 17.sp, maxLines = 1)

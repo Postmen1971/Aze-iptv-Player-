@@ -10,7 +10,9 @@ class Store(context: Context) {
     private val prefs = context.getSharedPreferences("aze", Context.MODE_PRIVATE)
 
     fun sources(): List<PlaylistSource> {
-        val arr = JSONArray(prefs.getString("sources", "[]"))
+        // Gespeichert verschlüsselt (Links enthalten oft Benutzer und Passwort).
+        val raw = Secure.decrypt(prefs.getString("sources", "[]")) ?: "[]"
+        val arr = runCatching { JSONArray(raw) }.getOrDefault(JSONArray())
         return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
             PlaylistSource(
@@ -33,7 +35,7 @@ class Store(context: Context) {
                     .put("url", it.url).put("user", it.user).put("pass", it.pass)
             )
         }
-        prefs.edit().putString("sources", arr.toString()).apply()
+        prefs.edit().putString("sources", Secure.encrypt(arr.toString())).apply()
     }
 
     fun favorites(): List<String> {
@@ -77,12 +79,29 @@ class Store(context: Context) {
             host = prefs.getString("proxyHost", "")!!,
             port = prefs.getInt("proxyPort", 0),
             user = prefs.getString("proxyUser", "")!!,
-            pass = prefs.getString("proxyPass", "")!!,
+            pass = Secure.decrypt(prefs.getString("proxyPass", "")) ?: "",
         )
         set(v) = prefs.edit()
             .putString("proxyType", v.type.name).putString("proxyHost", v.host).putInt("proxyPort", v.port)
-            .putString("proxyUser", v.user).putString("proxyPass", v.pass)
+            .putString("proxyUser", v.user).putString("proxyPass", if (v.pass.isEmpty()) "" else Secure.encrypt(v.pass))
             .apply()
+
+    /** PIN für die Einstellungen. Standard: 0000. Gespeichert wird nur eine Prüfsumme. */
+    fun checkPin(pin: String): Boolean {
+        val salt = prefs.getString("pinSalt", null) ?: return pin == DEFAULT_PIN
+        return Secure.hashPin(pin, salt) == prefs.getString("pinHash", null)
+    }
+
+    fun setPin(pin: String) {
+        val salt = Secure.newSalt()
+        prefs.edit().putString("pinSalt", salt).putString("pinHash", Secure.hashPin(pin, salt)).apply()
+    }
+
+    val pinIsDefault: Boolean get() = prefs.getString("pinSalt", null) == null || checkPin(DEFAULT_PIN)
+
+    companion object {
+        const val DEFAULT_PIN = "0000"
+    }
 
     var lastChannelKey: String?
         get() = prefs.getString("lastChannel", null)
