@@ -318,14 +318,15 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
         }
 
         if (overlay) {
-            ChannelOverlay(
-                app = app,
-                onClose = { overlay = false },
-                onOpenSettings = {
-                    overlay = false
-                    onOpenSettings()
-                },
-            )
+            val openSettings = {
+                overlay = false
+                onOpenSettings()
+            }
+            if (app.enigmaStyle) {
+                BouquetOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings)
+            } else {
+                ChannelOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings)
+            }
         }
 
         if (quickMenu) {

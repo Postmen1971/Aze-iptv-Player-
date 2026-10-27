@@ -60,6 +60,11 @@ class Store(context: Context) {
         get() = prefs.getString("buffer", null)
         set(v) = prefs.edit().putString("buffer", v).apply()
 
+    /** "MODERN" oder "ENIGMA" */
+    var listStyle: String?
+        get() = prefs.getString("listStyle", null)
+        set(v) = prefs.edit().putString("listStyle", v).apply()
+
     var aspectMode: String?
         get() = prefs.getString("aspect", null)
         set(v) = prefs.edit().putString("aspect", v).apply()

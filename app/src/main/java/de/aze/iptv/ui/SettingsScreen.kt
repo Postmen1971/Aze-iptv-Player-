@@ -295,6 +295,21 @@ private fun PhoneInputSection(app: AppController) {
 
 @Composable
 private fun PlaybackSection(app: AppController) {
+    Section("Senderliste") {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Modern", selected = !app.enigmaStyle, onClick = { app.updateListStyle(false) })
+            TvButton("Enigma2 (Bouquets)", selected = app.enigmaStyle, onClick = { app.updateListStyle(true) })
+        }
+        Text(
+            if (app.enigmaStyle) {
+                "Wie bei Enigma2-Receivern: Liste des aktuellen Bouquets, Links/Rechts blättert seitenweise, " +
+                    "Zurück zeigt alle Bouquets."
+            } else {
+                "Gruppen links, Sender in der Mitte, rechts läuft das Programm weiter."
+            },
+            color = Palette.TextMuted, fontSize = 15.sp,
+        )
+    }
     Section("Wiedergabe") {
         Text("Puffer", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

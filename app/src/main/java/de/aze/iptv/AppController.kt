@@ -57,6 +57,15 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         Network.applyProxy(proxy)
     }
 
+    /** Senderliste im Enigma2-Stil (Bouquets) statt der modernen Ansicht. */
+    var enigmaStyle by mutableStateOf(store.listStyle == "ENIGMA")
+        private set
+
+    fun updateListStyle(enigma: Boolean) {
+        enigmaStyle = enigma
+        store.listStyle = if (enigma) "ENIGMA" else "MODERN"
+    }
+
     fun checkPin(pin: String): Boolean = store.checkPin(pin)
     fun changePin(pin: String) = store.setPin(pin)
     val pinIsDefault: Boolean get() = store.pinIsDefault
