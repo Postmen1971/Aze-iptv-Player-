@@ -14,6 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: SkorText-Videotext aktuell übernehmen
+        run: |
+          # Neueste SkorText-Seiten aus dem SkorText-Repository holen; klappt das nicht, bleibt die gespeicherte Kopie.
+          if git clone --depth 1 https://github.com/Postmen1971/SkorText "$RUNNER_TEMP/skortext"; then
+            cp -r "$RUNNER_TEMP/skortext/app/src/main/assets/www/." app/src/main/assets/skortext/
+            echo "SkorText-Stand: $(git -C "$RUNNER_TEMP/skortext" log -1 --format=%h)"
+          else
+            echo "::warning::SkorText konnte nicht geladen werden – gespeicherte Kopie wird verwendet."
+          fi
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

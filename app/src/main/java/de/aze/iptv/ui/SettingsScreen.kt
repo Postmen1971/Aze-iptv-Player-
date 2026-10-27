@@ -368,6 +368,11 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
             }
         }
         Text(app.bufferLevel.hint, color = Palette.TextMuted, fontSize = 15.sp)
+        Text("Untertitel", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Aus", selected = !app.subtitlesOn, onClick = { app.updateSubtitles(false) })
+            TvButton("An (wenn vorhanden)", selected = app.subtitlesOn, onClick = { app.updateSubtitles(true) })
+        }
         Text("Bildformat", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AspectMode.entries.forEach { m ->
@@ -376,7 +381,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
         }
         Text(
             "Schnell im Bild ändern: OK lang drücken oder Menütaste (Touch: lange tippen). " +
-                "Dort gibt es Bild, Ton, Untertitel und Puffer.",
+                "Dort gibt es Bild, Ton, Fußball-Videotext und Puffer.",
             color = Palette.TextMuted, fontSize = 15.sp,
         )
     }

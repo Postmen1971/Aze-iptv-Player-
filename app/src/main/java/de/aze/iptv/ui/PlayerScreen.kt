@@ -109,6 +109,9 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
     var quickMenu by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf(false) }
     var ytError by remember { mutableStateOf<String?>(null) }
+    // Fußball-Videotext (SkorText) als Ebene über dem Programm
+    var teletext by remember { mutableStateOf(false) }
+    var teletextWeb by remember { mutableStateOf<android.webkit.WebView?>(null) }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
@@ -244,7 +247,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
         }
     }
 
-    LaunchedEffect(overlay, quickMenu, search) {
+    LaunchedEffect(overlay, quickMenu, search, teletext) {
         if (!overlay && !quickMenu && !search) runCatching { focus.requestFocus() }
     }
 
@@ -255,6 +258,16 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
             .focusRequester(focus)
             .onKeyEvent { e ->
                 val code = e.nativeKeyEvent.keyCode
+                // Videotext offen: alle Tasten gehen an den Videotext.
+                if (teletext) {
+                    if (e.type == KeyEventType.KeyDown) {
+                        val k = Teletext.mapKey(code)
+                        val w = teletextWeb
+                        if (k != null && w != null) Teletext.sendKey(w, k) { teletext = false }
+                        else if (code == AndroidKeyEvent.KEYCODE_BACK) teletext = false
+                    }
+                    return@onKeyEvent true
+                }
                 // Ziffern in der Senderliste: Liste schließen und direkt wählen (wie bei Enigma2).
                 if (overlay && e.type == KeyEventType.KeyDown &&
                     (code in AndroidKeyEvent.KEYCODE_0..AndroidKeyEvent.KEYCODE_9 || code in AndroidKeyEvent.KEYCODE_NUMPAD_0..AndroidKeyEvent.KEYCODE_NUMPAD_9)
@@ -328,6 +341,9 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
                     AndroidKeyEvent.KEYCODE_CAPTIONS -> {
                         quickMenu = true; true
                     }
+                    AndroidKeyEvent.KEYCODE_TV_TELETEXT -> {
+                        teletext = true; true
+                    }
                     AndroidKeyEvent.KEYCODE_SEARCH -> {
                         search = true; true
                     }
@@ -400,7 +416,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
             digits.isNotEmpty() -> { { Text(digits, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             notFound != null -> { { Text(notFound ?: "", color = Palette.Live, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             ytError != null && !overlay && !search -> { { Text(ytError ?: "", color = Palette.Live, fontSize = 22.sp, fontWeight = FontWeight.Bold) } }
-            noPicture && cur != null && !overlay && !search -> {
+            noPicture && cur != null && !overlay && !search && !teletext -> {
                 {
                     Row {
                         Text("${cur.number}", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
@@ -440,6 +456,14 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
             SearchOverlay(app = app, onClose = { search = false })
         }
 
+        if (teletext) {
+            TeletextView(
+                modifier = Modifier.fillMaxSize(),
+                onReady = { teletextWeb = it },
+                onClose = { teletext = false },
+            )
+        }
+
         if (quickMenu) {
             // tracksVersion lesen, damit die Werte nach einem Spurwechsel neu angezeigt werden.
             @Suppress("UNUSED_VARIABLE") val v = tracksVersion
@@ -452,10 +476,10 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
                     TrackHelper.nextAudio(player)?.language?.let { app.updateAudioLanguage(it) }
                     tracksVersion++
                 },
-                QuickItem("Untertitel", TrackHelper.currentLabel(player, C.TRACK_TYPE_TEXT, "Keine")) {
-                    val chosen = TrackHelper.nextSubtitle(player)
-                    app.updateSubtitles(chosen != null)
-                    tracksVersion++
+                // Fußball-Videotext (SkorText) statt Untertitel – Untertitel gibt es in den Einstellungen.
+                QuickItem("Fußball", "Videotext öffnen") {
+                    quickMenu = false
+                    teletext = true
                 },
                 QuickItem("Puffer", level.label) {
                     val all = BufferLevel.entries
