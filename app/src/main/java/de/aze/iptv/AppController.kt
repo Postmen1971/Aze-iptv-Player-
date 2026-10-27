@@ -16,7 +16,10 @@ import de.aze.iptv.data.NumberedChannel
 import de.aze.iptv.data.Numbering
 import de.aze.iptv.data.PlaylistSource
 import de.aze.iptv.data.Repository
+import de.aze.iptv.data.SourceType
 import de.aze.iptv.data.Store
+import de.aze.iptv.data.YouTube
+import de.aze.iptv.data.YtEntry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -197,9 +200,52 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    // ---- YouTube Live (eigene Gruppe, offizieller eingebetteter Player) ----
+
+    var youtube by mutableStateOf(store.youtube)
+        private set
+
+    /** true, wenn es Playlists oder YouTube-Sender gibt. */
+    val hasAnySource: Boolean get() = sources.isNotEmpty() || youtube.isNotEmpty()
+
+    fun addYoutube(link: String, name: String) {
+        scope.launch {
+            message = "YouTube-Kanal wird gesucht …"
+            val entry = YouTube.resolve(link, name)
+            if (entry == null) {
+                message = "Kanal nicht gefunden. Bitte den Link vom Kanal (youtube.com/@name) oder die Kanal-ID (UC…) eingeben."
+                return@launch
+            }
+            youtube = youtube + entry
+            store.youtube = youtube
+            rebuild(restoreKey = current?.channel?.key)
+            message = "„${entry.name}“ zur Gruppe YouTube Live hinzugefügt."
+        }
+    }
+
+    fun removeYoutube(entry: YtEntry) {
+        youtube = youtube.filterNot { it.id == entry.id }
+        store.youtube = youtube
+        rebuild(restoreKey = current?.channel?.key)
+    }
+
+    fun moveYoutube(entry: YtEntry, delta: Int) {
+        val list = youtube.toMutableList()
+        val i = list.indexOfFirst { it.id == entry.id }
+        val j = i + delta
+        if (i < 0 || j !in list.indices) return
+        list[i] = list[j].also { list[j] = list[i] }
+        youtube = list
+        store.youtube = list
+        rebuild(restoreKey = current?.channel?.key)
+    }
+
     private fun rebuild(restoreKey: String?) {
-        lineup = Numbering.build(channels, favorites, sources, layout)
-        editGroups = Numbering.arrange(channels, sources, layout)
+        // YouTube-Gruppe kommt direkt nach den Favoriten (in "Senderliste bearbeiten" verschiebbar).
+        val all = youtube.map { it.toChannel() } + channels
+        val named = sources + PlaylistSource(YouTube.SOURCE, "YouTube", SourceType.M3U, "")
+        lineup = Numbering.build(all, favorites, named, layout)
+        editGroups = Numbering.arrange(all, named, layout)
         current = restoreKey?.let { lineup.byKey[it] } ?: current?.let { lineup.byKey[it.channel.key] } ?: lineup.all.firstOrNull()
     }
 

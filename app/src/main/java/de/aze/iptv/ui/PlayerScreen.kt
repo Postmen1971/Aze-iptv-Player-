@@ -51,6 +51,8 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import de.aze.iptv.AppController
 import de.aze.iptv.data.Http
+import de.aze.iptv.data.YouTube
+import androidx.compose.runtime.key
 import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.BufferLevel
 import de.aze.iptv.player.PlaybackConfig
@@ -96,6 +98,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
     var overlay by remember { mutableStateOf(false) }
     var quickMenu by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf(false) }
+    var ytError by remember { mutableStateOf<String?>(null) }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
@@ -144,6 +147,13 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
         retryJob?.cancel()
         retries = 0
         noPicture = true
+        ytError = null
+        if (YouTube.isYouTube(ch.url)) {
+            // YouTube läuft im eigenen Player (WebView); den normalen Player anhalten.
+            player.stop()
+            player.clearMediaItems()
+            return@LaunchedEffect
+        }
         // Bevorzugte Tonsprache und Untertitel-Wahl gelten für jeden neuen Sender.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .clearOverrides()
@@ -271,7 +281,17 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
             AspectMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
             else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
-        AndroidView(
+        val ytUrl = app.current?.channel?.url?.takeIf { YouTube.isYouTube(it) }
+        if (ytUrl != null) {
+            key(ytUrl) {
+                YouTubeView(
+                    url = ytUrl,
+                    modifier = Modifier.fillMaxSize(),
+                    onPlaying = { noPicture = false },
+                    onError = { ytError = it },
+                )
+            }
+        } else AndroidView(
             modifier = videoModifier,
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -301,6 +321,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
         val corner: (@Composable () -> Unit)? = when {
             digits.isNotEmpty() -> { { Text(digits, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             notFound != null -> { { Text(notFound ?: "", color = Palette.Live, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
+            ytError != null && !overlay && !search -> { { Text(ytError ?: "", color = Palette.Live, fontSize = 22.sp, fontWeight = FontWeight.Bold) } }
             noPicture && cur != null && !overlay && !search -> {
                 {
                     Row {

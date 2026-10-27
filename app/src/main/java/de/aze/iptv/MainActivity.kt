@@ -44,7 +44,7 @@ class MainActivity : ComponentActivity() {
                 ),
             ) {
                 // Einstellungen sind mit PIN geschützt (Standard 0000).
-                var screen by remember { mutableStateOf(if (app.sources.isEmpty()) Screen.PIN else Screen.PLAYER) }
+                var screen by remember { mutableStateOf(if (!app.hasAnySource) Screen.PIN else Screen.PLAYER) }
                 when (screen) {
                     Screen.PLAYER -> PlayerScreen(app, onOpenSettings = { screen = Screen.PIN })
                     Screen.PIN -> PinScreen(
@@ -55,10 +55,10 @@ class MainActivity : ComponentActivity() {
                             if (ok) screen = Screen.SETTINGS
                             ok
                         },
-                        onCancel = { if (app.sources.isEmpty()) finish() else screen = Screen.PLAYER },
+                        onCancel = { if (!app.hasAnySource) finish() else screen = Screen.PLAYER },
                     )
                     Screen.SETTINGS -> SettingsScreen(app, onClose = {
-                        if (app.sources.isEmpty()) finish() else screen = Screen.PLAYER
+                        if (!app.hasAnySource) finish() else screen = Screen.PLAYER
                     })
                 }
             }

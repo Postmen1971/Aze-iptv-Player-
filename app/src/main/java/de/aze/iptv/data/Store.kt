@@ -65,6 +65,20 @@ class Store(context: Context) {
         get() = ListLayout.fromJson(Secure.decrypt(prefs.getString("layout", null)))
         set(v) = prefs.edit().putString("layout", Secure.encrypt(v.toJson())).apply()
 
+    var youtube: List<YtEntry>
+        get() {
+            val arr = runCatching { JSONArray(prefs.getString("youtube", "[]")) }.getOrDefault(JSONArray())
+            return (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                YtEntry(o.getString("id"), o.optString("name"), o.optBoolean("channel"), o.getString("ref"))
+            }
+        }
+        set(v) {
+            val arr = JSONArray()
+            v.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("channel", it.isChannel).put("ref", it.ref)) }
+            prefs.edit().putString("youtube", arr.toString()).apply()
+        }
+
     /** "MODERN" oder "ENIGMA" */
     var listStyle: String?
         get() = prefs.getString("listStyle", null)

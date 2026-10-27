@@ -122,6 +122,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
 
             PhoneInputSection(app)
             PlaylistSection(app)
+            YouTubeSection(app)
             RefreshSection(app)
             PlaybackSection(app, onEditList = { editingList = true })
             FavoritesSection(app)
@@ -296,6 +297,47 @@ private fun PhoneInputSection(app: AppController) {
             Text("Schließt sich nach der Eingabe oder nach 5 Minuten von selbst.", color = Palette.TextMuted, fontSize = 15.sp)
             TvButton("Beenden", onClick = { s.stop() })
         }
+    }
+}
+
+@Composable
+private fun YouTubeSection(app: AppController) {
+    Section("YouTube Live") {
+        Text(
+            "YouTube-Livesender erscheinen als eigene Gruppe „YouTube Live“. Am besten den Kanal-Link eintragen " +
+                "(z. B. youtube.com/@trthaber) – dann läuft immer der aktuelle Livestream. " +
+                "Es laufen nur Kanäle, die das Einbetten erlauben.",
+            color = Palette.TextMuted, fontSize = 15.sp,
+        )
+        app.youtube.forEachIndexed { i, e ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(e.name, color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (e.isChannel) "Kanal · immer der aktuelle Livestream" else "Einzelnes Video", color = Palette.TextMuted, fontSize = 14.sp)
+                }
+                if (i > 0) TvButton("▲", onClick = { app.moveYoutube(e, -1) })
+                if (i < app.youtube.size - 1) TvButton("▼", onClick = { app.moveYoutube(e, +1) })
+                TvButton("Löschen", danger = true, onClick = { app.removeYoutube(e) })
+            }
+        }
+        val open = de.aze.iptv.data.YouTube.suggestions.filter { (n, _) -> app.youtube.none { it.name == n } }
+        if (open.isNotEmpty()) {
+            Text("Vorschläge (offizielle Kanäle, frei auf YouTube) – antippen zum Hinzufügen:", color = Palette.TextSoft, fontSize = 16.sp)
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                open.forEach { (n, ref) -> TvButton("+ $n", onClick = { app.addYoutube(ref, n) }) }
+            }
+        }
+
+        var name by remember { mutableStateOf("") }
+        var link by remember { mutableStateOf("") }
+        Text("Eigener Kanal:", color = Palette.TextSoft, fontSize = 16.sp)
+        InputRow("Name", name, placeholder = "z. B. TRT Haber") { name = it }
+        InputRow("Kanal- oder Video-Link", link, placeholder = "youtube.com/@kanal", keyboard = KeyboardType.Uri) { link = it }
+        TvButton(if (link.isBlank()) "Hinzufügen (Link fehlt)" else "Hinzufügen", onClick = {
+            if (link.isBlank()) return@TvButton
+            app.addYoutube(link, name)
+            name = ""; link = ""
+        })
     }
 }
 
