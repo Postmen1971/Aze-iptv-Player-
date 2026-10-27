@@ -16,6 +16,7 @@ object M3uParser {
         var name: String? = null
         var group = ""
         var logo: String? = null
+        var tvgId: String? = null
         var extGroup: String? = null
 
         lines.forEach { rawLine ->
@@ -26,6 +27,7 @@ object M3uParser {
                     val attrs = attrRegex.findAll(line).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
                     group = attrs["group-title"].orEmpty().trim()
                     logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() }
+                    tvgId = attrs["tvg-id"]?.trim()?.takeIf { it.isNotEmpty() }
                     val title = titleOf(line)
                     name = title.ifBlank { attrs["tvg-name"].orEmpty() }
                     extGroup = null
@@ -38,11 +40,12 @@ object M3uParser {
                     val n = name
                     if (n != null && !isVod(line)) {
                         val g = group.ifBlank { extGroup.orEmpty() }.ifBlank { "Ohne Gruppe" }
-                        result.add(Channel(name = n.trim(), group = g, logo = logo, url = line))
+                        result.add(Channel(name = n.trim(), group = g, logo = logo, url = line, tvgId = tvgId))
                     }
                     name = null
                     group = ""
                     logo = null
+                    tvgId = null
                     extGroup = null
                 }
             }

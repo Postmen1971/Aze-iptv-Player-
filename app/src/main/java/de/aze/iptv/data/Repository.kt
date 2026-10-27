@@ -111,8 +111,9 @@ class Repository(context: Context) {
                     val name = clean(s.optString("name"))
                     val logo = clean(s.optString("stream_icon"))
                     val id = s.optString("stream_id")
+                    val epgId = clean(s.optString("epg_channel_id").takeIf { it != "null" }.orEmpty())
                     if (id.isNotEmpty()) {
-                        w.write("#EXTINF:-1 tvg-logo=\"$logo\" group-title=\"$group\",$name\n")
+                        w.write("#EXTINF:-1 tvg-id=\"$epgId\" tvg-logo=\"$logo\" group-title=\"$group\",$name\n")
                         w.write("$base/live/$pathUser/$pathPass/$id.ts\n")
                     }
                 }
@@ -122,6 +123,26 @@ class Repository(context: Context) {
     }
 
     private fun clean(s: String) = s.replace("\"", "'").replace("\n", " ").replace("\r", " ").trim()
+
+    /**
+     * EPG-Adressen der Playlists: bei Server + Login die xmltv.php des Anbieters,
+     * bei M3U die Angabe url-tvg / x-tvg-url aus der ersten Zeile der Liste.
+     */
+    fun epgUrls(sources: List<PlaylistSource>): List<String> = sources.mapNotNull { src ->
+        if (src.type == SourceType.XTREAM) {
+            val raw = src.url.trim().trimEnd('/')
+            val base = if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "http://$raw"
+            "$base/xmltv.php?username=${java.net.URLEncoder.encode(src.user.trim(), "UTF-8")}&password=${java.net.URLEncoder.encode(src.pass, "UTF-8")}"
+        } else {
+            val f = cacheFile(src)
+            if (!f.exists()) null else runCatching {
+                val head = f.bufferedReader().use { it.readLine() }.orEmpty()
+                tvgUrl.find(head)?.groupValues?.get(1)?.split(',')?.firstOrNull()?.trim()
+            }.getOrNull()?.takeIf { it.startsWith("http") }
+        }
+    }
+
+    private val tvgUrl = Regex("(?:url-tvg|x-tvg-url)=\"([^\"]+)\"")
 
     fun delete(source: PlaylistSource) {
         cacheFile(source).delete()

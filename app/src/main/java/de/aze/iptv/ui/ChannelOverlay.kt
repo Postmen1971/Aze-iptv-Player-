@@ -236,10 +236,11 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                                 },
                                 onLongClick = { app.toggleFavorite(nc.channel) },
                             ) { focused ->
+                                val prog = app.epg.now(nc.channel)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(34.dp)
+                                        .height(if (prog != null) 40.dp else 34.dp)
                                         .background(if (focused) Palette.Accent else Palette.PanelDark.copy(alpha = 0f), RoundedCornerShape(7.dp))
                                         .then(if (playing && !focused) Modifier.border(1.5.dp, Palette.Accent, RoundedCornerShape(7.dp)) else Modifier)
                                         .padding(horizontal = 8.dp),
@@ -252,14 +253,29 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                                         textAlign = TextAlign.End, modifier = Modifier.width(38.dp),
                                     )
                                     Spacer(Modifier.width(10.dp))
-                                    Text(
-                                        nc.channel.name,
-                                        color = if (focused) Palette.OnAccent else Palette.Text,
-                                        fontSize = 15.sp,
-                                        fontWeight = if (focused || playing) FontWeight.Bold else FontWeight.Normal,
-                                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f),
-                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            nc.channel.name,
+                                            color = if (focused) Palette.OnAccent else Palette.Text,
+                                            fontSize = 15.sp,
+                                            fontWeight = if (focused || playing) FontWeight.Bold else FontWeight.Normal,
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                        )
+                                        // Laufende Sendung (EPG) klein darunter, mit dünnem Fortschrittsbalken
+                                        if (prog != null) {
+                                            Text(
+                                                prog.title,
+                                                color = if (focused) Palette.OnAccent else Palette.TextMuted,
+                                                fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                            )
+                                            Box(Modifier.fillMaxWidth().height(2.dp).background(if (focused) Palette.OnAccent.copy(alpha = 0.25f) else Palette.Line)) {
+                                                Box(
+                                                    Modifier.fillMaxWidth(prog.progress(System.currentTimeMillis())).height(2.dp)
+                                                        .background(if (focused) Palette.OnAccent else Palette.Accent),
+                                                )
+                                            }
+                                        }
+                                    }
                                     if (nc.favorite) Text("★", color = if (focused) Palette.OnAccent else Palette.Accent, fontSize = 12.sp)
                                 }
                             }

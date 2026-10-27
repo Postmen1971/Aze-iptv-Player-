@@ -206,6 +206,8 @@ fun BouquetOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                                         modifier = Modifier.width(44.dp),
                                     )
                                     Spacer(Modifier.width(10.dp))
+                                    // Wie bei Enigma2: Sendername, dahinter die laufende Sendung
+                                    val prog = app.epg.now(nc.channel)
                                     Text(
                                         nc.channel.name,
                                         color = if (playing && !focused) E2.Gold else E2.Text,
@@ -213,8 +215,18 @@ fun BouquetOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                                         fontWeight = if (focused || playing) FontWeight.Bold else FontWeight.Normal,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier.weight(if (prog != null) 0.45f else 1f),
                                     )
+                                    if (prog != null) {
+                                        Text(
+                                            prog.title,
+                                            color = if (focused) E2.Text else E2.Soft,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(0.55f).padding(start = 8.dp),
+                                        )
+                                    }
                                     if (nc.favorite) Text("★", color = E2.Gold, fontSize = 18.sp)
                                 }
                             }

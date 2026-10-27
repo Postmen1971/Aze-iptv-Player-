@@ -7,6 +7,8 @@ import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import de.aze.iptv.data.Channel
 import de.aze.iptv.data.EditGroup
+import de.aze.iptv.data.Epg
+import de.aze.iptv.data.EpgRepository
 import de.aze.iptv.data.Lineup
 import de.aze.iptv.data.ListLayout
 import de.aze.iptv.data.Network
@@ -34,6 +36,40 @@ class AppController(context: Context, private val scope: CoroutineScope) {
 
     private val store = Store(context)
     private val repo = Repository(context)
+    private val epgRepo = EpgRepository(context)
+
+    /** Programmzeitschrift; Zuordnung zu den Sendern über tvg-id oder Namen. */
+    var epg by mutableStateOf(Epg.EMPTY, referentialEqualityPolicy())
+        private set
+    var epgLoading by mutableStateOf(false)
+        private set
+    var epgUrl by mutableStateOf(store.epgUrl)
+        private set
+
+    fun updateEpgUrl(url: String) {
+        epgUrl = url.trim()
+        store.epgUrl = epgUrl
+    }
+
+    fun refreshEpg() {
+        if (epgLoading) return
+        val urls = repo.epgUrls(sources) + listOfNotNull(epgUrl.takeIf { it.startsWith("http") })
+        if (urls.isEmpty()) {
+            message = "Keine EPG-Quelle gefunden. Bei M3U-Listen ohne Programmdaten eine EPG-Adresse eintragen."
+            return
+        }
+        scope.launch {
+            epgLoading = true
+            val result = epgRepo.refresh(urls, channels)
+            epgLoading = false
+            result.onSuccess {
+                epg = it
+                message = "Programmzeitschrift geladen: ${it.channelCount} Sender mit Programm."
+            }.onFailure {
+                message = "Programmzeitschrift konnte nicht geladen werden."
+            }
+        }
+    }
 
     var sources by mutableStateOf(store.sources())
         private set
@@ -204,7 +240,9 @@ class AppController(context: Context, private val scope: CoroutineScope) {
             channels = repo.loadCached(sources)
             rebuild(restoreKey = store.lastChannelKey).join()
             loading = false
+            epg = epgRepo.load()
             if (needsRefresh()) refreshNow()
+            else if (sources.isNotEmpty() && epgRepo.isStale(12)) refreshEpg()
         }
     }
 
@@ -231,6 +269,8 @@ class AppController(context: Context, private val scope: CoroutineScope) {
             rebuild(restoreKey = current?.channel?.key).join()
             loading = false
             message = if (errors.isEmpty()) "Senderliste aktualisiert: ${lineup.all.size} Sender" else errors.joinToString("\n")
+            // Programmzeitschrift gleich mit aktualisieren
+            refreshEpg()
         }
     }
 

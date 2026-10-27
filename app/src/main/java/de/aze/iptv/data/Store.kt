@@ -81,6 +81,11 @@ class Store(context: Context) {
             prefs.edit().putString("youtube", arr.toString()).apply()
         }
 
+    /** Eigene EPG-Adresse (optional). Verschlüsselt, weil sie Zugangsdaten enthalten kann. */
+    var epgUrl: String
+        get() = Secure.decrypt(prefs.getString("epgUrl", "")) ?: ""
+        set(v) = prefs.edit().putString("epgUrl", if (v.isBlank()) "" else Secure.encrypt(v.trim())).apply()
+
     var playerEngine: String?
         get() = prefs.getString("engine", null)
         set(v) = prefs.edit().putString("engine", v).apply()

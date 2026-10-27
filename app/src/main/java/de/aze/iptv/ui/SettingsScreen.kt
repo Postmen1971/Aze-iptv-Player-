@@ -124,6 +124,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             PlaylistSection(app)
             YouTubeSection(app)
             RefreshSection(app)
+            EpgSection(app)
             PlaybackSection(app, onEditList = { editingList = true })
             FavoritesSection(app)
             NetworkSection(app)
@@ -249,6 +250,23 @@ private fun RefreshSection(app: AppController) {
         val last = if (app.lastRefresh > 0) SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY).format(Date(app.lastRefresh)) else "noch nie"
         Text("Zuletzt aktualisiert: $last", color = Palette.TextMuted, fontSize = 15.sp)
         TvButton(if (app.loading) "Wird aktualisiert …" else "Jetzt aktualisieren", onClick = { app.refreshNow() })
+    }
+}
+
+@Composable
+private fun EpgSection(app: AppController) {
+    Section("Programmzeitschrift (EPG)") {
+        Text(
+            "Bei Server + Login kommt das Programm automatisch vom Anbieter, bei M3U-Listen aus der Angabe in der Liste. " +
+                "Fehlt sie, hier eine eigene EPG-Adresse (XMLTV, auch .gz) eintragen. Das Programm wird zusammen mit der Senderliste aktualisiert.",
+            color = Palette.TextMuted, fontSize = 15.sp,
+        )
+        InputRow("Eigene EPG-Adresse (optional)", app.epgUrl, placeholder = "http://…/epg.xml.gz", keyboard = KeyboardType.Uri) { app.updateEpgUrl(it) }
+        Text(
+            if (app.epg.channelCount > 0) "Geladen: ${app.epg.channelCount} Sender mit Programm" else "Noch keine Programmdaten geladen",
+            color = Palette.TextSoft, fontSize = 15.sp,
+        )
+        TvButton(if (app.epgLoading) "Wird geladen …" else "Programm jetzt laden", onClick = { app.refreshEpg() })
     }
 }
 

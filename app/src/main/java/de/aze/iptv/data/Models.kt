@@ -10,6 +10,8 @@ data class Channel(
     val url: String,
     /** id der Playlist, aus der der Sender stammt. */
     val source: String = "",
+    /** Kennung für die Programmzeitschrift (tvg-id) */
+    val tvgId: String? = null,
 ) {
     val key: String get() = url
 }
