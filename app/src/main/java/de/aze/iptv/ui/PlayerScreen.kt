@@ -61,6 +61,10 @@ import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.BufferLevel
 import de.aze.iptv.player.PlaybackConfig
 import de.aze.iptv.player.TrackHelper
+import de.aze.iptv.player.PlayerEngine
+import de.aze.iptv.player.VlcHandle
+import de.aze.iptv.player.VlcVideo
+import de.aze.iptv.player.vlcCachingMs
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -118,6 +122,11 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
     var retries by remember { mutableIntStateOf(0) }
     var okLong by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
+    val vlcHandle = remember { VlcHandle() }
+    val curCh = app.current?.channel
+    // VLC statt Media3: wenn so eingestellt, oder automatisch für Sender, die Media3 nicht schafft.
+    val useVlc = curCh != null && !YouTube.isYouTube(curCh.url) &&
+        (app.playerEngine == PlayerEngine.VLC || (app.playerEngine == PlayerEngine.AUTO && curCh.key in app.vlcFallback))
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -145,6 +154,14 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
             override fun onPlayerError(error: PlaybackException) {
                 noPicture = true
                 retryJob?.cancel()
+                // Automatisch: Format-/Decoder-Fehler oder wiederholte Abbrüche → diesen Sender mit VLC abspielen.
+                val key = app.current?.channel?.key
+                val group = error.errorCode / 1000
+                if (app.playerEngine == PlayerEngine.AUTO && key != null && (group == 3 || group == 4 || retries >= 2)) {
+                    player.stop()
+                    app.markVlc(key)
+                    return
+                }
                 retryJob = scope.launch {
                     if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
                         // Zu weit hinter "live" gefallen: direkt an den Live-Punkt springen.
@@ -193,7 +210,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
     }
 
     val currentKey = app.current?.channel?.key
-    LaunchedEffect(currentKey, player, resumeTick) {
+    LaunchedEffect(currentKey, player, resumeTick, useVlc) {
         val ch = app.current?.channel ?: return@LaunchedEffect
         retryJob?.cancel()
         retries = 0
@@ -201,8 +218,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
         ytError = null
         // Altes Programm sofort anhalten, damit beim schnellen Durchschalten nichts nachläuft.
         player.stop()
-        if (YouTube.isYouTube(ch.url)) {
-            // YouTube läuft im eigenen Player (WebView); den normalen Player leeren.
+        if (YouTube.isYouTube(ch.url) || useVlc) {
+            // YouTube bzw. VLC laufen in eigenen Playern; Media3 leeren.
             player.clearMediaItems()
             return@LaunchedEffect
         }
@@ -385,6 +402,20 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
                     onError = { ytError = it },
                 )
             }
+        } else if (useVlc) {
+            if (!inBackground) {
+                key(currentKey) {
+                    VlcVideo(
+                        url = curCh!!.url,
+                        cachingMs = level.vlcCachingMs(),
+                        aspect = aspect,
+                        handle = vlcHandle,
+                        onFirstFrame = { noPicture = false },
+                        onError = { noPicture = true },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
         } else AndroidView(
             modifier = videoModifier,
             factory = { ctx ->
@@ -472,14 +503,27 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
                     val all = AspectMode.entries
                     app.updateAspect(all[(all.indexOf(aspect) + 1) % all.size])
                 },
-                QuickItem("Ton", TrackHelper.currentLabel(player, C.TRACK_TYPE_AUDIO, "Standard")) {
-                    TrackHelper.nextAudio(player)?.language?.let { app.updateAudioLanguage(it) }
+                QuickItem("Ton", if (useVlc) vlcHandle.audioLabel() else TrackHelper.currentLabel(player, C.TRACK_TYPE_AUDIO, "Standard")) {
+                    if (useVlc) vlcHandle.nextAudio()
+                    else TrackHelper.nextAudio(player)?.language?.let { app.updateAudioLanguage(it) }
                     tracksVersion++
                 },
                 // Fußball-Videotext (SkorText) statt Untertitel – Untertitel gibt es in den Einstellungen.
                 QuickItem("Fußball", "Videotext öffnen") {
                     quickMenu = false
                     teletext = true
+                },
+                QuickItem(
+                    "Player",
+                    when {
+                        app.playerEngine != PlayerEngine.AUTO -> app.playerEngine.label
+                        useVlc -> "VLC"
+                        else -> "Media3"
+                    },
+                ) {
+                    // Automatisch-Modus: diesen Sender zwischen Media3 und VLC umschalten.
+                    val k = app.current?.channel?.key
+                    if (app.playerEngine == PlayerEngine.AUTO && k != null) app.toggleVlc(k)
                 },
                 QuickItem("Puffer", level.label) {
                     val all = BufferLevel.entries

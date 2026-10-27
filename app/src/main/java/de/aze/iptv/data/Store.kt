@@ -81,6 +81,14 @@ class Store(context: Context) {
             prefs.edit().putString("youtube", arr.toString()).apply()
         }
 
+    var playerEngine: String?
+        get() = prefs.getString("engine", null)
+        set(v) = prefs.edit().putString("engine", v).apply()
+
+    var autostart: Boolean
+        get() = prefs.getBoolean("autostart", false)
+        set(v) = prefs.edit().putBoolean("autostart", v).apply()
+
     /** "MODERN" oder "ENIGMA" */
     var listStyle: String?
         get() = prefs.getString("listStyle", null)

@@ -51,6 +51,16 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    // Je Prozessor-Typ eine eigene, kleinere APK (VLC bringt große Bibliotheken mit) plus eine für alle Geräte.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
+        }
+    }
+
     lint {
         checkReleaseBuilds = false
         abortOnError = false
@@ -79,4 +89,7 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-exoplayer-dash:$media3")
     implementation("androidx.media3:media3-ui:$media3")
+
+    // VLC als Ausweich-Player (LGPL 2.1, unverändert eingebunden)
+    implementation("org.videolan.android:libvlc-all:3.6.0")
 }

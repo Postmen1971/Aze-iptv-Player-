@@ -127,6 +127,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             PlaybackSection(app, onEditList = { editingList = true })
             FavoritesSection(app)
             NetworkSection(app)
+            AutostartSection(app)
             Section("Sicherheit") {
                 Text(
                     if (app.pinIsDefault) "Die PIN ist noch 0000. Bitte eine eigene PIN festlegen."
@@ -252,6 +253,31 @@ private fun RefreshSection(app: AppController) {
 }
 
 @Composable
+private fun AutostartSection(app: AppController) {
+    val context = LocalContext.current
+    Section("Autostart") {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Aus", selected = !app.autostart, onClick = { app.updateAutostart(false) })
+            TvButton("Beim Einschalten starten", selected = app.autostart, onClick = { app.updateAutostart(true) })
+        }
+        if (app.autostart && android.os.Build.VERSION.SDK_INT >= 29 && !android.provider.Settings.canDrawOverlays(context)) {
+            Text(
+                "Dieses Gerät braucht dafür die Erlaubnis „Über anderen Apps anzeigen“. Ohne sie startet die App nach dem Einschalten nicht von selbst.",
+                color = Palette.Accent, fontSize = 15.sp,
+            )
+            TvButton("Erlaubnis öffnen", onClick = {
+                val i = android.content.Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:${context.packageName}"),
+                ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                val ok = runCatching { context.startActivity(i) }.isSuccess
+                if (!ok) app.message = "Dieses Gerät bietet die Einstellung nicht an. Autostart klappt hier evtl. nicht."
+            })
+        }
+    }
+}
+
+@Composable
 private fun PhoneInputSection(app: AppController) {
     var server by remember { mutableStateOf<PhoneInputServer?>(null) }
     var address by remember { mutableStateOf<String?>(null) }
@@ -368,6 +394,17 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
             }
         }
         Text(app.bufferLevel.hint, color = Palette.TextMuted, fontSize = 15.sp)
+        Text("Player", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            de.aze.iptv.player.PlayerEngine.entries.forEach { e ->
+                TvButton(e.label, selected = app.playerEngine == e, onClick = { app.updateEngine(e) })
+            }
+        }
+        Text(
+            "Automatisch: Media3 spielt ab; kann es einen Sender nicht abspielen, übernimmt VLC für diesen Sender. " +
+                "Im Schnellmenü lässt sich das je Sender auch von Hand umschalten.",
+            color = Palette.TextMuted, fontSize = 15.sp,
+        )
         Text("Untertitel", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Aus", selected = !app.subtitlesOn, onClick = { app.updateSubtitles(false) })
@@ -381,7 +418,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
         }
         Text(
             "Schnell im Bild ändern: OK lang drücken oder Menütaste (Touch: lange tippen). " +
-                "Dort gibt es Bild, Ton, Fußball-Videotext und Puffer.",
+                "Dort gibt es Bild, Ton, Fußball-Videotext, Player und Puffer.",
             color = Palette.TextMuted, fontSize = 15.sp,
         )
     }
@@ -512,7 +549,8 @@ private fun AboutSection() {
         Text(
             "Verwendete Open-Source-Bausteine: AndroidX Media3 (Wiedergabe), Jetpack Compose (Oberfläche), " +
                 "AndroidX Core/Activity/Lifecycle und Kotlin Coroutines – jeweils unter der Apache License 2.0 " +
-                "(apache.org/licenses/LICENSE-2.0).",
+                "(apache.org/licenses/LICENSE-2.0). libVLC (VideoLAN) unter der GNU LGPL 2.1 (gnu.org/licenses/lgpl-2.1), " +
+                "unverändert eingebunden. SkorText-Schriften: DejaVu Fonts License.",
             color = Palette.TextMuted, fontSize = 14.sp,
         )
     }

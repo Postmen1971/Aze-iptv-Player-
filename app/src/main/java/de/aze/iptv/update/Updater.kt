@@ -30,13 +30,19 @@ object Updater {
         val tag = json.optString("tag_name")
         val code = tag.substringAfterLast('.').toIntOrNull() ?: return@withContext null
         val assets = json.optJSONArray("assets")
-        var apk: String? = null
+        // Passende APK für dieses Gerät wählen: erst nach Prozessor-Typ, sonst "universal", sonst irgendeine.
+        val apks = ArrayList<Pair<String, String>>()
         if (assets != null) {
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
-                if (a.optString("name").endsWith(".apk")) apk = a.optString("browser_download_url")
+                val n = a.optString("name")
+                if (n.endsWith(".apk")) apks.add(n to a.optString("browser_download_url"))
             }
         }
+        val abis = if (Build.VERSION.SDK_INT >= 21) Build.SUPPORTED_ABIS.toList() else emptyList()
+        val apk = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { it.first.endsWith("-$abi.apk") }?.second }
+            ?: apks.firstOrNull { it.first.contains("universal") }?.second
+            ?: apks.firstOrNull()?.second
         if (apk == null || code <= BuildConfig.VERSION_CODE) null
         else Release(code, tag.removePrefix("v"), apk, json.optString("body"))
     }

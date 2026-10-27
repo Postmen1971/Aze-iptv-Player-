@@ -54,7 +54,12 @@ jobs:
         run: |
           if [ -z "$KEYSTORE_FILE" ]; then unset KEYSTORE_FILE; fi
           gradle :app:assembleRelease --stacktrace
-          cp app/build/outputs/apk/release/app-release.apk "Aze-IPTV-Player-1.0.${GITHUB_RUN_NUMBER}.apk"
+          # Eine APK je Prozessor-Typ plus "universal" (läuft überall, ist aber größer)
+          for f in app/build/outputs/apk/release/app-*-release.apk; do
+            abi=$(basename "$f" | sed -e 's/^app-//' -e 's/-release.apk$//')
+            cp "$f" "Aze-IPTV-Player-1.0.${GITHUB_RUN_NUMBER}-${abi}.apk"
+          done
+          ls -la Aze-IPTV-Player-*.apk
 
       - name: Test-APK ablegen
         uses: actions/upload-artifact@v4

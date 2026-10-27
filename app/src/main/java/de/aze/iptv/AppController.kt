@@ -13,6 +13,8 @@ import de.aze.iptv.data.Network
 import de.aze.iptv.data.ProxySettings
 import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.BufferLevel
+import de.aze.iptv.player.PlayerEngine
+import androidx.compose.runtime.mutableStateListOf
 import de.aze.iptv.data.NumberedChannel
 import de.aze.iptv.data.Numbering
 import de.aze.iptv.data.PlaylistSource
@@ -137,6 +139,33 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     fun updateListStyle(enigma: Boolean) {
         enigmaStyle = enigma
         store.listStyle = if (enigma) "ENIGMA" else "MODERN"
+    }
+
+    var playerEngine by mutableStateOf(PlayerEngine.of(store.playerEngine))
+        private set
+
+    fun updateEngine(e: PlayerEngine) {
+        playerEngine = e
+        store.playerEngine = e.name
+    }
+
+    /** Sender, die in dieser Sitzung mit VLC laufen (weil Media3 sie nicht abspielen konnte). */
+    val vlcFallback = mutableStateListOf<String>()
+
+    fun markVlc(key: String) {
+        if (key !in vlcFallback) vlcFallback.add(key)
+    }
+
+    fun toggleVlc(key: String) {
+        if (key in vlcFallback) vlcFallback.remove(key) else vlcFallback.add(key)
+    }
+
+    var autostart by mutableStateOf(store.autostart)
+        private set
+
+    fun updateAutostart(on: Boolean) {
+        autostart = on
+        store.autostart = on
     }
 
     fun checkPin(pin: String): Boolean = store.checkPin(pin)

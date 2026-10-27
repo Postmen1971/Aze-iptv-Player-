@@ -45,6 +45,17 @@ enum class AspectMode(val label: String, val ratio: Float?) {
     }
 }
 
+/** Welcher Player abspielt. AUTO: Media3, bei Problemen automatisch VLC für diesen Sender. */
+enum class PlayerEngine(val label: String) {
+    AUTO("Automatisch"),
+    MEDIA3("Immer Media3"),
+    VLC("Immer VLC");
+
+    companion object {
+        fun of(name: String?): PlayerEngine = entries.firstOrNull { it.name == name } ?: AUTO
+    }
+}
+
 object PlaybackConfig {
 
     /** Schwache Geräte (z. B. ältere Fire Sticks) bekommen eine Speichergrenze, damit nichts abstürzt. */
