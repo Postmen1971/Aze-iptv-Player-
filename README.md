@@ -29,6 +29,15 @@ IPTV-Player für Android (Handy, Tablet, Android TV, Fire TV Stick), ab Android 
 - **Keine Backups** in die Cloud oder auf andere Geräte
 - **Playlist vom Handy eingeben:** In den Einstellungen starten, am Handy die angezeigte Adresse öffnen und den Code vom Fernseher eingeben. Nur im Heimnetz, höchstens 5 Minuten, schließt sich nach der Eingabe.
 
+### Version 4
+
+- **Filme & Serien** (bei Server + Login): Kategorien, Poster, Detailseite mit Beschreibung, Staffeln und Folgen, Weiterschauen
+- **EPG**: laufende Sendung mit Fortschritt in der Senderliste (Anbieter-EPG, url-tvg aus der M3U oder eigene XMLTV-Adresse)
+- **VLC** als Ausweich-Player: automatisch für Sender, die Media3 nicht abspielen kann, oder fest eingestellt
+- **Autostart** beim Einschalten (Einstellungen → Autostart)
+- **Fußball-Videotext (SkorText)** über dem Programm: OK lang → Fußball
+- APKs je Prozessor-Typ (armeabi-v7a, arm64-v8a, x86, x86_64) und „universal“; Fire TV Stick: armeabi-v7a
+
 ### Bedienung
 
 | Taste | Funktion |
@@ -42,7 +51,6 @@ IPTV-Player für Android (Handy, Tablet, Android TV, Fire TV Stick), ab Android 
 
 Touch: Tippen = Senderliste, doppelt Tippen = letzter Sender, lange Tippen = Schnellmenü.
 
-Geplant: Filme & Serien im TiviMate-Stil, YouTube-Live als eigene Gruppe, Eingabe der Playlist vom Handy aus, libVLC als zusätzlicher Player.
 
 ## Installieren
 
