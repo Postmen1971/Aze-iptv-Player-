@@ -278,6 +278,7 @@ private fun PhoneInputSection(app: AppController) {
                         app.addSource(src)
                         app.message = "Playlist „${src.name}“ vom Handy übernommen."
                     },
+                    onYoutube = { link, name -> app.addYoutube(link, name) },
                     onStopped = { server = null },
                 )
                 if (srv.start()) {

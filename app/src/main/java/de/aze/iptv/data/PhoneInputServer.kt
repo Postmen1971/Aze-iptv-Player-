@@ -25,6 +25,7 @@ import java.util.UUID
  */
 class PhoneInputServer(
     private val onSource: (PlaylistSource) -> Unit,
+    private val onYoutube: (link: String, name: String) -> Unit,
     private val onStopped: () -> Unit,
 ) {
     val code: String = (SecureRandom().nextInt(9000) + 1000).toString()
@@ -105,6 +106,17 @@ class PhoneInputServer(
                 wrongCodes++
                 respond(out, 403, page("Falscher Code", "Bitte den Code vom Fernseher eingeben.", back = true))
                 if (wrongCodes >= 5) stop()
+                return
+            }
+            if (form["type"] == "youtube") {
+                val link = form["url"].orEmpty().trim()
+                if (link.isEmpty()) {
+                    respond(out, 400, page("Angaben fehlen", "Bitte den YouTube-Link einfügen.", back = true))
+                    return
+                }
+                respond(out, 200, page("Übernommen", "Der YouTube-Sender wird jetzt am Fernseher hinzugefügt. Du kannst diese Seite schließen."))
+                main.post { onYoutube(link, form["name"].orEmpty().trim()) }
+                stop()
                 return
             }
             val type = if (form["type"] == "xtream") SourceType.XTREAM else SourceType.M3U
@@ -192,6 +204,7 @@ class PhoneInputServer(
           <div class="tabs">
             <label><input type="radio" name="type" value="m3u" checked onchange="sw()">M3U-Link</label>
             <label><input type="radio" name="type" value="xtream" onchange="sw()">Server + Login</label>
+            <label><input type="radio" name="type" value="youtube" onchange="sw()">YouTube</label>
           </div>
           <label for="name">Name</label>
           <input id="name" name="name" placeholder="z. B. Mein Anbieter">
@@ -208,10 +221,11 @@ class PhoneInputServer(
           <button type="submit">An den Fernseher senden</button>
         </form>
         <script>
-        function sw(){var x=document.querySelector('input[name=type]:checked').value==='xtream';
+        function sw(){var t=document.querySelector('input[name=type]:checked').value,x=t==='xtream',y=t==='youtube';
           document.getElementById('xt').style.display=x?'block':'none';
-          document.getElementById('urlLabel').textContent=x?'Server-Adresse':'M3U-Link (komplett)';
-          document.getElementById('url').placeholder=x?'http://server:port':'http://…';}
+          document.getElementById('urlLabel').textContent=x?'Server-Adresse':(y?'YouTube-Link (Kanal oder Livestream)':'M3U-Link (komplett)');
+          document.getElementById('url').placeholder=x?'http://server:port':(y?'In YouTube: Teilen → Link kopieren, hier einfügen':'http://…');
+          document.getElementById('name').placeholder=y?'z. B. TRT Haber (leer = Kanalname)':'z. B. Mein Anbieter';}
         </script>
         </body></html>
     """.trimIndent()
