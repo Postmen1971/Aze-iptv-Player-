@@ -86,6 +86,21 @@ class Store(context: Context) {
         get() = Secure.decrypt(prefs.getString("epgUrl", "")) ?: ""
         set(v) = prefs.edit().putString("epgUrl", if (v.isBlank()) "" else Secure.encrypt(v.trim())).apply()
 
+    /** Weiterschauen: gemerkte Stelle je Film/Folge (Millisekunden). */
+    fun resumePositions(): MutableMap<String, Long> {
+        val o = runCatching { JSONObject(prefs.getString("resume", "{}")) }.getOrDefault(JSONObject())
+        val m = HashMap<String, Long>()
+        o.keys().forEach { k -> m[k] = o.optLong(k) }
+        return m
+    }
+
+    fun saveResumePositions(m: Map<String, Long>) {
+        val o = JSONObject()
+        // höchstens 300 Einträge behalten
+        m.entries.toList().takeLast(300).forEach { (k, v) -> o.put(k, v) }
+        prefs.edit().putString("resume", o.toString()).apply()
+    }
+
     var playerEngine: String?
         get() = prefs.getString("engine", null)
         set(v) = prefs.edit().putString("engine", v).apply()

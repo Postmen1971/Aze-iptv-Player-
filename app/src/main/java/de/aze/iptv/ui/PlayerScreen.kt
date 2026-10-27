@@ -80,7 +80,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
+fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (series: Boolean) -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val level = app.bufferLevel
@@ -477,9 +477,9 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit) {
                 search = true
             }
             if (app.enigmaStyle) {
-                BouquetOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch)
+                BouquetOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch, onVod = { overlay = false; onOpenVod(it) })
             } else {
-                ChannelOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch)
+                ChannelOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch, onVod = { overlay = false; onOpenVod(it) })
             }
         }
 

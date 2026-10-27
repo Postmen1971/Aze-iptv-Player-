@@ -66,7 +66,13 @@ private object E2 {
  *  - Zurück (oder Menü): Bouquet-Übersicht; dort OK öffnet das Bouquet, Zurück schließt
  */
 @Composable
-fun BouquetOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -> Unit, onSearch: () -> Unit) {
+fun BouquetOverlay(
+    app: AppController,
+    onClose: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onSearch: () -> Unit,
+    onVod: (series: Boolean) -> Unit = {},
+) {
     val filter = app.playlistFilter
     val multi = app.sources.size > 1
     val bouquets = app.lineup.groups.filter {
@@ -119,7 +125,8 @@ fun BouquetOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                     key("bouquets") {
                         val entries = bouquets.map { b ->
                             Triple(b.name + (if (multi && filter == null && b.sourceName != null) "  ·  ${b.sourceName}" else ""), "${b.channels.size}", b.isFavorites)
-                        } + Triple("🔍  Sender suchen", "", false) + Triple("⚙  Einstellungen", "", false)
+                        } + Triple("🎬  Filme", "", false) + Triple("📺  Serien", "", false) +
+                            Triple("🔍  Sender suchen", "", false) + Triple("⚙  Einstellungen", "", false)
                         PagedList(
                             count = entries.size,
                             startIndex = bouquetIndex.coerceAtMost(entries.size - 1),
@@ -132,8 +139,12 @@ fun BouquetOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                                 onFocus = onFocused,
                                 onClick = {
                                     if (index == bouquets.size) {
-                                        onSearch()
+                                        onVod(false)
                                     } else if (index == bouquets.size + 1) {
+                                        onVod(true)
+                                    } else if (index == bouquets.size + 2) {
+                                        onSearch()
+                                    } else if (index == bouquets.size + 3) {
                                         onOpenSettings()
                                     } else {
                                         bouquetIndex = index

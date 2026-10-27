@@ -55,7 +55,13 @@ import de.aze.iptv.AppController
  *  Ganz oben (Hoch am Listenanfang): Suchen und Einstellungen.
  */
 @Composable
-fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -> Unit, onSearch: () -> Unit) {
+fun ChannelOverlay(
+    app: AppController,
+    onClose: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onSearch: () -> Unit,
+    onVod: (series: Boolean) -> Unit = {},
+) {
     // Zurück / Links in der Senderliste: Gruppenübersicht; Zurück in der Übersicht: schließen.
     var showGroups by remember { mutableStateOf(false) }
     BackHandler { if (showGroups) onClose() else showGroups = true }
@@ -96,6 +102,8 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
             // Kleine Knöpfe ganz oben
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 4.dp)) {
                 SmallButton("Suchen", onClick = onSearch)
+                SmallButton("Filme", onClick = { onVod(false) })
+                SmallButton("Serien", onClick = { onVod(true) })
                 SmallButton("Einstellungen", onClick = onOpenSettings)
                 if (multi) SmallButton(app.playlistName(filter), onClick = {
                     app.nextPlaylistFilter()

@@ -16,10 +16,11 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import de.aze.iptv.ui.Palette
 import de.aze.iptv.ui.PinScreen
+import de.aze.iptv.ui.VodScreen
 import de.aze.iptv.ui.PlayerScreen
 import de.aze.iptv.ui.SettingsScreen
 
-private enum class Screen { PLAYER, PIN, SETTINGS }
+private enum class Screen { PLAYER, PIN, SETTINGS, VOD }
 
 class MainActivity : ComponentActivity() {
 
@@ -45,8 +46,17 @@ class MainActivity : ComponentActivity() {
             ) {
                 // Einstellungen sind mit PIN geschützt (Standard 0000).
                 var screen by remember { mutableStateOf(if (!app.hasAnySource) Screen.PIN else Screen.PLAYER) }
+                var vodSeries by remember { mutableStateOf(false) }
                 when (screen) {
-                    Screen.PLAYER -> PlayerScreen(app, onOpenSettings = { screen = Screen.PIN })
+                    Screen.PLAYER -> PlayerScreen(
+                        app,
+                        onOpenSettings = { screen = Screen.PIN },
+                        onOpenVod = { series ->
+                            vodSeries = series
+                            screen = Screen.VOD
+                        },
+                    )
+                    Screen.VOD -> VodScreen(app, startWithSeries = vodSeries, onExit = { screen = Screen.PLAYER })
                     Screen.PIN -> PinScreen(
                         title = "PIN für die Einstellungen",
                         hint = if (app.pinIsDefault) "Standard-PIN: 0000 – bitte in den Einstellungen ändern" else null,

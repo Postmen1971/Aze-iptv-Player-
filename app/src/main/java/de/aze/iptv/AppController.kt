@@ -196,6 +196,23 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         if (key in vlcFallback) vlcFallback.remove(key) else vlcFallback.add(key)
     }
 
+    // ---- Filme & Serien: Weiterschauen ----
+    private val resume = store.resumePositions()
+    var resumeVersion by mutableStateOf(0)
+        private set
+
+    fun resumeOf(key: String): Long {
+        @Suppress("UNUSED_VARIABLE") val v = resumeVersion
+        return resume[key] ?: 0L
+    }
+
+    /** Stelle merken – nicht ganz am Anfang und nicht kurz vor Schluss (dann gilt es als gesehen). */
+    fun saveResume(key: String, posMs: Long, durMs: Long) {
+        if (posMs < 60_000 || (durMs > 0 && posMs > durMs - 180_000)) resume.remove(key) else resume[key] = posMs
+        store.saveResumePositions(resume)
+        resumeVersion++
+    }
+
     var autostart by mutableStateOf(store.autostart)
         private set
 

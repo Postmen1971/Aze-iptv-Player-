@@ -90,6 +90,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-dash:$media3")
     implementation("androidx.media3:media3-ui:$media3")
 
+    // Poster und Bilder für Filme & Serien
+    implementation("io.coil-kt:coil-compose:2.7.0")
+
     // VLC als Ausweich-Player (LGPL 2.1, unverändert eingebunden)
     implementation("org.videolan.android:libvlc-all:3.6.0")
 }
