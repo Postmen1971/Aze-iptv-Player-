@@ -120,13 +120,25 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     }
 
     private fun rebuild(restoreKey: String?) {
-        lineup = Numbering.build(channels, favorites)
+        lineup = Numbering.build(channels, favorites, sources)
         current = restoreKey?.let { lineup.byKey[it] } ?: current?.let { lineup.byKey[it.channel.key] } ?: lineup.all.firstOrNull()
     }
 
+    /** Der zuletzt geschaute Sender (für OK = zurückspringen). */
+    private var previousKey: String? = null
+
     fun play(channel: NumberedChannel) {
+        val before = current?.channel?.key
+        if (before != null && before != channel.channel.key) previousKey = before
         current = channel
         store.lastChannelKey = channel.channel.key
+    }
+
+    /** Springt zwischen aktuellem und vorherigem Sender hin und her. */
+    fun playPrevious(): Boolean {
+        val target = previousKey?.let { lineup.byKey[it] } ?: return false
+        play(target)
+        return true
     }
 
     fun step(delta: Int) {
@@ -169,7 +181,43 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         refreshNow()
     }
 
+    /** Welche Playlist die Senderliste zeigt: null = alle untereinander. */
+    var playlistFilter by mutableStateOf<String?>(null)
+        private set
+
+    /** Schaltet die Senderliste weiter: Alle → Playlist 1 → Playlist 2 → … → Alle. */
+    fun nextPlaylistFilter() {
+        val ids = listOf<String?>(null) + sources.map { it.id }
+        playlistFilter = ids[(ids.indexOf(playlistFilter) + 1) % ids.size]
+    }
+
+    fun playlistName(id: String?): String =
+        if (id == null) "Alle" else sources.firstOrNull { it.id == id }?.name ?: "Playlist"
+
+    fun renameSource(source: PlaylistSource, name: String) {
+        if (name.isBlank()) return
+        sources = sources.map { if (it.id == source.id) it.copy(name = name.trim()) else it }
+        store.saveSources(sources)
+        rebuild(restoreKey = current?.channel?.key)
+    }
+
+    /** Reihenfolge der Playlists ändern (bestimmt auch die Nummerierung). */
+    fun moveSource(source: PlaylistSource, delta: Int) {
+        val list = sources.toMutableList()
+        val i = list.indexOfFirst { it.id == source.id }
+        val j = i + delta
+        if (i < 0 || j !in list.indices) return
+        list[i] = list[j].also { list[j] = list[i] }
+        sources = list
+        store.saveSources(list)
+        scope.launch {
+            channels = repo.loadCached(sources)
+            rebuild(restoreKey = current?.channel?.key)
+        }
+    }
+
     fun removeSource(source: PlaylistSource) {
+        if (playlistFilter == source.id) playlistFilter = null
         sources = sources.filterNot { it.id == source.id }
         store.saveSources(sources)
         repo.delete(source)

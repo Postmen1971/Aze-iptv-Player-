@@ -13,6 +13,27 @@ IPTV-Player für Android (Handy, Tablet, Android TV, Fire TV Stick), ab Android 
 - Senderliste automatisch aktualisieren: nur manuell, 24 / 48 / 72 Stunden oder alle zwei Wochen
 - **App-Update** manuell in den Einstellungen (lädt das neueste Release von GitHub)
 
+### Version 2
+
+- Mehrere Playlists erscheinen zusammen untereinander; oben in der Senderliste „Playlist: Alle“ oder nur eine; Playlists umbenennen und sortieren
+- Puffer Klein / Mittel / Groß (Groß spielt etwas später als live, dafür sehr stabil), Speichergrenze für schwache Geräte
+- Automatisches Neuverbinden bei Abbrüchen, Ausweich-Decoder
+- Schnellmenü im Bild (durchsichtige Leiste unten): Bildformat, Tonspur, Untertitel, Puffer
+- Proxy (HTTP/SOCKS5) nur für die App, Anzeige ob ein VPN aktiv ist
+
+### Bedienung
+
+| Taste | Funktion |
+|---|---|
+| Hoch / Runter | Sender wechseln |
+| 0–9 | Direktwahl |
+| OK kurz | zum zuletzt geschauten Sender springen |
+| OK lang / Menütaste | Schnellmenü (Bild, Ton, Untertitel, Puffer) |
+| Links / Rechts | Senderliste |
+| In der Liste: OK lang | Favorit an/aus |
+
+Touch: Tippen = Senderliste, doppelt Tippen = letzter Sender, lange Tippen = Schnellmenü.
+
 Geplant: Filme & Serien im TiviMate-Stil, YouTube-Live als eigene Gruppe, Eingabe der Playlist vom Handy aus, libVLC als zusätzlicher Player.
 
 ## Installieren

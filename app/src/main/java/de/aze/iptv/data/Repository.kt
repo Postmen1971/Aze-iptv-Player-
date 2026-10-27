@@ -15,7 +15,11 @@ class Repository(context: Context) {
     suspend fun loadCached(sources: List<PlaylistSource>): List<Channel> = withContext(Dispatchers.IO) {
         sources.flatMap { src ->
             val f = cacheFile(src)
-            if (f.exists()) runCatching { M3uParser.parse(f.readText()) }.getOrDefault(emptyList()) else emptyList()
+            if (f.exists()) {
+                runCatching { M3uParser.parse(f.readText()).map { it.copy(source = src.id) } }.getOrDefault(emptyList())
+            } else {
+                emptyList()
+            }
         }
     }
 

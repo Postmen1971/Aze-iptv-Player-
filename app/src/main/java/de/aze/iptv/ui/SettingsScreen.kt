@@ -43,7 +43,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import de.aze.iptv.AppController
 import de.aze.iptv.BuildConfig
+import de.aze.iptv.data.Network
 import de.aze.iptv.data.PlaylistSource
+import de.aze.iptv.data.ProxySettings
+import de.aze.iptv.data.ProxyType
+import de.aze.iptv.player.AspectMode
+import de.aze.iptv.player.BufferLevel
+import kotlinx.coroutines.delay
 import de.aze.iptv.data.SourceType
 import de.aze.iptv.update.Release
 import de.aze.iptv.update.Updater
@@ -82,7 +88,9 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
 
             PlaylistSection(app)
             RefreshSection(app)
+            PlaybackSection(app)
             FavoritesSection(app)
+            NetworkSection(app)
             UpdateSection()
             AboutSection()
         }
@@ -109,13 +117,32 @@ private fun PlaylistSection(app: AppController) {
         if (app.sources.isEmpty()) {
             Text("Noch keine Playlist. Füge unten einen M3U-Link oder Server + Login hinzu.", color = Palette.TextMuted, fontSize = 16.sp)
         }
-        app.sources.forEach { src ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        if (app.sources.size > 1) {
+            Text(
+                "Alle Playlists erscheinen in der Senderliste untereinander, in dieser Reihenfolge. " +
+                    "Oben in der Senderliste kannst du auch nur eine Playlist anzeigen lassen.",
+                color = Palette.TextMuted, fontSize = 15.sp,
+            )
+        }
+        app.sources.forEachIndexed { i, src ->
+            var renaming by remember(src.id) { mutableStateOf(false) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(src.name, color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Text(if (src.type == SourceType.M3U) "M3U-Link" else "Server + Login", color = Palette.TextMuted, fontSize = 14.sp)
                 }
+                if (app.sources.size > 1) {
+                    if (i > 0) TvButton("▲", onClick = { app.moveSource(src, -1) })
+                    if (i < app.sources.size - 1) TvButton("▼", onClick = { app.moveSource(src, +1) })
+                }
+                TvButton("Umbenennen", onClick = { renaming = true })
                 TvButton("Löschen", danger = true, onClick = { app.removeSource(src) })
+            }
+            if (renaming) {
+                InputDialog("Name der Playlist", src.name, password = false, keyboard = KeyboardType.Text, onDone = {
+                    app.renameSource(src, it)
+                    renaming = false
+                }, onCancel = { renaming = false })
             }
         }
 
@@ -167,6 +194,78 @@ private fun RefreshSection(app: AppController) {
         val last = if (app.lastRefresh > 0) SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY).format(Date(app.lastRefresh)) else "noch nie"
         Text("Zuletzt aktualisiert: $last", color = Palette.TextMuted, fontSize = 15.sp)
         TvButton(if (app.loading) "Wird aktualisiert …" else "Jetzt aktualisieren", onClick = { app.refreshNow() })
+    }
+}
+
+@Composable
+private fun PlaybackSection(app: AppController) {
+    Section("Wiedergabe") {
+        Text("Puffer", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BufferLevel.entries.forEach { lvl ->
+                TvButton(lvl.label, selected = app.bufferLevel == lvl, onClick = { app.updateBuffer(lvl) })
+            }
+        }
+        Text(app.bufferLevel.hint, color = Palette.TextMuted, fontSize = 15.sp)
+        Text("Bildformat", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AspectMode.entries.forEach { m ->
+                TvButton(m.label, selected = app.aspectMode == m, onClick = { app.updateAspect(m) })
+            }
+        }
+        Text(
+            "Schnell im Bild ändern: OK lang drücken oder Menütaste (Touch: lange tippen). " +
+                "Dort gibt es Bild, Ton, Untertitel und Puffer.",
+            color = Palette.TextMuted, fontSize = 15.sp,
+        )
+    }
+}
+
+@Composable
+private fun NetworkSection(app: AppController) {
+    val context = LocalContext.current
+    var vpn by remember { mutableStateOf(Network.vpnActive(context)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(5_000)
+            vpn = Network.vpnActive(context)
+        }
+    }
+    Section("Netzwerk") {
+        Text(
+            if (vpn) "VPN auf diesem Gerät: aktiv" else "VPN auf diesem Gerät: nicht aktiv",
+            color = if (vpn) Palette.Accent else Palette.TextSoft,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+        val p = app.proxy
+        var type by remember { mutableStateOf(p.type) }
+        var host by remember { mutableStateOf(p.host) }
+        var port by remember { mutableStateOf(if (p.port > 0) p.port.toString() else "") }
+        var user by remember { mutableStateOf(p.user) }
+        var pass by remember { mutableStateOf(p.pass) }
+
+        Text("Proxy nur für diese App (optional)", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            ProxyType.entries.forEach { t ->
+                TvButton(t.label, selected = type == t, onClick = { type = t })
+            }
+        }
+        if (type != ProxyType.OFF) {
+            InputRow("Proxy-Adresse", host, placeholder = "z. B. proxy.anbieter.com", keyboard = KeyboardType.Uri) { host = it }
+            InputRow("Port", port, placeholder = "z. B. 1080", keyboard = KeyboardType.Number) { port = it.filter(Char::isDigit) }
+            InputRow("Benutzer (falls nötig)", user) { user = it }
+            InputRow("Passwort (falls nötig)", pass, password = true) { pass = it }
+        }
+        val pending = ProxySettings(type, host.trim(), port.toIntOrNull() ?: 0, user.trim(), pass)
+        TvButton(if (pending == p) "Gespeichert" else "Proxy-Einstellung übernehmen", onClick = {
+            app.updateProxy(pending)
+            app.message = when {
+                pending.type == ProxyType.OFF -> "Proxy ausgeschaltet."
+                pending.active -> "Proxy aktiv: Verbindungen laufen über ${pending.host}:${pending.port}."
+                else -> "Proxy unvollständig: Adresse und Port angeben."
+            }
+        })
     }
 }
 

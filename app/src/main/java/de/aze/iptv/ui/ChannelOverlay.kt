@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,7 +52,11 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
     BackHandler(onBack = onClose)
 
     val lineup = app.lineup
-    val groups = lineup.groups.filter { it.channels.isNotEmpty() || it.isFavorites }
+    val filter = app.playlistFilter
+    val multi = app.sources.size > 1
+    val groups = lineup.groups.filter {
+        (it.channels.isNotEmpty() || it.isFavorites) && (it.isFavorites || filter == null || it.sourceId == filter)
+    }
     val currentKey = app.current?.channel?.key
     val startGroup = groups.indexOfFirst { g -> g.channels.any { it.channel.key == currentKey } }.coerceAtLeast(0)
     var selectedGroup by remember { mutableIntStateOf(startGroup) }
@@ -85,6 +90,17 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                 Text("GRUPPEN", color = Palette.TextMuted, fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 TvButton("Einstellungen", onClick = onOpenSettings)
             }
+            if (multi) {
+                // Alle Playlists untereinander oder nur eine davon.
+                TvButton(
+                    "Playlist: ${app.playlistName(filter)}",
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    onClick = {
+                        app.nextPlaylistFilter()
+                        selectedGroup = 0
+                    },
+                )
+            }
             val groupState = rememberLazyListState(initialFirstVisibleItemIndex = startGroup)
             LazyColumn(state = groupState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(groups) { index, group ->
@@ -99,7 +115,7 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(48.dp)
+                                .heightIn(min = 48.dp)
                                 .background(
                                     when {
                                         focused -> Palette.Accent
@@ -112,15 +128,26 @@ fun ChannelOverlay(app: AppController, onClose: () -> Unit, onOpenSettings: () -
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             val fg = if (focused) Palette.OnAccent else Palette.Text
-                            Text(
-                                if (group.isFavorites) "★ ${group.name}" else group.name,
-                                color = fg,
-                                fontSize = 18.sp,
-                                fontWeight = if (focused || active) FontWeight.Bold else FontWeight.Medium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    if (group.isFavorites) "★ ${group.name}" else group.name,
+                                    color = fg,
+                                    fontSize = 18.sp,
+                                    fontWeight = if (focused || active) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                // Bei mehreren Playlists in der Ansicht "Alle": Herkunft klein darunter.
+                                if (multi && filter == null && group.sourceName != null) {
+                                    Text(
+                                        group.sourceName,
+                                        color = if (focused) Palette.OnAccent else Palette.TextMuted,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                             Text(group.range, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 14.sp)
                         }
                     }

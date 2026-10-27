@@ -8,6 +8,8 @@ data class Channel(
     val group: String,
     val logo: String?,
     val url: String,
+    /** id der Playlist, aus der der Sender stammt. */
+    val source: String = "",
 ) {
     val key: String get() = url
 }
@@ -49,6 +51,8 @@ data class ChannelGroup(
     val name: String,
     val isFavorites: Boolean,
     val channels: List<NumberedChannel>,
+    val sourceId: String? = null,
+    val sourceName: String? = null,
 ) {
     val range: String
         get() = if (channels.isEmpty()) "–" else "${channels.first().number}–${channels.last().number}"

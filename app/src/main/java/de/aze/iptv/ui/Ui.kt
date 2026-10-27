@@ -61,6 +61,9 @@ fun Focusable(
 ) {
     var focused by remember { mutableStateOf(false) }
     var longFired by remember { mutableStateOf(false) }
+    // Nur auf OK reagieren, wenn der Tastendruck auch hier begonnen hat
+    // (sonst würde das Loslassen eines langen OK, das ein Menü geöffnet hat, sofort etwas auslösen).
+    var downSeen by remember { mutableStateOf(false) }
     Box(
         modifier = modifier
             .onFocusChanged {
@@ -73,15 +76,17 @@ fun Focusable(
                     KeyEventType.KeyDown -> {
                         if (e.nativeKeyEvent.repeatCount == 0) {
                             longFired = false
-                        } else if (!longFired && onLongClick != null) {
+                            downSeen = true
+                        } else if (downSeen && !longFired && onLongClick != null) {
                             longFired = true
                             onLongClick()
                         }
                         true
                     }
                     KeyEventType.KeyUp -> {
-                        if (!longFired) onClick()
+                        if (downSeen && !longFired) onClick()
                         longFired = false
+                        downSeen = false
                         true
                     }
                     else -> false
