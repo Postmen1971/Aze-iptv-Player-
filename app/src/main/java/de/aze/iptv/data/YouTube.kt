@@ -58,7 +58,8 @@ object YouTube {
 
     /** Adresse für den eingebetteten Player. */
     fun embedUrl(url: String, origin: String): String {
-        val params = "autoplay=1&controls=0&rel=0&playsinline=1&enablejsapi=1&origin=$origin"
+        // vq = gewünschte Qualität (höchste); der Player schaltet zusätzlich nach dem Start hoch
+        val params = "autoplay=1&controls=0&rel=0&playsinline=1&enablejsapi=1&vq=hd1080&origin=$origin"
         return when {
             url.startsWith("youtube:channel:") ->
                 "https://www.youtube.com/embed/live_stream?channel=${url.removePrefix("youtube:channel:")}&$params"

@@ -42,6 +42,10 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
+            // Seite in voller Bildschirmbreite darstellen (statt halber Breite bei Fernseher-Dichte):
+            // YouTube wählt die Qualität nach der Playergröße – so bekommt es Platz für 1080p.
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
             webViewClient = WebViewClient()
             webChromeClient = WebChromeClient()
             // Eingebetteten Player direkt laden – mit Referer, damit YouTube die App erkennt.
@@ -57,6 +61,17 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
             web.evaluateJavascript(
                 """(function(){
                     var v=document.querySelector('video');
+                    // Nach und nach auf die höchste angebotene Qualität schalten
+                    try{
+                      var p=document.getElementById('movie_player');
+                      if(p && p.getAvailableQualityLevels){
+                        var q=p.getAvailableQualityLevels().filter(function(x){return x!=='auto';});
+                        if(q.length && p.getPlaybackQuality && p.getPlaybackQuality()!==q[0]){
+                          if(p.setPlaybackQualityRange) p.setPlaybackQualityRange(q[0], q[0]);
+                          if(p.setPlaybackQuality) p.setPlaybackQuality(q[0]);
+                        }
+                      }
+                    }catch(e){}
                     if(v && v.currentTime>0 && !v.paused) return 'play';
                     var e=document.querySelector('.ytp-error, .ytp-error-content-wrap-reason');
                     if(e && e.offsetParent!==null) return 'err:'+(e.innerText||'').trim().slice(0,80);
