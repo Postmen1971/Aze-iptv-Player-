@@ -28,7 +28,11 @@ class Repository(context: Context) {
             val f = cacheFile(src)
             if (f.exists()) {
                 runCatching {
-                    f.bufferedReader().useLines { lines -> M3uParser.parse(lines) }.map { it.copy(source = src.id) }
+                    val free = FreeLists.isFree(src)
+                    f.bufferedReader().useLines { lines -> M3uParser.parse(lines) }.map {
+                        // Freie Sender (iptv-org): alle zusammen in einer eigenen Gruppe
+                        if (free) it.copy(source = src.id, group = src.name) else it.copy(source = src.id)
+                    }
                 }.getOrDefault(emptyList())
             } else {
                 emptyList()

@@ -564,6 +564,17 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /** Freie Sender (iptv-org) ein- oder ausschalten. */
+    fun toggleFreeList(e: de.aze.iptv.data.FreeLists.Entry) {
+        val url = de.aze.iptv.data.FreeLists.url(e.code)
+        val existing = sources.firstOrNull { it.url.trim() == url }
+        if (existing != null) {
+            removeSource(existing)
+        } else {
+            addSource(PlaylistSource(java.util.UUID.randomUUID().toString(), e.name, SourceType.M3U, url))
+        }
+    }
+
     fun removeSource(source: PlaylistSource) {
         if (playlistFilter == source.id) playlistFilter = null
         sources = sources.filterNot { it.id == source.id }

@@ -140,6 +140,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 0 -> {
                     PhoneInputSection(app)
                     PlaylistSection(app)
+                    FreeListSection(app)
                 }
                 1 -> YouTubeSection(app)
                 2 -> {
@@ -206,6 +207,25 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
     ) {
         Text(title, color = Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         content()
+    }
+}
+
+/** Freie Sender (iptv-org) per Knopfdruck dazunehmen – jeweils als eigene Playlist und eigene Gruppe. */
+@Composable
+private fun FreeListSection(app: AppController) {
+    Section("Freie Sender (iptv-org)") {
+        Text(
+            "Öffentlich frei empfangbare Sender aus der Sammlung iptv-org. Die Liste wird aus dem Internet geladen und " +
+                "mit „Jetzt aktualisieren“ auf den neuesten Stand gebracht. Jede Liste erscheint als eigene Gruppe. " +
+                "Manche Streams sind nur im jeweiligen Land abrufbar oder zeitweise offline.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            de.aze.iptv.data.FreeLists.entries.forEach { e ->
+                val on = app.sources.any { it.url.trim() == de.aze.iptv.data.FreeLists.url(e.code) }
+                TvButton(if (on) "✓ ${e.name}" else "+ ${e.name}", selected = on, onClick = { app.toggleFreeList(e) })
+            }
+        }
     }
 }
 
