@@ -42,6 +42,9 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
+            // Eigene Grafik-Ebene für die WebView: behebt auf manchen Android-TV-Geräten (z. B. SHIELD)
+            // schwarzes Video bei laufendem Ton, wenn die WebView in die App-Oberfläche eingebettet ist.
+            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
             webViewClient = WebViewClient()
             webChromeClient = WebChromeClient()
             // Eingebetteten Player direkt laden – mit Referer, damit YouTube die App erkennt.
