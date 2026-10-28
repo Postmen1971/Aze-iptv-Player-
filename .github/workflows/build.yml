@@ -57,7 +57,12 @@ jobs:
           KEYSTORE_FILE: ${{ steps.key.outputs.file }}
           KEYSTORE_PASSWORD: ${{ steps.key.outputs.password }}
         run: |
-          gradle :app:assembleRelease --stacktrace
+          set -o pipefail
+          # Compiler-Fehler zusätzlich als Hinweise am Lauf anzeigen (Logs sind nicht immer abrufbar)
+          gradle :app:assembleRelease --stacktrace 2>&1 | tee build.log || {
+            grep -E "^e: |What went wrong" -A2 build.log | head -60 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          }
           mkdir -p out
           # Eine APK je Prozessor-Typ plus "universal" (läuft überall, ist aber größer).
           # Feste Namen, damit der Download-Link immer gleich bleibt.
