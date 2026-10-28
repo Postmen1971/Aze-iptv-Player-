@@ -37,41 +37,46 @@ jobs:
         id: key
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
             echo "file=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
-            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "password=$KEYSTORE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "label=" >> "$GITHUB_OUTPUT"
           else
-            echo "signed=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Kein Signaturschlüssel hinterlegt – es wird nur eine Test-APK gebaut, kein Release."
+            # Noch keine Secrets: mit dem öffentlichen Test-Schlüssel signieren (siehe keystore/README.md)
+            echo "file=$GITHUB_WORKSPACE/keystore/test.jks" >> "$GITHUB_OUTPUT"
+            echo "password=aze-test-key" >> "$GITHUB_OUTPUT"
+            echo "label= (Testversion)" >> "$GITHUB_OUTPUT"
+            echo "::warning::Keine Secrets hinterlegt – Testversion mit öffentlichem Test-Schlüssel."
           fi
 
       - name: APK bauen
         env:
           KEYSTORE_FILE: ${{ steps.key.outputs.file }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ steps.key.outputs.password }}
         run: |
-          if [ -z "$KEYSTORE_FILE" ]; then unset KEYSTORE_FILE; fi
           gradle :app:assembleRelease --stacktrace
-          # Eine APK je Prozessor-Typ plus "universal" (läuft überall, ist aber größer)
+          mkdir -p out
+          # Eine APK je Prozessor-Typ plus "universal" (läuft überall, ist aber größer).
+          # Feste Namen, damit der Download-Link immer gleich bleibt.
           for f in app/build/outputs/apk/release/app-*-release.apk; do
             abi=$(basename "$f" | sed -e 's/^app-//' -e 's/-release.apk$//')
-            cp "$f" "Aze-IPTV-Player-1.0.${GITHUB_RUN_NUMBER}-${abi}.apk"
+            cp "$f" "out/Aze-IPTV-Player-${abi}.apk"
           done
-          ls -la Aze-IPTV-Player-*.apk
+          ls -la out
 
-      - name: Test-APK ablegen
+      - name: APK als Artefakt ablegen
         uses: actions/upload-artifact@v4
         with:
           name: Aze-IPTV-Player-1.0.${{ github.run_number }}
-          path: Aze-IPTV-Player-*.apk
+          path: out/*.apk
 
       - name: Release veröffentlichen
-        if: steps.key.outputs.signed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Aze-IPTV-Player 1.0.${{ github.run_number }}
+          name: Aze-IPTV-Player 1.0.${{ github.run_number }}${{ steps.key.outputs.label }}
           body: ${{ github.event.head_commit.message }}
-          files: Aze-IPTV-Player-*.apk
+          files: out/*.apk
