@@ -42,9 +42,6 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
-            // Eigene Grafik-Ebene für die WebView: behebt auf manchen Android-TV-Geräten (z. B. SHIELD)
-            // schwarzes Video bei laufendem Ton, wenn die WebView in die App-Oberfläche eingebettet ist.
-            setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
             webViewClient = WebViewClient()
             webChromeClient = WebChromeClient()
             // Eingebetteten Player direkt laden – mit Referer, damit YouTube die App erkennt.
@@ -79,11 +76,22 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
         }
     }
 
-    DisposableEffect(web) {
+    // Die WebView wird NICHT in die Compose-Oberfläche eingebettet, sondern direkt ins App-Fenster
+    // hinter die Oberfläche gelegt. Eingebettet zeichnen manche Android-TV-Geräte (z. B. SHIELD) das Video nicht –
+    // Ton ja, Bild schwarz. Die Oberfläche darüber ist an dieser Stelle durchsichtig.
+    val root = remember(context) {
+        de.aze.iptv.player.FrameRate.findActivity(context)?.findViewById<android.view.ViewGroup>(android.R.id.content)
+    }
+    DisposableEffect(web, root) {
+        root?.addView(
+            web, 0,
+            android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT),
+        )
         onDispose {
+            root?.removeView(web)
             web.loadUrl("about:blank")
             web.destroy()
         }
     }
-    AndroidView(factory = { web }, modifier = modifier)
+    if (root == null) AndroidView(factory = { web }, modifier = modifier)
 }

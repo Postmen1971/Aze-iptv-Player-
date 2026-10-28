@@ -42,9 +42,13 @@ class Epg(
         val EMPTY = Epg(emptyMap(), emptyMap())
 
         /** Namen vergleichbar machen: "Das Erste HD" ≈ "das erste". */
+        // einmal vorbereitet (wird beim Durchblättern der Senderliste sehr oft gebraucht)
+        private val qualityRx = Regex("""\b(hd|fhd|uhd|4k|sd|\+1)\b""")
+        private val otherRx = Regex("[^a-z0-9äöüßçğışİ]")
+
         fun normName(s: String): String = s.lowercase(Locale.ROOT)
-            .replace(Regex("""\b(hd|fhd|uhd|4k|sd|\+1)\b"""), "")
-            .replace(Regex("[^a-z0-9äöüßçğışİ]"), "")
+            .replace(qualityRx, "")
+            .replace(otherRx, "")
     }
 }
 

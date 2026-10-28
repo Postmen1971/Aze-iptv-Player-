@@ -330,12 +330,18 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     fun start() {
         scope.launch {
             loading = true
-            channels = repo.loadCached(sources)
-            rebuild(restoreKey = store.lastChannelKey).join()
-            updateStatus(emptyMap())
-            loading = false
-            epg = epgRepo.load()
-            if (needsRefresh()) refreshNow()
+            try {
+                channels = repo.loadCached(sources)
+                rebuild(restoreKey = store.lastChannelKey).join()
+                updateStatus(emptyMap())
+            } finally {
+                loading = false
+            }
+            epg = runCatching { epgRepo.load() }.getOrDefault(Epg.EMPTY)
+            if (needsRefresh() || refreshPending) {
+                refreshPending = false
+                refreshNow()
+            }
             else if (sources.isNotEmpty() && epgRepo.isStale(12)) refreshEpg()
         }
     }
@@ -364,25 +370,44 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /** Wurde während einer laufenden Aktualisierung eine neue angefordert (z. B. neue Playlist), danach nachholen. */
+    private var refreshPending = false
+
     fun refreshNow() {
-        if (loading) return
+        if (loading) {
+            refreshPending = true
+            return
+        }
         scope.launch {
             loading = true
             message = "Senderliste wird aktualisiert …"
-            val errors = repo.refresh(sources)
-            channels = repo.loadCached(sources)
-            val now = System.currentTimeMillis()
-            if (errors.size < sources.size) {
-                lastRefresh = now
-                store.lastRefresh = now
+            val errors = try {
+                val errs = repo.refresh(sources)
+                channels = repo.loadCached(sources)
+                val now = System.currentTimeMillis()
+                if (errs.size < sources.size) {
+                    lastRefresh = now
+                    store.lastRefresh = now
+                }
+                updateStatus(errs)
+                rebuild(restoreKey = current?.channel?.key).join()
+                errs
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                // Nie in "wird aktualisiert" hängen bleiben
+                mapOf("" to (e.message ?: "Fehler beim Aktualisieren"))
+            } finally {
+                loading = false
             }
-            updateStatus(errors)
-            rebuild(restoreKey = current?.channel?.key).join()
-            loading = false
             message = if (errors.isEmpty()) "Senderliste aktualisiert: ${lineup.all.size} Sender"
             else errors.entries.joinToString("\n") { (id, e) -> "${sources.firstOrNull { it.id == id }?.name ?: "Playlist"}: $e" }
             // Programmzeitschrift gleich mit aktualisieren
             refreshEpg()
+            if (refreshPending) {
+                refreshPending = false
+                refreshNow()
+            }
         }
     }
 

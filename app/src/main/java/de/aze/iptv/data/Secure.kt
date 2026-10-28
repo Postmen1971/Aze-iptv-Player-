@@ -43,17 +43,72 @@ object Secure {
         }.getOrNull().also { cached = it }
     }
 
+    // ---- Schnelle Verschlüsselung ----
+    // Der Android-Schlüsselspeicher ist langsam (jeder Aufruf geht an einen Systemdienst; große Daten dauern
+    // Sekunden). Deshalb: einmal einen eigenen Datenschlüssel erzeugen, ihn mit dem Schlüsselspeicher geschützt
+    // ablegen und die Daten damit im App-Speicher verschlüsseln – genauso sicher, aber ohne Hänger.
+    private const val PREFIX2 = "enc2:"
+    @Volatile private var prefs: android.content.SharedPreferences? = null
+    @Volatile private var dataKey: SecretKey? = null
+
+    fun init(context: android.content.Context) {
+        if (prefs == null) prefs = context.applicationContext.getSharedPreferences("aze_k", android.content.Context.MODE_PRIVATE)
+    }
+
+    private fun dataKey(): SecretKey? {
+        dataKey?.let { return it }
+        synchronized(this) {
+            dataKey?.let { return it }
+            val p = prefs ?: return null
+            if (key() == null) return null
+            val bytes = p.getString("dek", null)?.let { stored ->
+                decryptKeystore(stored)?.let { Base64.decode(it, Base64.NO_WRAP) }
+            } ?: run {
+                val b = ByteArray(32).also { SecureRandom().nextBytes(it) }
+                val enc = encryptKeystore(Base64.encodeToString(b, Base64.NO_WRAP)) ?: return null
+                p.edit().putString("dek", enc).commit()
+                b
+            }
+            return javax.crypto.spec.SecretKeySpec(bytes, "AES").also { dataKey = it }
+        }
+    }
+
     fun encrypt(plain: String): String {
-        val k = key() ?: return plain
+        val k = dataKey() ?: return encryptKeystore(plain) ?: plain
+        return runCatching {
+            val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
+            val c = Cipher.getInstance("AES/GCM/NoPadding")
+            c.init(Cipher.ENCRYPT_MODE, k, GCMParameterSpec(128, iv))
+            PREFIX2 + Base64.encodeToString(iv + c.doFinal(plain.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
+        }.getOrDefault(plain)
+    }
+
+    fun decrypt(stored: String?): String? {
+        if (stored == null) return null
+        if (stored.startsWith(PREFIX2)) {
+            val k = dataKey() ?: return null
+            return runCatching {
+                val data = Base64.decode(stored.removePrefix(PREFIX2), Base64.NO_WRAP)
+                val c = Cipher.getInstance("AES/GCM/NoPadding")
+                c.init(Cipher.DECRYPT_MODE, k, GCMParameterSpec(128, data, 0, 12))
+                String(c.doFinal(data, 12, data.size - 12), Charsets.UTF_8)
+            }.getOrNull()
+        }
+        return decryptKeystore(stored)
+    }
+
+    /** Direkt mit dem Schlüsselspeicher (nur für den Datenschlüssel und ältere gespeicherte Werte). */
+    private fun encryptKeystore(plain: String): String? {
+        val k = key() ?: return null
         return runCatching {
             val c = Cipher.getInstance("AES/GCM/NoPadding")
             c.init(Cipher.ENCRYPT_MODE, k)
             val out = c.iv + c.doFinal(plain.toByteArray(Charsets.UTF_8))
             PREFIX + Base64.encodeToString(out, Base64.NO_WRAP)
-        }.getOrDefault(plain)
+        }.getOrNull()
     }
 
-    fun decrypt(stored: String?): String? {
+    private fun decryptKeystore(stored: String?): String? {
         if (stored == null || !stored.startsWith(PREFIX)) return stored
         val k = key() ?: return null
         return runCatching {

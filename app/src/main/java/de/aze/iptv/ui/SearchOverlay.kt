@@ -65,19 +65,25 @@ fun SearchOverlay(app: AppController, onClose: () -> Unit) {
     val focusManager = LocalFocusManager.current
     LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
 
-    // Suchtexte einmal vorbereiten.
-    val lineupId = System.identityHashCode(app.lineup)
-    val index = remember(lineupId) { app.lineup.all.map { it to simplify(it.channel.name + " " + it.channel.group) } }
+    // Suchtexte einmal vorbereiten und suchen – im Hintergrund, damit die Eingabe bei großen Listen nicht hakt.
+    val lineup = app.lineup
+    val index by androidx.compose.runtime.produceState<List<Pair<NumberedChannel, String>>>(emptyList(), lineup) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            lineup.all.map { it to simplify(it.channel.name + " " + it.channel.group) }
+        }
+    }
     val q = simplify(query.trim())
-    val results: List<NumberedChannel> = remember(q, lineupId) {
-        when {
-            q.isEmpty() -> emptyList()
-            q.all { it.isDigit() } -> index.filter { it.first.number.toString().startsWith(q) }.map { it.first }
-            else -> {
-                val words = q.split(' ').filter { it.isNotBlank() }
-                index.filter { (_, text) -> words.all { text.contains(it) } }.map { it.first }
-            }
-        }.take(300)
+    val results by androidx.compose.runtime.produceState<List<NumberedChannel>>(emptyList(), q, index) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            when {
+                q.isEmpty() -> emptyList()
+                q.all { it.isDigit() } -> index.filter { it.first.number.toString().startsWith(q) }.map { it.first }
+                else -> {
+                    val words = q.split(' ').filter { it.isNotBlank() }
+                    index.filter { (_, text) -> words.all { text.contains(it) } }.map { it.first }
+                }
+            }.take(300)
+        }
     }
     val currentKey = app.current?.channel?.key
 

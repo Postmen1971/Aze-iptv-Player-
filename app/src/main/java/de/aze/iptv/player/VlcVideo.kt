@@ -70,9 +70,8 @@ fun VlcVideo(
     var restart by remember { mutableIntStateOf(0) }
     var failures by remember { mutableIntStateOf(0) }
 
-    val libVlc = remember {
-        LibVLC(context, arrayListOf("--http-reconnect", "--no-stats", "--audio-time-stretch"))
-    }
+    // Eine LibVLC für die ganze App: neu anlegen kostet bei jedem Senderwechsel spürbar Zeit
+    val libVlc = remember { VlcEngine.get(context) }
     val mp = remember { MediaPlayer(libVlc) }
     val layout = remember { VLCVideoLayout(context) }
 
@@ -96,11 +95,15 @@ fun VlcVideo(
             handle.player = null
             runCatching {
                 mp.setEventListener(null)
-                mp.stop()
                 mp.detachViews()
-                mp.release()
-                libVlc.release()
             }
+            // Anhalten/Freigeben kann bei Netz-Streams Sekunden dauern → nicht auf dem Haupt-Thread (sonst hängt die App)
+            Thread({
+                runCatching {
+                    mp.stop()
+                    mp.release()
+                }
+            }, "vlc-release").start()
         }
     }
 
@@ -131,4 +134,15 @@ fun VlcVideo(
     }
 
     AndroidView(factory = { layout }, modifier = modifier)
+}
+
+
+/** Gemeinsame LibVLC-Instanz (wird beim ersten VLC-Sender angelegt und bleibt bestehen). */
+object VlcEngine {
+    @Volatile private var instance: LibVLC? = null
+
+    fun get(context: android.content.Context): LibVLC = instance ?: synchronized(this) {
+        instance ?: LibVLC(context.applicationContext, arrayListOf("--http-reconnect", "--no-stats", "--audio-time-stretch"))
+            .also { instance = it }
+    }
 }

@@ -10,6 +10,16 @@ class Store(context: Context) {
     private val prefs = context.getSharedPreferences("aze", Context.MODE_PRIVATE)
 
     init {
+        Secure.init(context)
+        // Einmalig: ältere, langsam verschlüsselte Werte auf die schnelle Verschlüsselung umstellen
+        if (!prefs.getBoolean("enc2Done", false)) {
+            val e = prefs.edit()
+            listOf("sources", "favorites", "layout", "epgUrl", "lastChannel", "proxyPass").forEach { k ->
+                val v = prefs.getString(k, null)
+                if (v != null && v.startsWith("enc1:")) Secure.decrypt(v)?.let { e.putString(k, Secure.encrypt(it)) }
+            }
+            e.putBoolean("enc2Done", true).apply()
+        }
         // Einmalig nach dem Update: Tunneling aus (verträgt sich nicht mit dem Anpassen der Bildwiederholrate)
         if (!prefs.getBoolean("tunnelReset1", false)) {
             prefs.edit().putBoolean("tunneling", false).putBoolean("tunnelReset1", true).apply()
