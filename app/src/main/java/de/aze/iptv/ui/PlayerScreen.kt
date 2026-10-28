@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -380,8 +381,11 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
     }
 
-    LaunchedEffect(overlay, quickMenu, search, teletext) {
-        if (!overlay && !quickMenu && !search) runCatching { focus.requestFocus() }
+    LaunchedEffect(overlay, quickMenu, search, teletext, football) {
+        if (!overlay && !quickMenu && !search && !football) {
+            withFrameNanos { }
+            runCatching { focus.requestFocus() }
+        }
     }
 
     // YouTube: Manche Geräte (z. B. Fire TV) zeigen das Video der WebView auf einer Ebene HINTER der App
@@ -426,7 +430,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     typeDigit(if (code <= AndroidKeyEvent.KEYCODE_9) code - AndroidKeyEvent.KEYCODE_0 else code - AndroidKeyEvent.KEYCODE_NUMPAD_0)
                     return@onKeyEvent true
                 }
-                if (overlay || quickMenu || search) return@onKeyEvent false
+                // Offene Fenster (Senderliste, Schnellmenü, Suche, Fußball heute) bekommen die Tasten selbst
+                if (overlay || quickMenu || search || football) return@onKeyEvent false
                 val isOk = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
                     code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
 
