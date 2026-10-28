@@ -426,6 +426,20 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
                 "Im Schnellmenü lässt sich das je Sender auch von Hand umschalten.",
             color = Palette.TextMuted, fontSize = 15.sp,
         )
+        Text("Bildqualität", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Immer beste Stufe", selected = app.forceHighest, onClick = { app.updateForceHighest(true) })
+            TvButton("Automatisch nach Leitung", selected = !app.forceHighest, onClick = { app.updateForceHighest(false) })
+        }
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Tunneling aus", selected = !app.tunneling, onClick = { app.updateTunneling(false) })
+            TvButton("Tunneling an", selected = app.tunneling, onClick = { app.updateTunneling(true) })
+        }
+        Text(
+            "Tunneling gibt das Bild direkt an den Video-Chip des Geräts. Auf vielen Fire-TV- und Android-TV-Geräten wirkt das Bild " +
+                "dann natürlicher und ruckelfreier. Falls Bild oder Ton danach hängen, wieder ausschalten.",
+            color = Palette.TextMuted, fontSize = 15.sp,
+        )
         Text("Untertitel", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Aus", selected = !app.subtitlesOn, onClick = { app.updateSubtitles(false) })

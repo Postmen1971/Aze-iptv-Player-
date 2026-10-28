@@ -214,6 +214,23 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         resumeVersion++
     }
 
+    /** Bildqualität: sofort die beste Stufe statt langsam hochzuschalten. */
+    var forceHighest by mutableStateOf(store.forceHighest)
+        private set
+    /** Tunneling: Bild direkt an den Video-Chip (kann Farben/Bewegung verbessern, nicht auf jedem Gerät stabil). */
+    var tunneling by mutableStateOf(store.tunneling)
+        private set
+
+    fun updateForceHighest(on: Boolean) {
+        forceHighest = on
+        store.forceHighest = on
+    }
+
+    fun updateTunneling(on: Boolean) {
+        tunneling = on
+        store.tunneling = on
+    }
+
     var autostart by mutableStateOf(store.autostart)
         private set
 

@@ -41,6 +41,12 @@ object Palette {
     val Accent = Color(0xFFF2B544)
     val OnAccent = Color(0xFF15130E)
     val Live = Color(0xFFD64545)
+
+    // Gruppenübersicht im Enigma2-Blau
+    val GroupBlue = Color(0xF2122347)
+    val GroupSelect = Color(0xFF2F64C8)
+    val GroupActive = Color(0xFF1E3566)
+    val GroupSoft = Color(0xFFB8C2D6)
 }
 
 fun isOkKey(key: Key): Boolean =

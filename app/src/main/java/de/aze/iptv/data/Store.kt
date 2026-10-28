@@ -105,6 +105,14 @@ class Store(context: Context) {
         get() = prefs.getString("engine", null)
         set(v) = prefs.edit().putString("engine", v).apply()
 
+    var forceHighest: Boolean
+        get() = prefs.getBoolean("forceHighest", true)
+        set(v) = prefs.edit().putBoolean("forceHighest", v).apply()
+
+    var tunneling: Boolean
+        get() = prefs.getBoolean("tunneling", false)
+        set(v) = prefs.edit().putBoolean("tunneling", v).apply()
+
     var autostart: Boolean
         get() = prefs.getBoolean("autostart", false)
         set(v) = prefs.edit().putBoolean("autostart", v).apply()

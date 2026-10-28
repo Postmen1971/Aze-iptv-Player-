@@ -86,7 +86,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     val level = app.bufferLevel
 
     // Bei geänderter Puffer-Stufe wird der Player neu aufgebaut.
-    val player = remember(level) {
+    val tunnel = app.tunneling
+    val player = remember(level, tunnel) {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(Http.USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
@@ -103,7 +104,13 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .setLoadControl(PlaybackConfig.loadControl(context, level))
             .build()
-            .apply { playWhenReady = true }
+            .apply {
+                playWhenReady = true
+                // Tunneling: Bild direkt an den Video-Chip des Geräts (wie bei TiviMate einstellbar)
+                (trackSelector as? androidx.media3.exoplayer.trackselection.DefaultTrackSelector)?.let { ts ->
+                    ts.setParameters(ts.buildUponParameters().setTunnelingEnabled(tunnel))
+                }
+            }
     }
 
     var noPicture by remember { mutableStateOf(true) }
@@ -230,6 +237,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .clearOverrides()
             .setPreferredAudioLanguage(app.audioLanguage)
+            // Sofort die beste Qualitätsstufe statt vorsichtig hochzuschalten
+            .setForceHighestSupportedBitrate(app.forceHighest)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !app.subtitlesOn)
             .build()
         val builder = MediaItem.Builder().setUri(ch.url)

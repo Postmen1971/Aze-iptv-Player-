@@ -95,7 +95,8 @@ fun ChannelOverlay(
                 .fillMaxHeight()
                 .widthIn(min = 240.dp)
                 .fillMaxWidth(0.27f)
-                .background(Palette.PanelDark.copy(alpha = 0.88f))
+                // Gruppenübersicht blau (wie Enigma2), Senderliste dunkel
+                .background(if (showGroups) Palette.GroupBlue else Palette.PanelDark.copy(alpha = 0.88f))
                 .padding(horizontal = 8.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -112,7 +113,7 @@ fun ChannelOverlay(
             }
 
             if (showGroups) {
-                Text("Gruppen", color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
+                Text("Gruppen", color = Palette.GroupSoft, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
                 val gState = rememberLazyListState(initialFirstVisibleItemIndex = (groupIndex - 5).coerceAtLeast(0))
                 val gFirst = remember { FocusRequester() }
                 LazyColumn(
@@ -141,22 +142,22 @@ fun ChannelOverlay(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(34.dp)
-                                    .background(if (focused) Palette.Accent else if (i == groupIndex) Palette.Raised else Palette.PanelDark.copy(alpha = 0f), RoundedCornerShape(7.dp))
+                                    .background(if (focused) Palette.GroupSelect else if (i == groupIndex) Palette.GroupActive else Palette.GroupBlue.copy(alpha = 0f), RoundedCornerShape(7.dp))
                                     .padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         (if (g.isFavorites) "★ " else "") + g.name,
-                                        color = if (focused) Palette.OnAccent else Palette.Text,
+                                        color = Palette.Text,
                                         fontSize = 15.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
                                     if (multi && filter == null && g.sourceName != null) {
-                                        Text(g.sourceName, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 10.sp, maxLines = 1)
+                                        Text(g.sourceName, color = Palette.GroupSoft, fontSize = 10.sp, maxLines = 1)
                                     }
                                 }
-                                Text(g.range, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 11.sp)
+                                Text(g.range, color = if (focused) Palette.Text else Palette.GroupSoft, fontSize = 11.sp)
                             }
                         }
                     }
