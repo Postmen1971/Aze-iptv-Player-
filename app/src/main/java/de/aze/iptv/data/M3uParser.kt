@@ -14,10 +14,9 @@ object M3uParser {
     /** Zeilenweise lesen – so muss auch eine sehr große Liste nie komplett im Speicher liegen. */
     fun parse(lines: Sequence<String>): List<Channel> {
         val result = ArrayList<Channel>()
-        var name: String? = null
-        var group = ""
-        var logo: String? = null
-        var tvgId: String? = null
+        // Die #EXTINF-Zeile wird erst ausgewertet, wenn feststeht, dass es ein Live-Sender ist –
+        // Listen mit zehntausenden Filmen/Serien laden so viel schneller.
+        var extinf: String? = null
         var extGroup: String? = null
 
         lines.forEach { rawLine ->
@@ -25,14 +24,7 @@ object M3uParser {
             when {
                 line.isEmpty() -> Unit
                 line.startsWith("#EXTINF", ignoreCase = true) -> {
-                    val attrs = attrRegex.findAll(line).associate {
-                        it.groupValues[1].lowercase() to it.groupValues[2].ifEmpty { it.groupValues[3] }
-                    }
-                    group = (attrs["group-title"] ?: attrs["tvg-group"] ?: attrs["group"]).orEmpty().trim()
-                    logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() }
-                    tvgId = attrs["tvg-id"]?.trim()?.takeIf { it.isNotEmpty() }
-                    val title = titleOf(line)
-                    name = title.ifBlank { attrs["tvg-name"].orEmpty() }
+                    extinf = line
                     extGroup = null
                 }
                 line.startsWith("#EXTGRP:", ignoreCase = true) -> {
@@ -40,15 +32,24 @@ object M3uParser {
                 }
                 line.startsWith("#") -> Unit
                 else -> {
-                    val n = name
-                    if (n != null && !isVod(line)) {
+                    val inf = extinf
+                    if (inf != null && !isVod(line)) {
+                        val attrs = attrRegex.findAll(inf).associate {
+                            it.groupValues[1].lowercase() to it.groupValues[2].ifEmpty { it.groupValues[3] }
+                        }
+                        val group = (attrs["group-title"] ?: attrs["tvg-group"] ?: attrs["group"]).orEmpty().trim()
+                        val name = titleOf(inf).ifBlank { attrs["tvg-name"].orEmpty() }
                         val g = group.ifBlank { extGroup.orEmpty() }.ifBlank { "Ohne Gruppe" }
-                        result.add(Channel(name = n.trim(), group = g, logo = logo, url = line, tvgId = tvgId))
+                        result.add(
+                            Channel(
+                                name = name.trim(), group = g,
+                                logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() },
+                                url = line,
+                                tvgId = attrs["tvg-id"]?.trim()?.takeIf { it.isNotEmpty() },
+                            ),
+                        )
                     }
-                    name = null
-                    group = ""
-                    logo = null
-                    tvgId = null
+                    extinf = null
                     extGroup = null
                 }
             }

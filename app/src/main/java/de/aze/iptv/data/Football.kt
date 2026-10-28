@@ -22,7 +22,14 @@ class TodayMatch(
 )
 
 /** Ein Sender, der laut Programmzeitschrift das Spiel zeigt. */
-class MatchChannel(val channel: NumberedChannel, val programme: Programme, val sure: Boolean)
+class MatchChannel(
+    val channel: NumberedChannel,
+    /** Sendung aus der Programmzeitschrift (null = laut TV-Plan) */
+    val programme: Programme?,
+    val sure: Boolean,
+    /** Name des Senders laut TV-Plan, falls daher */
+    val listed: String? = null,
+)
 
 /**
  * „Welches Spiel läuft wo?“
@@ -139,11 +146,31 @@ object Football {
             .replace(marks, "")
 
     /** Aussagekräftige Wörter eines Vereinsnamens, z. B. "Borussia Dortmund" → [borussia, dortmund]. */
-    private fun tokens(team: String): List<String> =
+    fun tokens(team: String): List<String> =
         norm(team).split(Regex("[^a-z0-9]+")).filter { it.length >= 3 && it !in generic }
             .ifEmpty { listOf(norm(team).replace(Regex("[^a-z0-9]"), "")) }
 
     private val footballWords = listOf("fussball", "football", "futbol", "liga", "lig ", "league", "cup", "kupa", "pokal", "mac", "canli")
+
+    // ---- Sendernamen aus dem TV-Plan den eigenen Sendern zuordnen ----
+
+    private val nameNoise = setOf("hd", "fhd", "uhd", "4k", "sd", "tv", "tr", "de", "at", "ch", "live", "turkiye", "turkey", "germany", "deutschland")
+
+    private fun nameTokens(s: String): List<String> =
+        norm(s).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in nameNoise }
+
+    /** Eigene Sender mit vorbereiteten Namen (einmal je Fenster). */
+    class NameIndex(val items: List<Pair<NumberedChannel, String>>)
+
+    fun nameIndex(lineup: Lineup): NameIndex =
+        NameIndex(lineup.all.map { it to " " + nameTokens(it.channel.name).joinToString(" ") + " " })
+
+    /** Eigene Sender, deren Name zum Sender aus dem TV-Plan passt (z. B. "beIN Sports 1" → "TR: BEIN SPORTS 1 HD"). */
+    fun matchByName(listed: String, idx: NameIndex): List<NumberedChannel> {
+        val t = nameTokens(listed)
+        if (t.isEmpty()) return emptyList()
+        return idx.items.filter { (_, n) -> t.all { n.contains(" $it ") } }.map { it.first }.take(4)
+    }
 
     /** Vorbereitete Programmzeitschrift: je Sender die Sendungen des Tages mit vereinfachtem Titel. */
     class EpgIndex(val items: List<Pair<NumberedChannel, List<Pair<Programme, String>>>>)

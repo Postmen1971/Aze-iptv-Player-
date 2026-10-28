@@ -45,7 +45,14 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-private class GuideData(val matches: List<TodayMatch>, val channels: Map<String, List<MatchChannel>>, val error: String?)
+private class GuideData(
+    val matches: List<TodayMatch>,
+    /** eigene Sender je Spiel (Programmzeitschrift + TV-Plan zugeordnet) */
+    val channels: Map<String, List<MatchChannel>>,
+    /** alle Sender laut TV-Plan je Spiel */
+    val listed: Map<String, List<de.aze.iptv.data.TvListings.Broadcast>>,
+    val error: String?,
+)
 
 /**
  * „Fußball heute“: alle Spiele des Tages (wie in SkorText) – OK öffnet ein Fenster mit den Sendern,
@@ -64,19 +71,31 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
         value = withContext(Dispatchers.IO) {
             val matches = runCatching { Football.today() }
             val list = matches.getOrDefault(emptyList())
+            val plan = runCatching { de.aze.iptv.data.TvListings.today() }.getOrDefault(emptyList())
+            val names = Football.nameIndex(lineup)
             val dayStart = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
             }.timeInMillis
             val idx = Football.index(epg, lineup, dayStart, dayStart + 30 * 3_600_000L)
+            val listed = list.associate { it.id to de.aze.iptv.data.TvListings.forMatch(it, plan) }
             GuideData(
                 matches = list,
-                channels = list.associate { it.id to Football.channelsFor(it, idx) },
+                channels = list.associate { m ->
+                    val fromEpg = Football.channelsFor(m, idx)
+                    val fromPlan = listed[m.id].orEmpty().flatMap { b ->
+                        Football.matchByName(b.channel, names).map { MatchChannel(it, null, true, b.channel) }
+                    }
+                    m.id to (fromPlan + fromEpg).distinctBy { it.channel.channel.key }
+                        .sortedWith(compareBy({ !it.sure }, { it.channel.number }))
+                },
+                listed = listed,
                 error = matches.exceptionOrNull()?.let { "Spiele konnten nicht geladen werden (Internet?)" },
             )
         }
     }
 
     val first = remember { FocusRequester() }
+    var selected by remember { mutableIntStateOf(0) }
     LaunchedEffect(data, popup) {
         if (data != null && popup == null) {
             withFrameNanos { }
@@ -121,9 +140,12 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
                             )
                         }
                         val n = d.channels[m.id].orEmpty().size
+                        val planned = d.listed[m.id].orEmpty().size
                         Focusable(
-                            modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                            // Fokus-Anker auf der zuletzt gewählten Zeile – nach dem Schließen des Fensters geht es dort weiter
+                            modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(first) else Modifier),
                             onClick = { popup = m },
+                            onFocus = { selected = i },
                         ) { focused ->
                             val fg = if (focused) Palette.OnAccent else Palette.Text
                             val soft = if (focused) Palette.OnAccent else Palette.TextMuted
@@ -146,9 +168,13 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
                                 )
                                 m.score?.let { Text(it, color = fg, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
                                 Text(
-                                    when (n) { 0 -> "–"; 1 -> "1 Sender"; else -> "$n Sender" },
+                                    when {
+                                        n > 0 -> "$n Sender"
+                                        planned > 0 -> "$planned im Plan"
+                                        else -> "–"
+                                    },
                                     color = if (n > 0 && !focused) Palette.Highlight else soft, fontSize = 12.sp,
-                                    modifier = Modifier.width(64.dp),
+                                    modifier = Modifier.width(76.dp),
                                 )
                             }
                         }
@@ -162,6 +188,7 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
             MatchPopup(
                 match = p,
                 channels = data?.channels?.get(p.id).orEmpty(),
+                listed = data?.listed?.get(p.id).orEmpty(),
                 current = app.current?.channel?.key,
                 onPlay = { nc ->
                     app.play(nc)
@@ -178,6 +205,7 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
 private fun MatchPopup(
     match: TodayMatch,
     channels: List<MatchChannel>,
+    listed: List<de.aze.iptv.data.TvListings.Broadcast>,
     current: String?,
     onPlay: (de.aze.iptv.data.NumberedChannel) -> Unit,
     onClose: () -> Unit,
@@ -204,9 +232,13 @@ private fun MatchPopup(
             )
             if (channels.isEmpty()) {
                 Text(
-                    "In der Programmzeitschrift deiner Sender wurde kein Sender für dieses Spiel gefunden.",
+                    if (listed.isEmpty()) "Kein Sender gefunden – weder in deiner Programmzeitschrift noch im TV-Plan."
+                    else "Keiner dieser Sender ist in deiner Senderliste:",
                     color = Palette.TextSoft, fontSize = 14.sp,
                 )
+                listed.take(12).forEach { b ->
+                    Text("• ${b.channel}" + (if (b.country.isNotBlank()) "  (${b.country})" else ""), color = Palette.Text, fontSize = 14.sp)
+                }
                 TvButton("Schließen", modifier = Modifier.focusRequester(first), onClick = onClose)
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -230,11 +262,23 @@ private fun MatchPopup(
                                     Text(mc.channel.channel.name, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                     if (!mc.sure) Text("vermutlich", color = if (focused) fg else Palette.TextMuted, fontSize = 11.sp)
                                 }
+                                val prog = mc.programme
                                 Text(
-                                    time.format(Date(mc.programme.start)) + "  " + mc.programme.title,
+                                    if (prog != null) time.format(Date(prog.start)) + "  " + prog.title else "laut TV-Plan: ${mc.listed}",
                                     color = if (focused) fg else Palette.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 )
                             }
+                        }
+                    }
+                    // Weitere Sender laut TV-Plan, die nicht in deiner Liste sind
+                    val own = channels.mapNotNull { it.listed?.lowercase() }.toSet()
+                    val others = listed.filter { it.channel.lowercase() !in own }
+                    if (others.isNotEmpty()) {
+                        item {
+                            Text(
+                                "Laut TV-Plan außerdem: " + others.take(10).joinToString(", ") { it.channel + (if (it.country.isNotBlank()) " (${it.country})" else "") },
+                                color = Palette.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp),
+                            )
                         }
                     }
                 }

@@ -24,20 +24,20 @@ class Repository(context: Context) {
     fun cacheFileOf(source: PlaylistSource): File = cacheFile(source)
 
     suspend fun loadCached(sources: List<PlaylistSource>): List<Channel> = withContext(Dispatchers.IO) {
-        sources.flatMap { src ->
-            val f = cacheFile(src)
-            if (f.exists()) {
-                runCatching {
-                    val free = FreeLists.isFree(src)
-                    f.bufferedReader().useLines { lines -> M3uParser.parse(lines) }.map {
-                        // Freie Sender (iptv-org): alle zusammen in einer eigenen Gruppe
-                        if (free) it.copy(source = src.id, group = src.name) else it.copy(source = src.id)
-                    }
-                }.getOrDefault(emptyList())
-            } else {
-                emptyList()
+        // Alle Playlists gleichzeitig lesen (schnellerer Start)
+        sources.map { src -> kotlinx.coroutines.async { readCached(src) } }.flatMap { it.await() }
+    }
+
+    private fun readCached(src: PlaylistSource): List<Channel> {
+        val f = cacheFile(src)
+        if (!f.exists()) return emptyList()
+        return runCatching {
+            val free = FreeLists.isFree(src)
+            f.bufferedReader().useLines { lines -> M3uParser.parse(lines) }.map {
+                // Freie Sender (iptv-org): alle zusammen in einer eigenen Gruppe
+                if (free) it.copy(source = src.id, group = src.name) else it.copy(source = src.id)
             }
-        }
+        }.getOrDefault(emptyList())
     }
 
     fun hasCache(sources: List<PlaylistSource>): Boolean = sources.any { cacheFile(it).exists() }
