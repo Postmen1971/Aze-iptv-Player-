@@ -63,6 +63,7 @@ import de.aze.iptv.player.BufferLevel
 import de.aze.iptv.player.FpsProbe
 import de.aze.iptv.player.FrameRate
 import de.aze.iptv.player.rememberDisplayWatch
+import de.aze.iptv.player.createPlayerView
 import de.aze.iptv.player.PlaybackConfig
 import de.aze.iptv.player.TrackHelper
 import de.aze.iptv.player.PlayerEngine
@@ -128,6 +129,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     val afrOn = app.afr
     // Nach dem Umschalten der Frequenz wird die Bildfläche neu angelegt (sonst friert das Bild auf manchen Geräten ein)
     val displayWatch = rememberDisplayWatch()
+    val useTexture = app.afr && !app.tunneling
     val probe = remember(player) {
         FpsProbe { fps ->
             val act = activity
@@ -501,11 +503,11 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     )
                 }
             }
-        } else key(displayWatch.tick) {
+        } else key(displayWatch.tick, useTexture) {
             AndroidView(
                 modifier = videoModifier,
                 factory = { ctx ->
-                    PlayerView(ctx).apply {
+                    createPlayerView(ctx, useTexture).apply {
                         useController = false
                         setShutterBackgroundColor(android.graphics.Color.BLACK)
                         setKeepContentOnPlayerReset(false)

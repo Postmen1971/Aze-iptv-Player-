@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Player mit TextureView: Bild wird von der Grafik der App gezeichnet statt über eine eigene Video-Ebene.
+     Hilft bei Geräten, deren Video-Ebene nach dem Umschalten der Bildwiederholrate stehen bleibt. -->
+<androidx.media3.ui.PlayerView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    app:surface_type="texture_view"
+    app:use_controller="false" />

@@ -85,6 +85,7 @@ import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.FpsProbe
 import de.aze.iptv.player.FrameRate
 import de.aze.iptv.player.rememberDisplayWatch
+import de.aze.iptv.player.createPlayerView
 import de.aze.iptv.player.TrackHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -741,11 +742,12 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
         } else {
             Modifier.fillMaxSize()
         }
-        androidx.compose.runtime.key(displayWatch.tick) {
+        val useTexture = app.afr && !app.tunneling
+        androidx.compose.runtime.key(displayWatch.tick, useTexture) {
             AndroidView(
                 modifier = videoModifier,
                 factory = { ctx ->
-                    PlayerView(ctx).apply {
+                    createPlayerView(ctx, useTexture).apply {
                         this.player = player
                         useController = false
                         setShutterBackgroundColor(android.graphics.Color.BLACK)

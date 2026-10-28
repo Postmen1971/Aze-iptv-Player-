@@ -166,3 +166,16 @@ fun rememberDisplayWatch(): DisplayWatch {
     }
     return watch
 }
+
+/**
+ * Bildfläche für den Player. Bei angepasster Bildwiederholrate wird eine TextureView genommen:
+ * Manche Geräte (z. B. Fire TV) lassen die eigene Video-Ebene (SurfaceView) nach dem Frequenzwechsel stehen –
+ * das Bild friert ein, bis ein Menü darübergelegt wird. Die TextureView zeichnet das Bild über die App-Grafik
+ * und ist davon nicht betroffen. (Tunneling braucht die SurfaceView, deshalb dann die normale Fläche.)
+ */
+fun createPlayerView(context: Context, texture: Boolean): androidx.media3.ui.PlayerView =
+    if (texture) {
+        android.view.LayoutInflater.from(context).inflate(de.aze.iptv.R.layout.player_texture, null) as androidx.media3.ui.PlayerView
+    } else {
+        androidx.media3.ui.PlayerView(context)
+    }
