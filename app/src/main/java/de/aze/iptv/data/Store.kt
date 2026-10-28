@@ -139,6 +139,11 @@ class Store(context: Context) {
         get() = prefs.getBoolean("afr", false)
         set(v) = prefs.edit().putBoolean("afr", v).apply()
 
+    /** YouTube-Sender in der offiziellen YouTube-App öffnen statt im eingebauten Player. */
+    var youtubeExternal: Boolean
+        get() = prefs.getBoolean("ytExternal", false)
+        set(v) = prefs.edit().putBoolean("ytExternal", v).apply()
+
     var autostart: Boolean
         get() = prefs.getBoolean("autostart", false)
         set(v) = prefs.edit().putBoolean("autostart", v).apply()

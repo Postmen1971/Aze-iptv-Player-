@@ -293,6 +293,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     }
 
     val currentKey = app.current?.channel?.key
+    // YouTube-App: nur beim Wählen des Senders öffnen, nicht erneut beim Zurückkommen in die App
+    var startedYt by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(currentKey) { watchdogRestarts = 0 }
     LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick, restartTick) {
         val ch = app.current?.channel ?: return@LaunchedEffect
@@ -308,8 +310,21 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         if (YouTube.isYouTube(ch.url)) {
             // YouTube läuft in einem eigenen Player; Media3 leeren.
             player.clearMediaItems()
+            if (app.youtubeExternal && startedYt != ch.key) {
+                // Nach kurzem Warten (schnelles Durchschalten) in der offiziellen YouTube-App öffnen
+                delay(600)
+                startedYt = ch.key
+                val ok = runCatching {
+                    context.startActivity(
+                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(YouTube.watchUrl(ch.url)))
+                            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                    )
+                }.isSuccess
+                ytError = if (ok) "In der YouTube-App geöffnet" else "YouTube-App ist nicht installiert"
+            }
             return@LaunchedEffect
         }
+        startedYt = null
         if (useVlc) player.clearMediaItems()
         // Kurz warten: wer mehrfach schnell ▲/▼ drückt, lädt nur den Sender, bei dem er stehen bleibt.
         // (Ein neuer Tastendruck bricht diese Wartezeit ab.)
@@ -524,7 +539,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         val ytUrl = app.current?.channel?.url?.takeIf { YouTube.isYouTube(it) }
         if (ytUrl != null) {
             // Im Hintergrund wird der YouTube-Player entfernt, damit kein Ton weiterläuft.
-            if (!inBackground) 
+            if (!inBackground && !app.youtubeExternal)
             key(ytUrl) {
                 YouTubeView(
                     url = ytUrl,

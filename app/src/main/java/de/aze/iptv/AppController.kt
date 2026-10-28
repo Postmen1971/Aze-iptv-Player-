@@ -434,6 +434,14 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    var youtubeExternal by mutableStateOf(store.youtubeExternal)
+        private set
+
+    fun updateYoutubeExternal(on: Boolean) {
+        youtubeExternal = on
+        store.youtubeExternal = on
+    }
+
     fun removeYoutube(entry: YtEntry) {
         youtube = youtube.filterNot { it.id == entry.id }
         store.youtube = youtube

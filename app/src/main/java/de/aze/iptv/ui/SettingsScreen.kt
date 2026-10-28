@@ -495,6 +495,16 @@ private fun WebEditSection(app: AppController) {
 @Composable
 private fun YouTubeSection(app: AppController) {
     Section("YouTube Live") {
+        Text("Abspielen", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Im Player der App", selected = !app.youtubeExternal, onClick = { app.updateYoutubeExternal(false) })
+            TvButton("In der YouTube-App", selected = app.youtubeExternal, onClick = { app.updateYoutubeExternal(true) })
+        }
+        Text(
+            "Zeigt dein Gerät bei YouTube-Sendern nur Ton ohne Bild, „In der YouTube-App“ wählen: Der Sender startet dann " +
+                "in der offiziellen YouTube-App, mit Zurück geht es hierher zurück.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
         Text(
             "YouTube-Livesender erscheinen als eigene Gruppe „YouTube Live“. Am besten den Kanal-Link eintragen " +
                 "(z. B. youtube.com/@trthaber) – dann läuft immer der aktuelle Livestream. " +
