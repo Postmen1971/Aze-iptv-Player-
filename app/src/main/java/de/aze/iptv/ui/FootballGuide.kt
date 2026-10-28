@@ -72,12 +72,17 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
             val matches = runCatching { Football.today() }
             val list = matches.getOrDefault(emptyList())
             val plan = runCatching { de.aze.iptv.data.TvListings.today() }.getOrDefault(emptyList())
+            // Erste Quelle für Sender: liveonsat.com (wie das Enigma2-Plugin FootOnSat)
+            val los = runCatching { de.aze.iptv.data.LiveOnSat.today() }.getOrDefault(emptyList())
             val names = Football.nameIndex(lineup)
             val dayStart = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
             }.timeInMillis
             val idx = Football.index(epg, lineup, dayStart, dayStart + 30 * 3_600_000L)
-            val listed = list.associate { it.id to de.aze.iptv.data.TvListings.forMatch(it, plan) }
+            val listed = list.associate { m ->
+                val fromLos = de.aze.iptv.data.LiveOnSat.forMatch(m, los).map { de.aze.iptv.data.TvListings.Broadcast("", it, "") }
+                m.id to (fromLos + de.aze.iptv.data.TvListings.forMatch(m, plan)).distinctBy { it.channel.lowercase() }
+            }
             GuideData(
                 matches = list,
                 channels = list.associate { m ->
