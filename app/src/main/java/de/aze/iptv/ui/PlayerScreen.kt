@@ -125,8 +125,18 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // Bildwiederholrate an den Sender anpassen
     val activity = remember(context) { FrameRate.findActivity(context) }
     val afrOn = app.afr
+    // Nach dem Umschalten der Frequenz Wiedergabe neu starten (sonst friert das Bild auf manchen Geräten ein)
+    var afrRestart by remember { mutableIntStateOf(0) }
     val probe = remember(player) {
-        FpsProbe { fps -> if (app.afr) activity?.let { FrameRate.match(it, fps) } }.also { it.attach(player) }
+        FpsProbe { fps ->
+            val act = activity
+            if (app.afr && act != null && FrameRate.match(act, fps)) {
+                scope.launch {
+                    delay(1_800)
+                    afrRestart++
+                }
+            }
+        }.also { it.attach(player) }
     }
     LaunchedEffect(afrOn) { if (!afrOn) activity?.let { FrameRate.reset(it) } }
 
@@ -140,6 +150,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // Fußball-Videotext (SkorText) als Ebene über dem Programm
     var teletext by remember { mutableStateOf(false) }
     var teletextWeb by remember { mutableStateOf<android.webkit.WebView?>(null) }
+    // Zurück beim Fernsehen: erst die Senderliste zeigen (weiter: Gruppen, dann App beenden)
+    androidx.activity.compose.BackHandler(enabled = !overlay && !quickMenu && !search && !teletext) { overlay = true }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
@@ -249,7 +261,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     }
 
     val currentKey = app.current?.channel?.key
-    LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick) {
+    LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick, afrRestart) {
         val ch = app.current?.channel ?: return@LaunchedEffect
         retryJob?.cancel()
         if (startedKey != ch.key) retries = 0
@@ -539,7 +551,11 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 overlay = false
                 search = true
             }
-            ChannelOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch, onVod = { overlay = false; onOpenVod(it) })
+            ChannelOverlay(
+                app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch,
+                onVod = { overlay = false; onOpenVod(it) },
+                onExitApp = { activity?.finish() },
+            )
         }
 
         if (search) {

@@ -32,9 +32,13 @@ object FrameRate {
         return null
     }
 
-    /** Stellt den Bildschirm auf eine zur Bildrate passende Frequenz um. Gibt die gewählte Frequenz zurück (oder null). */
-    fun match(activity: Activity, fps: Float): Float? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || fps < 10f || fps > 125f) return null
+    /**
+     * Stellt den Bildschirm auf eine zur Bildrate passende Frequenz um.
+     * Gibt true zurück, wenn wirklich umgeschaltet wird – dann muss die Wiedergabe kurz neu gestartet werden,
+     * weil manche Geräte (z. B. Fire TV) das Bild nach dem Umschalten sonst einfrieren lassen.
+     */
+    fun match(activity: Activity, fps: Float): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || fps < 10f || fps > 125f) return false
         @Suppress("DEPRECATION")
         val display: Display = activity.windowManager.defaultDisplay
         val cur = display.mode
@@ -49,19 +53,17 @@ object FrameRate {
             return n
         }
         val candidates = sameSize.mapNotNull { m -> multiple(m.refreshRate)?.let { m to it } }
-        if (candidates.isEmpty()) return null
+        if (candidates.isEmpty()) return false
         // Bevorzugt 48 Hz und mehr (24/25-Hz-Modi flackern bei manchen Fernsehern im Menü), dann das kleinste Vielfache
         val best = candidates.minWith(
             compareBy<Pair<Display.Mode, Int>>({ if (it.first.refreshRate >= 47f) 0 else 1 }, { it.second }, { abs(it.first.refreshRate / it.second - fps) }),
         ).first
-        if (best.modeId != cur.modeId) {
-            val attrs = activity.window.attributes
-            if (attrs.preferredDisplayModeId != best.modeId) {
-                attrs.preferredDisplayModeId = best.modeId
-                activity.window.attributes = attrs
-            }
-        }
-        return best.refreshRate
+        if (best.modeId == cur.modeId) return false
+        val attrs = activity.window.attributes
+        if (attrs.preferredDisplayModeId == best.modeId) return false
+        attrs.preferredDisplayModeId = best.modeId
+        activity.window.attributes = attrs
+        return true
     }
 
     /** Zurück zur Standard-Frequenz des Geräts. */

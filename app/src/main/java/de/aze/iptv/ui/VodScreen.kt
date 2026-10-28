@@ -217,6 +217,19 @@ private fun Browse(
 
     Box(Modifier.fillMaxSize().background(Palette.Ground)) {
         Row(Modifier.fillMaxSize()) {
+            // Menü wie beim Fernsehen: schiebt sich links neben die Kategorien
+            if (menu) {
+                SideMenu(
+                    multi = multi,
+                    playlistLabel = sourceLabel,
+                    onTv = onExit,
+                    onVod = { s -> menu = false; query = null; onSwitch(s) },
+                    onSearch = { menu = false; askSearch = true },
+                    onSettings = onOpenSettings,
+                    onPlaylist = { menu = false; query = null; onNextSource() },
+                    onRight = { menu = false },
+                )
+            }
             Column(
                 Modifier
                     .width(260.dp)
@@ -316,19 +329,6 @@ private fun Browse(
             }
         }
 
-        if (menu) {
-            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
-            SideMenu(
-                multi = multi,
-                playlistLabel = sourceLabel,
-                onTv = onExit,
-                onVod = { s -> menu = false; query = null; onSwitch(s) },
-                onSearch = { menu = false; askSearch = true },
-                onSettings = onOpenSettings,
-                onPlaylist = { menu = false; query = null; onNextSource() },
-                onRight = { menu = false },
-            )
-        }
         if (askSearch) {
             InputDialog("$kind suchen", query.orEmpty(), password = false, keyboard = KeyboardType.Text, onDone = {
                 askSearch = false
@@ -583,7 +583,21 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
     }
     // Bildwiederholrate an den Film anpassen (z. B. 24 Hz bei Kinofilmen)
     val activity = remember(context) { FrameRate.findActivity(context) }
-    remember(player) { FpsProbe { fps -> if (app.afr) activity?.let { FrameRate.match(it, fps) } }.also { it.attach(player) } }
+    remember(player) {
+        FpsProbe { fps ->
+            val act = activity
+            if (app.afr && act != null && FrameRate.match(act, fps)) {
+                // Nach dem Umschalten an gleicher Stelle neu starten (sonst friert das Bild auf manchen Geräten ein)
+                scope.launch {
+                    delay(1_800)
+                    val pos = player.currentPosition
+                    player.stop()
+                    player.prepare()
+                    player.seekTo(pos)
+                }
+            }
+        }.also { it.attach(player) }
+    }
 
     fun exit() {
         val pos = pending ?: player.currentPosition
