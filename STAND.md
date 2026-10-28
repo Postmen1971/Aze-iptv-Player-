@@ -1,4 +1,4 @@
-# Aze-IPTV-Player – Projektstand (28.10.2026, Version 1.0.37)
+# Aze-IPTV-Player – Projektstand (28.10.2026, Version 1.0.40)
 
 ## Wo alles liegt
 - **GitHub-Repository:** https://github.com/Postmen1971/Aze-iptv-Player- (Branch `main`)
@@ -56,7 +56,7 @@
 **Wiedergabe**
 - Puffer-Stufen, VLC als Ausweich-Player (automatisch je Sender), Programmzeitschrift (EPG)
 - Bildqualität: „Automatisch (schnelles Umschalten)“ (Standard) oder „Immer beste Stufe“, Tunneling optional
-- Bildwiederholrate an Sender anpassen (50 Hz bei 25/50 fps), Standard an
+- Bildwiederholrate an Sender anpassen (50 Hz bei 25/50 fps) – **Standard aus**, als Test markiert (friert auf Fire TV ein); Tunneling ebenfalls aus, beides schließt sich gegenseitig aus
 
 **Filme & Serien**
 - Bedienung wie Live-TV (◀ = Seitenmenü), Anzahl je Kategorie, durchnummerierte Poster, Suche
@@ -73,7 +73,7 @@
 - Keine Senderlisten in der App (Urheberrecht); Handy-/Web-Zugriff nur im Heimnetz mit Code
 
 ## Offene Punkte
-1. **Einfrieren nach dem Umschalten auf 50 Hz testen** (Version 1.0.37): Jetzt wird bei angepasster Bildwiederholrate eine TextureView statt der eigenen Video-Ebene benutzt. Falls es trotzdem einfriert: Tunneling aus? „Bildwiederholrate“ auf Aus → hilft das? Dann weiter untersuchen (z. B. Wiedergabe nach dem HDMI-Umschalten neu starten, oder Umschaltung vor dem Start des Senders).
+1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
 2. **SkorText-Update direkt im Player:** Beim Öffnen von SkorText prüfen, ob es auf GitHub eine neuere Version gibt, und die Seiten selbst nachladen (ohne neuen Player-Build). Der Update-Knopf in SkorText soll das auch auslösen (im Player derzeit ohne Funktion, `SkorBridge.installApk` ist leer).
 3. **Eigenen Signaturschlüssel einrichten** (siehe unten).
 4. Stalker-Portal: Filme/Serien und EPG fehlen noch; an einem echten Portal ungetestet.
