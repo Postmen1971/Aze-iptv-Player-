@@ -598,13 +598,35 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         }
         Text("Bildwiederholrate", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton("Aus (empfohlen)", selected = !app.afr, onClick = { app.updateAfr(false) })
-            TvButton("An Sender anpassen (Test)", selected = app.afr, onClick = { app.updateAfr(true) })
+            TvButton("Aus", selected = !app.afr && !app.afr50, onClick = { app.updateAfr(false); app.updateAfr50(false) })
+            TvButton("Immer 50 Hz", selected = app.afr50, onClick = { app.updateAfr50(true) })
+            TvButton("An Sender anpassen", selected = app.afr, onClick = { app.updateAfr(true) })
         }
         Text(
-            "Deutsche Sender laufen mit 25/50 Bildern pro Sekunde. Steht das Gerät auf 60 Hz, ruckelt das Bild leicht. " +
-                "„An Sender anpassen“ stellt den Bildschirm passend um (z. B. 50 Hz) – das Bild läuft ruhiger. " +
-                "Noch im Test: Auf manchen Geräten (z. B. Fire TV) bleibt das Bild danach stehen – dann wieder auf „Aus“ stellen.",
+            "Deutsche und türkische Sender laufen mit 25/50 Bildern pro Sekunde; bei 60 Hz ruckelt das Bild leicht. " +
+                "„Immer 50 Hz“ stellt den Bildschirm einmal beim Start um und lässt ihn dann so – am wenigsten anfällig. " +
+                "„An Sender anpassen“ schaltet je nach Sender um (auch 24 Hz bei Filmen).",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        if (app.afr || app.afr50) {
+            Text("Wartezeit nach dem Umschalten", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf(2, 4, 6, 8).forEach { s ->
+                    TvButton("$s s", selected = app.afrDelay == s, onClick = { app.updateAfrDelay(s) })
+                }
+            }
+            Text(
+                "So lange wartet die App nach dem Umschalten, bis der Fernseher fertig ist. Friert das Bild ein, einen größeren Wert wählen.",
+                color = Palette.TextMuted, fontSize = 13.sp,
+            )
+        }
+        Text("Fehlersuche", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Anzeige aus", selected = !app.showDiag, onClick = { app.updateShowDiag(false) })
+            TvButton("Anzeige an", selected = app.showDiag, onClick = { app.updateShowDiag(true) })
+        }
+        Text(
+            "Zeigt oben links Frequenz, Bilder pro Sekunde, ob die Wiedergabe läuft und ob Ton kommt – hilft, Einfrieren einzugrenzen.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

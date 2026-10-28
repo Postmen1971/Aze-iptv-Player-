@@ -145,33 +145,70 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             scope.launch {
                 val before = displayWatch.tick
                 FrameRate.apply(act, mode)
-                displayWatch.awaitChange(before, 6_000)
-                delay(1_500) // HDMI braucht nach dem Wechsel noch einen Moment
+                displayWatch.awaitChange(before, 8_000)
+                delay(app.afrDelay * 1_000L) // Fernseher/HDMI braucht nach dem Wechsel noch einen Moment
                 switching = false
                 restartTick++
             }
         }.also { it.attach(player) }
     }
-    // Wächter: läuft der Sender, aber es kommen 5 s lang keine neuen Bilder, wird er neu gestartet (höchstens 3×).
+    // „Immer 50 Hz“: einmal umschalten, bevor/solange nichts läuft – danach nie wieder während der Wiedergabe
+    val afr50On = app.afr50
+    LaunchedEffect(afr50On) {
+        val act = activity ?: return@LaunchedEffect
+        if (!afr50On) return@LaunchedEffect
+        val mode = FrameRate.target50(act) ?: return@LaunchedEffect
+        switching = true
+        app.displaySettleUntil = System.currentTimeMillis() + 15_000
+        player.stop()
+        val before = displayWatch.tick
+        FrameRate.apply(act, mode)
+        displayWatch.awaitChange(before, 8_000)
+        delay(app.afrDelay * 1_000L)
+        app.displaySettleUntil = 0
+        switching = false
+        restartTick++
+    }
+    // Wächter: Sender „läuft“, aber 4 s lang keine neuen Bilder oder die Zeit steht → neu starten (höchstens 4×).
     var watchdogRestarts by remember { mutableIntStateOf(0) }
+    var diagText by remember { mutableStateOf("") }
     LaunchedEffect(player) {
-        var last = -1L
+        var lastFrames = -1L
+        var lastPos = -1L
         var still = 0
         while (true) {
             delay(1_000)
             val f = probe.frames
-            val active = !switching && player.playbackState == Player.STATE_READY && player.playWhenReady &&
-                player.videoFormat != null
-            if (active && f == last) still++ else still = 0
-            last = f
-            if (still >= 5 && watchdogRestarts < 3) {
+            val pos = player.currentPosition
+            val ready = player.playbackState == Player.STATE_READY && player.playWhenReady
+            val active = !switching && ready && player.videoFormat != null
+            val stuck = f == lastFrames || pos == lastPos
+            if (active && stuck) still++ else still = 0
+            if (app.showDiag) {
+                @Suppress("DEPRECATION")
+                val hz = activity?.windowManager?.defaultDisplay?.refreshRate ?: 0f
+                val state = when (player.playbackState) {
+                    Player.STATE_READY -> if (player.isPlaying) "läuft" else "bereit"
+                    Player.STATE_BUFFERING -> "puffert"
+                    Player.STATE_IDLE -> "angehalten"
+                    else -> "Ende"
+                }
+                diagText = "%.2f Hz · Bilder +%d/s · Zeit %s · %s · Ton %s%s".format(
+                    hz, if (lastFrames < 0) 0 else (f - lastFrames), if (pos != lastPos) "läuft" else "steht", state,
+                    if (player.audioFormat != null) "ja" else "–",
+                    if (switching) " · Umschalten …" else if (watchdogRestarts > 0) " · Neustarts $watchdogRestarts" else "",
+                )
+            }
+            lastFrames = f
+            lastPos = pos
+            if (still >= 4 && watchdogRestarts < 4) {
                 still = 0
                 watchdogRestarts++
                 restartTick++
             }
         }
     }
-    LaunchedEffect(afrOn) { if (!afrOn) activity?.let { FrameRate.reset(it) } }
+    LaunchedEffect(afrOn, afr50On) { if (!afrOn && !afr50On) activity?.let { FrameRate.reset(it) } }
 
     var noPicture by remember { mutableStateOf(true) }
     var digits by remember { mutableStateOf("") }
@@ -331,6 +368,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         // Kurz warten: wer mehrfach schnell ▲/▼ drückt, lädt nur den Sender, bei dem er stehen bleibt.
         // (Ein neuer Tastendruck bricht diese Wartezeit ab.)
         delay(220)
+        // Bildschirm schaltet gerade die Frequenz um: erst danach starten
+        while (switching || System.currentTimeMillis() < app.displaySettleUntil) delay(200)
         val url = try {
             app.resolveStreamUrl(ch.url)
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -616,6 +655,14 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 }
             }
             else -> null
+        }
+        if (app.showDiag && diagText.isNotEmpty() && !overlay) {
+            Text(
+                diagText, color = Color.White, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            )
         }
         if (corner != null) {
             Box(

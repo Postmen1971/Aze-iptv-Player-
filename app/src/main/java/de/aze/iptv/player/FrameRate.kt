@@ -74,6 +74,9 @@ object FrameRate {
         return best.modeId
     }
 
+    /** Modus mit 50 Hz in der aktuellen Auflösung – null, wenn schon aktiv oder keiner vorhanden. */
+    fun target50(activity: Activity): Int? = target(activity, 50f)
+
     fun apply(activity: Activity, modeId: Int) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
         val attrs = activity.window.attributes

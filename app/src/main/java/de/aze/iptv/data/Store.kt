@@ -139,6 +139,21 @@ class Store(context: Context) {
         get() = prefs.getBoolean("afr", false)
         set(v) = prefs.edit().putBoolean("afr", v).apply()
 
+    /** Bildschirm fest auf 50 Hz (einmal beim Start umschalten statt bei jedem Sender). */
+    var afr50: Boolean
+        get() = prefs.getBoolean("afr50", false)
+        set(v) = prefs.edit().putBoolean("afr50", v).apply()
+
+    /** Wartezeit nach dem Umschalten der Frequenz (Sekunden), wie bei TiviMate einstellbar. */
+    var afrDelay: Int
+        get() = prefs.getInt("afrDelay", 4)
+        set(v) = prefs.edit().putInt("afrDelay", v).apply()
+
+    /** Kleine Anzeige zur Fehlersuche im Bild (Frequenz, Bilder, Position). */
+    var showDiag: Boolean
+        get() = prefs.getBoolean("showDiag", false)
+        set(v) = prefs.edit().putBoolean("showDiag", v).apply()
+
     /** YouTube-Sender in der offiziellen YouTube-App öffnen statt im eingebauten Player. */
     var youtubeExternal: Boolean
         get() = prefs.getBoolean("ytExternal", false)

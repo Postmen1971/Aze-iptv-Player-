@@ -270,9 +270,39 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     var afr by mutableStateOf(store.afr)
         private set
 
+    var afr50 by mutableStateOf(store.afr50)
+        private set
+    var afrDelay by mutableStateOf(store.afrDelay)
+        private set
+    var showDiag by mutableStateOf(store.showDiag)
+        private set
+
+    /** Bis wann der Bildschirm noch mit dem Umschalten beschäftigt ist (Wiedergabe so lange zurückhalten). */
+    @Volatile var displaySettleUntil = 0L
+
+    fun updateAfr50(on: Boolean) {
+        afr50 = on
+        store.afr50 = on
+        if (on) {
+            afr = false; store.afr = false
+            tunneling = false; store.tunneling = false
+        }
+    }
+
+    fun updateAfrDelay(s: Int) {
+        afrDelay = s
+        store.afrDelay = s
+    }
+
+    fun updateShowDiag(on: Boolean) {
+        showDiag = on
+        store.showDiag = on
+    }
+
     fun updateAfr(on: Boolean) {
         afr = on
         store.afr = on
+        if (on) { afr50 = false; store.afr50 = false }
         // Beides zusammen lässt das Bild auf manchen Geräten einfrieren
         if (on && tunneling) {
             tunneling = false
@@ -286,6 +316,10 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         if (on && afr) {
             afr = false
             store.afr = false
+        }
+        if (on && afr50) {
+            afr50 = false
+            store.afr50 = false
         }
     }
 
