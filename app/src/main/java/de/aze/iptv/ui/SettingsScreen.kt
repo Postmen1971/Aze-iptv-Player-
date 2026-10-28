@@ -186,6 +186,9 @@ private fun PlaylistSection(app: AppController) {
                         color = Palette.TextMuted,
                         fontSize = 14.sp,
                     )
+                    app.sourceStatus[src.id]?.let { st ->
+                        Text(st, color = if (st.startsWith("Fehler") || st.contains("keine")) Palette.Live else Palette.Accent, fontSize = 14.sp)
+                    }
                 }
                 if (app.sources.size > 1) {
                     if (i > 0) TvButton("▲", onClick = { app.moveSource(src, -1) })

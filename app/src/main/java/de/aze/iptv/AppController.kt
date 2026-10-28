@@ -256,6 +256,7 @@ class AppController(context: Context, private val scope: CoroutineScope) {
             loading = true
             channels = repo.loadCached(sources)
             rebuild(restoreKey = store.lastChannelKey).join()
+            updateStatus(emptyMap())
             loading = false
             epg = epgRepo.load()
             if (needsRefresh()) refreshNow()
@@ -271,6 +272,22 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         return System.currentTimeMillis() - lastRefresh >= refreshHours * 3_600_000L
     }
 
+    /** Je Playlist: wie viele Sender geladen wurden oder was schiefging (für die Einstellungen). */
+    var sourceStatus by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    private fun updateStatus(errors: Map<String, String>) {
+        val counts = channels.groupingBy { it.source }.eachCount()
+        sourceStatus = sources.associate { src ->
+            val n = counts[src.id] ?: 0
+            src.id to when {
+                errors[src.id] != null -> "Fehler: ${errors[src.id]}" + if (n > 0) " (alte Liste mit $n Sendern bleibt)" else ""
+                n == 0 -> "Liste geladen, aber keine Live-Sender darin gefunden"
+                else -> "$n Sender geladen"
+            }
+        }
+    }
+
     fun refreshNow() {
         if (loading) return
         scope.launch {
@@ -283,9 +300,11 @@ class AppController(context: Context, private val scope: CoroutineScope) {
                 lastRefresh = now
                 store.lastRefresh = now
             }
+            updateStatus(errors)
             rebuild(restoreKey = current?.channel?.key).join()
             loading = false
-            message = if (errors.isEmpty()) "Senderliste aktualisiert: ${lineup.all.size} Sender" else errors.joinToString("\n")
+            message = if (errors.isEmpty()) "Senderliste aktualisiert: ${lineup.all.size} Sender"
+            else errors.entries.joinToString("\n") { (id, e) -> "${sources.firstOrNull { it.id == id }?.name ?: "Playlist"}: $e" }
             // Programmzeitschrift gleich mit aktualisieren
             refreshEpg()
         }

@@ -9,7 +9,8 @@ import java.net.URL
 /** Kleine HTTP-Hilfe, die auch Weiterleitungen zwischen http und https folgt. */
 object Http {
 
-    const val USER_AGENT = "AzeIPTV/1.0 (Android)"
+    // Viele IPTV-Anbieter lassen nur bekannte Player zu – deshalb wie VLC melden.
+    const val USER_AGENT = "VLC/3.0.20 LibVLC/3.0.20"
 
     fun open(url: String, accept: String? = null): HttpURLConnection {
         var current = url

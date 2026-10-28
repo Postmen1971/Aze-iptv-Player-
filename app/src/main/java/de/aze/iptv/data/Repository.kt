@@ -35,16 +35,16 @@ class Repository(context: Context) {
 
     fun hasCache(sources: List<PlaylistSource>): Boolean = sources.any { cacheFile(it).exists() }
 
-    /** Lädt alle Quellen neu. Gibt Fehlermeldungen pro Quelle zurück (leer = alles gut). */
-    suspend fun refresh(sources: List<PlaylistSource>): List<String> = withContext(Dispatchers.IO) {
-        val errors = ArrayList<String>()
+    /** Lädt alle Quellen neu. Gibt je Quelle (id) eine Fehlermeldung zurück; fehlt die id, war alles gut. */
+    suspend fun refresh(sources: List<PlaylistSource>): Map<String, String> = withContext(Dispatchers.IO) {
+        val errors = LinkedHashMap<String, String>()
         sources.forEach { src ->
             val tmp = File(dir, "${src.id}.tmp")
             try {
                 val viaApi = src.type == SourceType.XTREAM && runCatching { writeXtreamLive(src, tmp) }.getOrDefault(false)
                 if (!viaApi) Http.download(src.m3uUrl(), tmp)
                 if (!looksLikeM3u(tmp)) {
-                    errors.add("${src.name}: Antwort ist keine M3U-Liste")
+                    errors[src.id] = describeBadAnswer(tmp, src)
                     tmp.delete()
                 } else if (!tmp.renameTo(cacheFile(src))) {
                     tmp.copyTo(cacheFile(src), overwrite = true)
@@ -52,10 +52,26 @@ class Repository(context: Context) {
                 }
             } catch (e: Exception) {
                 tmp.delete()
-                errors.add("${src.name}: ${e.message ?: "Fehler beim Laden"}")
+                errors[src.id] = when {
+                    e is java.net.UnknownHostException -> "Server nicht gefunden – Adresse prüfen"
+                    e is java.net.SocketTimeoutException -> "Server antwortet nicht (Zeitüberschreitung)"
+                    e.message?.contains("401") == true || e.message?.contains("403") == true -> "Zugriff verweigert (${e.message}) – Login prüfen"
+                    else -> e.message ?: "Fehler beim Laden"
+                }
             }
         }
         errors
+    }
+
+    /** Verständliche Meldung, wenn statt einer Liste etwas anderes zurückkam. */
+    private fun describeBadAnswer(f: File, src: PlaylistSource): String {
+        if (!f.exists() || f.length() == 0L) return "Leere Antwort vom Server" + if (src.type == SourceType.XTREAM) " – Benutzer/Passwort prüfen" else ""
+        val head = runCatching { f.inputStream().use { i -> val b = ByteArray(300); val n = i.read(b); String(b, 0, maxOf(n, 0)) } }.getOrDefault("")
+        return when {
+            head.contains("\"auth\":0") || head.contains("\"auth\": 0") -> "Benutzer oder Passwort falsch"
+            head.trimStart().startsWith("<") -> "Server liefert eine Webseite statt einer Liste – Link prüfen"
+            else -> "Antwort ist keine M3U-Liste"
+        }
     }
 
     private fun looksLikeM3u(f: File): Boolean {

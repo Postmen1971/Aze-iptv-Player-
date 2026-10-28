@@ -1,21 +1,27 @@
 package de.aze.iptv.ui
 
 import android.annotation.SuppressLint
-import android.os.Handler
-import android.os.Looper
-import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import de.aze.iptv.BuildConfig
 import de.aze.iptv.data.YouTube
+import kotlinx.coroutines.delay
 
-private const val ORIGIN = "https://de.aze.iptv"
+/**
+ * YouTube verlangt, dass sich eingebettete Player in Apps über den Referer mit der App-Kennung ausweisen
+ * (https://<App-ID>). Fehlt er, meldet YouTube Fehler 153.
+ */
+private val ORIGIN = "https://${BuildConfig.APPLICATION_ID}"
 
 /**
  * Offizieller eingebetteter YouTube-Player im Vollbild.
@@ -25,7 +31,8 @@ private const val ORIGIN = "https://de.aze.iptv"
 @Composable
 fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError: (String) -> Unit) {
     val context = LocalContext.current
-    val main = remember { Handler(Looper.getMainLooper()) }
+    val playing by rememberUpdatedState(onPlaying)
+    val failed by rememberUpdatedState(onError)
     val web = remember(url) {
         WebView(context).apply {
             isFocusable = false
@@ -36,43 +43,38 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
             settings.mediaPlaybackRequiresUserGesture = false
             webViewClient = WebViewClient()
             webChromeClient = WebChromeClient()
-            addJavascriptInterface(object {
-                @JavascriptInterface
-                fun playing() {
-                    main.post { onPlaying() }
-                }
-
-                @JavascriptInterface
-                fun error(code: Int) {
-                    val text = when (code) {
-                        101, 150, 152, 153 -> "YouTube: Einbetten nicht erlaubt"
-                        100 -> "YouTube: Video nicht gefunden"
-                        2 -> "YouTube: Link ungültig"
-                        else -> "YouTube: Fehler $code"
-                    }
-                    main.post { onError(text) }
-                }
-            }, "Aze")
-            val src = YouTube.embedUrl(url, ORIGIN)
-            val html = """
-                <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-                <style>html,body{margin:0;height:100%;background:#000;overflow:hidden}
-                iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:0}</style></head><body>
-                <iframe id="p" src="$src" allow="autoplay; encrypted-media; picture-in-picture"
-                  referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-                <script src="https://www.youtube.com/iframe_api"></script>
-                <script>
-                function onYouTubeIframeAPIReady(){
-                  new YT.Player('p',{events:{
-                    onStateChange:function(e){ if(e.data===1){ Aze.playing(); } },
-                    onError:function(e){ Aze.error(e.data); }
-                  }});
-                }
-                </script></body></html>
-            """.trimIndent()
-            loadDataWithBaseURL("$ORIGIN/", html, "text/html", "utf-8", null)
+            // Eingebetteten Player direkt laden – mit Referer, damit YouTube die App erkennt.
+            loadUrl(YouTube.embedUrl(url, ORIGIN), mapOf("Referer" to "$ORIGIN/"))
         }
     }
+
+    // Prüfen, ob das Video läuft oder YouTube einen Fehler zeigt.
+    LaunchedEffect(web) {
+        var reported = false
+        while (true) {
+            delay(1_000)
+            web.evaluateJavascript(
+                """(function(){
+                    var v=document.querySelector('video');
+                    if(v && v.currentTime>0 && !v.paused) return 'play';
+                    var e=document.querySelector('.ytp-error, .ytp-error-content-wrap-reason');
+                    if(e && e.offsetParent!==null) return 'err:'+(e.innerText||'').trim().slice(0,80);
+                    return '';
+                })()""",
+            ) { r ->
+                val v = r?.trim('"').orEmpty()
+                when {
+                    v == "play" -> playing()
+                    v.startsWith("err:") && !reported -> {
+                        reported = true
+                        val txt = v.removePrefix("err:")
+                        failed(if (txt.isBlank()) "YouTube: kann nicht abgespielt werden" else "YouTube: $txt")
+                    }
+                }
+            }
+        }
+    }
+
     DisposableEffect(web) {
         onDispose {
             web.loadUrl("about:blank")
