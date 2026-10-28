@@ -116,7 +116,11 @@ class Repository(context: Context) {
         catOrder.forEach { byCat[it] = ArrayList() }
         for (i in 0 until streams.length()) {
             val s = streams.getJSONObject(i)
-            byCat.getOrPut(s.optString("category_id")) { ArrayList() }.add(s)
+            // Manche Server liefern statt "category_id" nur eine Liste "category_ids"
+            val cid = s.optString("category_id").takeIf { it.isNotBlank() && it != "null" }
+                ?: s.optJSONArray("category_ids")?.let { a -> if (a.length() > 0) a.optString(0) else null }
+                ?: ""
+            byCat.getOrPut(cid) { ArrayList() }.add(s)
         }
         target.bufferedWriter().use { w ->
             w.write("#EXTM3U\n")

@@ -71,7 +71,8 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         }
     }
 
-    var sources by mutableStateOf(store.sources())
+    // Anbieter-M3U-Links werden automatisch zu Server + Login (siehe PlaylistSource.normalized)
+    var sources by mutableStateOf(store.sources().map { it.normalized() })
         private set
     var favorites by mutableStateOf(store.favorites())
         private set
@@ -425,7 +426,7 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     }
 
     fun addSource(source: PlaylistSource) {
-        sources = sources + source
+        sources = sources + source.normalized()
         store.saveSources(sources)
         refreshNow()
     }

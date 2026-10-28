@@ -40,6 +40,26 @@ data class PlaylistSource(
     }
 
     private fun enc(s: String): String = URLEncoder.encode(s.trim(), "UTF-8")
+
+    /**
+     * Ein M3U-Link eines Anbieters (…/get.php?username=…&password=…) wird automatisch zu "Server + Login".
+     * Dann kommen Gruppen, EPG sowie Filme & Serien direkt über die Anbieter-Schnittstelle –
+     * auch wenn der Link nur "type=m3u" (ohne Gruppen) war.
+     */
+    fun normalized(): PlaylistSource {
+        if (type != SourceType.M3U) return this
+        val u = runCatching { java.net.URI(url.trim()) }.getOrNull() ?: return this
+        if (u.path?.endsWith("get.php") != true || u.rawQuery == null) return this
+        val q = u.rawQuery.split('&').mapNotNull {
+            val i = it.indexOf('=')
+            if (i <= 0) null else it.substring(0, i).lowercase() to java.net.URLDecoder.decode(it.substring(i + 1), "UTF-8")
+        }.toMap()
+        val user = q["username"]?.takeIf { it.isNotBlank() } ?: return this
+        val pass = q["password"]?.takeIf { it.isNotBlank() } ?: return this
+        val port = if (u.port > 0) ":${u.port}" else ""
+        val prefix = u.path.removeSuffix("get.php").trimEnd('/')
+        return copy(type = SourceType.XTREAM, url = "${u.scheme}://${u.host}$port$prefix", user = user, pass = pass)
+    }
 }
 
 /** Ein Sender mit seiner festen Nummer in der aktuellen Reihenfolge. */

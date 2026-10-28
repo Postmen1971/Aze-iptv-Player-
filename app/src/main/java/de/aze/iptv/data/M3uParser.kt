@@ -6,7 +6,8 @@ package de.aze.iptv.data
  */
 object M3uParser {
 
-    private val attrRegex = Regex("""([A-Za-z0-9_-]+)="([^"]*)"""")
+    // name="wert" oder name='wert' (manche Listen nutzen einfache Anführungszeichen)
+    private val attrRegex = Regex("""([A-Za-z0-9_-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 
     fun parse(text: String): List<Channel> = parse(text.lineSequence())
 
@@ -24,8 +25,10 @@ object M3uParser {
             when {
                 line.isEmpty() -> Unit
                 line.startsWith("#EXTINF", ignoreCase = true) -> {
-                    val attrs = attrRegex.findAll(line).associate { it.groupValues[1].lowercase() to it.groupValues[2] }
-                    group = attrs["group-title"].orEmpty().trim()
+                    val attrs = attrRegex.findAll(line).associate {
+                        it.groupValues[1].lowercase() to it.groupValues[2].ifEmpty { it.groupValues[3] }
+                    }
+                    group = (attrs["group-title"] ?: attrs["tvg-group"] ?: attrs["group"]).orEmpty().trim()
                     logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() }
                     tvgId = attrs["tvg-id"]?.trim()?.takeIf { it.isNotEmpty() }
                     val title = titleOf(line)
