@@ -273,11 +273,20 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     fun updateAfr(on: Boolean) {
         afr = on
         store.afr = on
+        // Beides zusammen lässt das Bild auf manchen Geräten einfrieren
+        if (on && tunneling) {
+            tunneling = false
+            store.tunneling = false
+        }
     }
 
     fun updateTunneling(on: Boolean) {
         tunneling = on
         store.tunneling = on
+        if (on && afr) {
+            afr = false
+            store.afr = false
+        }
     }
 
     var autostart by mutableStateOf(store.autostart)

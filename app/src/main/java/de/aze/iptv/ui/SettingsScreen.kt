@@ -585,7 +585,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         }
         Text(
             "Tunneling gibt das Bild direkt an den Video-Chip des Geräts. Auf vielen Fire-TV- und Android-TV-Geräten wirkt das Bild " +
-                "dann natürlicher und ruckelfreier. Falls Bild oder Ton danach hängen, wieder ausschalten. Zusammen mit „Bildwiederholrate anpassen“ besser aus lassen.",
+                "dann natürlicher und ruckelfreier. Falls Bild oder Ton danach hängen, wieder ausschalten. Schaltet „Bildwiederholrate anpassen“ automatisch aus (beides zusammen kann das Bild einfrieren).",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         Text("Untertitel", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
