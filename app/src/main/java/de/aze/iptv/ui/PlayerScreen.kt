@@ -513,7 +513,12 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         if (quickMenu) {
             // tracksVersion lesen, damit die Werte nach einem Spurwechsel neu angezeigt werden.
             @Suppress("UNUSED_VARIABLE") val v = tracksVersion
+            // Reihenfolge von links: Fußball (SkorText), Bild, Ton, Player, Puffer, dann Wechsel zu Filme/Serien/Einstellungen.
             val items = listOf(
+                QuickItem("Fußball", "SkorText") {
+                    quickMenu = false
+                    teletext = true
+                },
                 QuickItem("Bild", aspect.label) {
                     val all = AspectMode.entries
                     app.updateAspect(all[(all.indexOf(aspect) + 1) % all.size])
@@ -522,11 +527,6 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     if (useVlc) vlcHandle.nextAudio()
                     else TrackHelper.nextAudio(player)?.language?.let { app.updateAudioLanguage(it) }
                     tracksVersion++
-                },
-                // Fußball-Videotext (SkorText) statt Untertitel – Untertitel gibt es in den Einstellungen.
-                QuickItem("Fußball", "Videotext öffnen") {
-                    quickMenu = false
-                    teletext = true
                 },
                 QuickItem(
                     "Player",
@@ -543,6 +543,18 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 QuickItem("Puffer", level.label) {
                     val all = BufferLevel.entries
                     app.updateBuffer(all[(all.indexOf(level) + 1) % all.size])
+                },
+                QuickItem("Wechseln", "Filme") {
+                    quickMenu = false
+                    onOpenVod(false)
+                },
+                QuickItem("Wechseln", "Serien") {
+                    quickMenu = false
+                    onOpenVod(true)
+                },
+                QuickItem("Wechseln", "Einstellungen") {
+                    quickMenu = false
+                    onOpenSettings()
                 },
             )
             QuickMenu(items = items, onClose = { quickMenu = false })

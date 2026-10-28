@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -98,54 +100,97 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     }
 
     BackHandler(onBack = onClose)
-    val scroll = rememberScrollState()
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+    var cat by remember { mutableStateOf(0) }
+    val cats = listOf(
+        "Playlists", "YouTube Live", "Senderliste", "Wiedergabe", "Programm (EPG)",
+        "Netzwerk", "Sicherheit", "Autostart", "App-Update", "Über",
+    )
 
-    Box(modifier = Modifier.fillMaxSize().background(Palette.Ground), contentAlignment = Alignment.TopCenter) {
+    // Kompakt wie bei TiviMate: links die Bereiche, rechts nur der gewählte Bereich.
+    Row(modifier = Modifier.fillMaxSize().background(Palette.Ground)) {
         Column(
             modifier = Modifier
-                .widthIn(max = 920.dp)
-                .fillMaxWidth()
-                .verticalScroll(scroll)
-                .padding(horizontal = 24.dp, vertical = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+                .width(210.dp)
+                .fillMaxHeight()
+                .background(Palette.PanelDark)
+                .padding(horizontal = 8.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Einstellungen", color = Palette.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                TvButton("Zurück zum Fernsehen", modifier = Modifier.focusRequester(firstFocus), onClick = onClose)
+            Text("Einstellungen", color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+            CategoryItem("← Fernsehen", selected = false, modifier = Modifier.focusRequester(firstFocus), onFocus = {}, onClick = onClose)
+            cats.forEachIndexed { i, name ->
+                CategoryItem(name, selected = i == cat, onFocus = { cat = i }, onClick = { cat = i })
             }
-
-            app.message?.let {
-                Text(it, color = Palette.TextSoft, fontSize = 16.sp)
-            }
-
-            PhoneInputSection(app)
-            PlaylistSection(app)
-            YouTubeSection(app)
-            RefreshSection(app)
-            EpgSection(app)
-            PlaybackSection(app, onEditList = { editingList = true })
-            FavoritesSection(app)
-            NetworkSection(app)
-            AutostartSection(app)
-            Section("Sicherheit") {
-                Text(
-                    if (app.pinIsDefault) "Die PIN ist noch 0000. Bitte eine eigene PIN festlegen."
-                    else "Die Einstellungen sind mit deiner PIN geschützt.",
-                    color = if (app.pinIsDefault) Palette.Accent else Palette.TextSoft,
-                    fontSize = 16.sp,
-                )
-                Text(
-                    "Zugangsdaten werden verschlüsselt gespeichert, Links nur gekürzt angezeigt, " +
-                        "und die App macht keine Sicherungen in die Cloud oder auf andere Geräte.",
-                    color = Palette.TextMuted, fontSize = 15.sp,
-                )
-                TvButton("PIN ändern", onClick = { pinStep = 1 })
-            }
-            UpdateSection()
-            AboutSection()
         }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            app.message?.let {
+                Text(it, color = Palette.TextSoft, fontSize = 13.sp)
+            }
+            when (cat) {
+                0 -> {
+                    PhoneInputSection(app)
+                    PlaylistSection(app)
+                }
+                1 -> YouTubeSection(app)
+                2 -> {
+                    RefreshSection(app)
+                    PlaybackSection(app, onEditList = { editingList = true }, part = 1)
+                    FavoritesSection(app)
+                }
+                3 -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
+                4 -> EpgSection(app)
+                5 -> NetworkSection(app)
+                6 -> Section("Sicherheit") {
+                    Text(
+                        if (app.pinIsDefault) "Die PIN ist noch 0000. Bitte eine eigene PIN festlegen."
+                        else "Die Einstellungen sind mit deiner PIN geschützt.",
+                        color = if (app.pinIsDefault) Palette.Accent else Palette.TextSoft,
+                        fontSize = 14.sp,
+                    )
+                    Text(
+                        "Zugangsdaten werden verschlüsselt gespeichert, Links nur gekürzt angezeigt, " +
+                            "und die App macht keine Sicherungen in die Cloud oder auf andere Geräte.",
+                        color = Palette.TextMuted, fontSize = 13.sp,
+                    )
+                    TvButton("PIN ändern", onClick = { pinStep = 1 })
+                }
+                7 -> AutostartSection(app)
+                8 -> UpdateSection()
+                else -> AboutSection()
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryItem(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onFocus: () -> Unit,
+    onClick: () -> Unit,
+) {
+    Focusable(modifier = modifier.fillMaxWidth(), onClick = onClick, onFocus = onFocus) { focused ->
+        Text(
+            label,
+            color = if (focused) Palette.OnAccent else if (selected) Palette.Accent else Palette.Text,
+            fontSize = 14.sp,
+            fontWeight = if (focused || selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (focused) Palette.Accent else Palette.PanelDark.copy(alpha = 0f), RoundedCornerShape(7.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+        )
     }
 }
 
@@ -154,11 +199,11 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Palette.Panel, RoundedCornerShape(16.dp))
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .background(Palette.Panel, RoundedCornerShape(12.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(title, color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        Text(title, color = Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
         content()
     }
 }
@@ -167,20 +212,20 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 private fun PlaylistSection(app: AppController) {
     Section("Playlists") {
         if (app.sources.isEmpty()) {
-            Text("Noch keine Playlist. Füge unten einen M3U-Link oder Server + Login hinzu.", color = Palette.TextMuted, fontSize = 16.sp)
+            Text("Noch keine Playlist. Füge unten einen M3U-Link oder Server + Login hinzu.", color = Palette.TextMuted, fontSize = 14.sp)
         }
         if (app.sources.size > 1) {
             Text(
                 "Alle Playlists erscheinen in der Senderliste untereinander, in dieser Reihenfolge. " +
                     "Oben in der Senderliste kannst du auch nur eine Playlist anzeigen lassen.",
-                color = Palette.TextMuted, fontSize = 15.sp,
+                color = Palette.TextMuted, fontSize = 13.sp,
             )
         }
         app.sources.forEachIndexed { i, src ->
             var renaming by remember(src.id) { mutableStateOf(false) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(src.name, color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(src.name, color = Palette.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text(
                         (if (src.type == SourceType.M3U) "M3U-Link · " else "Server + Login · ") + Secure.shortUrl(src.url),
                         color = Palette.TextMuted,
@@ -211,7 +256,7 @@ private fun PlaylistSection(app: AppController) {
         var user by remember { mutableStateOf("") }
         var pass by remember { mutableStateOf("") }
 
-        Text("Playlist hinzufügen", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text("Playlist hinzufügen", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("M3U-Link", selected = mode == SourceType.M3U, onClick = { mode = SourceType.M3U })
             TvButton("Server + Login", selected = mode == SourceType.XTREAM, onClick = { mode = SourceType.XTREAM })
@@ -251,7 +296,7 @@ private fun RefreshSection(app: AppController) {
             }
         }
         val last = if (app.lastRefresh > 0) SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.GERMANY).format(Date(app.lastRefresh)) else "noch nie"
-        Text("Zuletzt aktualisiert: $last", color = Palette.TextMuted, fontSize = 15.sp)
+        Text("Zuletzt aktualisiert: $last", color = Palette.TextMuted, fontSize = 13.sp)
         TvButton(if (app.loading) "Wird aktualisiert …" else "Jetzt aktualisieren", onClick = { app.refreshNow() })
     }
 }
@@ -262,12 +307,12 @@ private fun EpgSection(app: AppController) {
         Text(
             "Bei Server + Login kommt das Programm automatisch vom Anbieter, bei M3U-Listen aus der Angabe in der Liste. " +
                 "Fehlt sie, hier eine eigene EPG-Adresse (XMLTV, auch .gz) eintragen. Das Programm wird zusammen mit der Senderliste aktualisiert.",
-            color = Palette.TextMuted, fontSize = 15.sp,
+            color = Palette.TextMuted, fontSize = 13.sp,
         )
         InputRow("Eigene EPG-Adresse (optional)", app.epgUrl, placeholder = "http://…/epg.xml.gz", keyboard = KeyboardType.Uri) { app.updateEpgUrl(it) }
         Text(
             if (app.epg.channelCount > 0) "Geladen: ${app.epg.channelCount} Sender mit Programm" else "Noch keine Programmdaten geladen",
-            color = Palette.TextSoft, fontSize = 15.sp,
+            color = Palette.TextSoft, fontSize = 13.sp,
         )
         TvButton(if (app.epgLoading) "Wird geladen …" else "Programm jetzt laden", onClick = { app.refreshEpg() })
     }
@@ -284,7 +329,7 @@ private fun AutostartSection(app: AppController) {
         if (app.autostart && android.os.Build.VERSION.SDK_INT >= 29 && !android.provider.Settings.canDrawOverlays(context)) {
             Text(
                 "Dieses Gerät braucht dafür die Erlaubnis „Über anderen Apps anzeigen“. Ohne sie startet die App nach dem Einschalten nicht von selbst.",
-                color = Palette.Accent, fontSize = 15.sp,
+                color = Palette.Accent, fontSize = 13.sp,
             )
             TvButton("Erlaubnis öffnen", onClick = {
                 val i = android.content.Intent(
@@ -312,7 +357,7 @@ private fun PhoneInputSection(app: AppController) {
         if (s == null) {
             Text(
                 "Handy und Fernseher müssen im selben WLAN sein. Die Eingabe ist nur 5 Minuten offen und braucht einen Code.",
-                color = Palette.TextMuted, fontSize = 15.sp,
+                color = Palette.TextMuted, fontSize = 13.sp,
             )
             TvButton("Handy-Eingabe starten", onClick = {
                 val ip = PhoneInputServer.localAddress()
@@ -336,13 +381,13 @@ private fun PhoneInputSection(app: AppController) {
                 }
             })
         } else {
-            Text("Am Handy im Browser öffnen:", color = Palette.TextSoft, fontSize = 16.sp)
+            Text("Am Handy im Browser öffnen:", color = Palette.TextSoft, fontSize = 14.sp)
             Text(address ?: "", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("Code:", color = Palette.TextSoft, fontSize = 18.sp)
                 Text(s.code, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
             }
-            Text("Schließt sich nach der Eingabe oder nach 5 Minuten von selbst.", color = Palette.TextMuted, fontSize = 15.sp)
+            Text("Schließt sich nach der Eingabe oder nach 5 Minuten von selbst.", color = Palette.TextMuted, fontSize = 13.sp)
             TvButton("Beenden", onClick = { s.stop() })
         }
     }
@@ -355,12 +400,12 @@ private fun YouTubeSection(app: AppController) {
             "YouTube-Livesender erscheinen als eigene Gruppe „YouTube Live“. Am besten den Kanal-Link eintragen " +
                 "(z. B. youtube.com/@trthaber) – dann läuft immer der aktuelle Livestream. " +
                 "Es laufen nur Kanäle, die das Einbetten erlauben.",
-            color = Palette.TextMuted, fontSize = 15.sp,
+            color = Palette.TextMuted, fontSize = 13.sp,
         )
         app.youtube.forEachIndexed { i, e ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(e.name, color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Text(e.name, color = Palette.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text(if (e.isChannel) "Kanal · immer der aktuelle Livestream" else "Einzelnes Video", color = Palette.TextMuted, fontSize = 14.sp)
                 }
                 if (i > 0) TvButton("▲", onClick = { app.moveYoutube(e, -1) })
@@ -370,7 +415,7 @@ private fun YouTubeSection(app: AppController) {
         }
         val open = de.aze.iptv.data.YouTube.suggestions.filter { (n, _) -> app.youtube.none { it.name == n } }
         if (open.isNotEmpty()) {
-            Text("Vorschläge (offizielle Kanäle, frei auf YouTube) – antippen zum Hinzufügen:", color = Palette.TextSoft, fontSize = 16.sp)
+            Text("Vorschläge (offizielle Kanäle, frei auf YouTube) – antippen zum Hinzufügen:", color = Palette.TextSoft, fontSize = 14.sp)
             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 open.forEach { (n, ref) -> TvButton("+ $n", onClick = { app.addYoutube(ref, n) }) }
             }
@@ -378,7 +423,7 @@ private fun YouTubeSection(app: AppController) {
 
         var name by remember { mutableStateOf("") }
         var link by remember { mutableStateOf("") }
-        Text("Eigener Kanal:", color = Palette.TextSoft, fontSize = 16.sp)
+        Text("Eigener Kanal:", color = Palette.TextSoft, fontSize = 14.sp)
         InputRow("Name", name, placeholder = "z. B. TRT Haber") { name = it }
         InputRow("Kanal- oder Video-Link", link, placeholder = "youtube.com/@kanal", keyboard = KeyboardType.Uri) { link = it }
         TvButton(if (link.isBlank()) "Hinzufügen (Link fehlt)" else "Hinzufügen", onClick = {
@@ -390,8 +435,8 @@ private fun YouTubeSection(app: AppController) {
 }
 
 @Composable
-private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
-    Section("Senderliste") {
+private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: Int = 0) {
+    if (part != 2) Section("Ansicht der Senderliste") {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Modern", selected = !app.enigmaStyle, onClick = { app.updateListStyle(false) })
             TvButton("Enigma2 (Bouquets)", selected = app.enigmaStyle, onClick = { app.updateListStyle(true) })
@@ -403,19 +448,19 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
             } else {
                 "Gruppen links, Sender in der Mitte, rechts läuft das Programm weiter."
             },
-            color = Palette.TextMuted, fontSize = 15.sp,
+            color = Palette.TextMuted, fontSize = 13.sp,
         )
         TvButton("Senderliste bearbeiten (Gruppen und Sender sortieren, ausblenden)", onClick = onEditList)
     }
-    Section("Wiedergabe") {
-        Text("Puffer", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    if (part != 1) Section("Wiedergabe") {
+        Text("Puffer", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             BufferLevel.entries.forEach { lvl ->
                 TvButton(lvl.label, selected = app.bufferLevel == lvl, onClick = { app.updateBuffer(lvl) })
             }
         }
-        Text(app.bufferLevel.hint, color = Palette.TextMuted, fontSize = 15.sp)
-        Text("Player", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text(app.bufferLevel.hint, color = Palette.TextMuted, fontSize = 13.sp)
+        Text("Player", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             de.aze.iptv.player.PlayerEngine.entries.forEach { e ->
                 TvButton(e.label, selected = app.playerEngine == e, onClick = { app.updateEngine(e) })
@@ -424,9 +469,9 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
         Text(
             "Automatisch: Media3 spielt ab; kann es einen Sender nicht abspielen, übernimmt VLC für diesen Sender. " +
                 "Im Schnellmenü lässt sich das je Sender auch von Hand umschalten.",
-            color = Palette.TextMuted, fontSize = 15.sp,
+            color = Palette.TextMuted, fontSize = 13.sp,
         )
-        Text("Bildqualität", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text("Bildqualität", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Automatisch (schnelles Umschalten)", selected = !app.forceHighest, onClick = { app.updateForceHighest(false) })
             TvButton("Immer beste Stufe", selected = app.forceHighest, onClick = { app.updateForceHighest(true) })
@@ -438,14 +483,14 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
         Text(
             "Tunneling gibt das Bild direkt an den Video-Chip des Geräts. Auf vielen Fire-TV- und Android-TV-Geräten wirkt das Bild " +
                 "dann natürlicher und ruckelfreier. Falls Bild oder Ton danach hängen, wieder ausschalten.",
-            color = Palette.TextMuted, fontSize = 15.sp,
+            color = Palette.TextMuted, fontSize = 13.sp,
         )
-        Text("Untertitel", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text("Untertitel", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Aus", selected = !app.subtitlesOn, onClick = { app.updateSubtitles(false) })
             TvButton("An (wenn vorhanden)", selected = app.subtitlesOn, onClick = { app.updateSubtitles(true) })
         }
-        Text("Bildformat", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text("Bildformat", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             AspectMode.entries.forEach { m ->
                 TvButton(m.label, selected = app.aspectMode == m, onClick = { app.updateAspect(m) })
@@ -454,7 +499,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
         Text(
             "Schnell im Bild ändern: OK lang drücken oder Menütaste (Touch: lange tippen). " +
                 "Dort gibt es Bild, Ton, Fußball-Videotext, Player und Puffer.",
-            color = Palette.TextMuted, fontSize = 15.sp,
+            color = Palette.TextMuted, fontSize = 13.sp,
         )
     }
 }
@@ -473,7 +518,7 @@ private fun NetworkSection(app: AppController) {
         Text(
             if (vpn) "VPN auf diesem Gerät: aktiv" else "VPN auf diesem Gerät: nicht aktiv",
             color = if (vpn) Palette.Accent else Palette.TextSoft,
-            fontSize = 16.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold,
         )
         val p = app.proxy
@@ -483,7 +528,7 @@ private fun NetworkSection(app: AppController) {
         var user by remember { mutableStateOf(p.user) }
         var pass by remember { mutableStateOf(p.pass) }
 
-        Text("Proxy nur für diese App (optional)", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        Text("Proxy nur für diese App (optional)", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             ProxyType.entries.forEach { t ->
                 TvButton(t.label, selected = type == t, onClick = { type = t })
@@ -512,7 +557,7 @@ private fun FavoritesSection(app: AppController) {
     Section("Favoriten (Nummer 1, 2, 3 …)") {
         val favs = app.lineup.groups.firstOrNull { it.isFavorites }?.channels.orEmpty()
         if (favs.isEmpty()) {
-            Text("In der Senderliste OK lang drücken (Touch: lange tippen), um einen Favoriten hinzuzufügen.", color = Palette.TextMuted, fontSize = 16.sp)
+            Text("In der Senderliste OK lang drücken (Touch: lange tippen), um einen Favoriten hinzuzufügen.", color = Palette.TextMuted, fontSize = 14.sp)
         }
         favs.forEach { nc ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -535,7 +580,7 @@ private fun UpdateSection() {
     var busy by remember { mutableStateOf(false) }
 
     Section("App-Update") {
-        Text("Installiert: Version ${BuildConfig.VERSION_NAME}", color = Palette.TextSoft, fontSize = 16.sp)
+        Text("Installiert: Version ${BuildConfig.VERSION_NAME}", color = Palette.TextSoft, fontSize = 14.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Nach Update suchen", onClick = {
                 if (busy) return@TvButton
@@ -568,8 +613,8 @@ private fun UpdateSection() {
                 })
             }
         }
-        status?.let { Text(it, color = Palette.TextMuted, fontSize = 15.sp) }
-        release?.notes?.takeIf { it.isNotBlank() }?.let { Text("Neu: $it", color = Palette.TextMuted, fontSize = 15.sp) }
+        status?.let { Text(it, color = Palette.TextMuted, fontSize = 13.sp) }
+        release?.notes?.takeIf { it.isNotBlank() }?.let { Text("Neu: $it", color = Palette.TextMuted, fontSize = 13.sp) }
     }
 }
 
@@ -579,7 +624,7 @@ private fun AboutSection() {
         Text(
             "Aze-IPTV-Player ist ein Player und liefert selbst keine Sender oder Inhalte. " +
                 "Bitte nur Playlists verwenden, für die du die Nutzungsrechte hast.",
-            color = Palette.TextSoft, fontSize = 15.sp,
+            color = Palette.TextSoft, fontSize = 13.sp,
         )
         Text(
             "Verwendete Open-Source-Bausteine: AndroidX Media3 (Wiedergabe), Jetpack Compose (Oberfläche), " +

@@ -2,6 +2,8 @@ package de.aze.iptv.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -54,10 +56,11 @@ fun QuickMenu(items: List<QuickItem>, onClose: () -> Unit) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Row(
             modifier = Modifier
-                .padding(bottom = 28.dp, start = 16.dp, end = 16.dp)
-                .background(Palette.Ground.copy(alpha = 0.72f), RoundedCornerShape(16.dp))
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(bottom = 10.dp, start = 12.dp, end = 12.dp)
+                .horizontalScroll(rememberScrollState())
+                .background(Palette.Ground.copy(alpha = 0.72f), RoundedCornerShape(12.dp))
+                .padding(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             items.forEachIndexed { i, item ->
                 Focusable(
@@ -70,23 +73,23 @@ fun QuickMenu(items: List<QuickItem>, onClose: () -> Unit) {
                 ) { focused ->
                     Column(
                         modifier = Modifier
-                            .widthIn(min = 130.dp, max = 260.dp)
+                            .widthIn(min = 78.dp, max = 160.dp)
                             .background(
                                 if (focused) Palette.Accent else Palette.Raised.copy(alpha = 0.55f),
-                                RoundedCornerShape(12.dp),
+                                RoundedCornerShape(8.dp),
                             )
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
                     ) {
                         Text(
                             item.title,
                             color = if (focused) Palette.OnAccent else Palette.TextMuted,
-                            fontSize = 13.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
                             item.value,
                             color = if (focused) Palette.OnAccent else Palette.Text,
-                            fontSize = 18.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

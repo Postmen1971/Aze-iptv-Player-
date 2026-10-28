@@ -126,13 +126,13 @@ fun TvButton(
         }
         Box(
             modifier = Modifier
-                .heightIn(min = 44.dp)
+                .heightIn(min = 38.dp)
                 .background(bg, RoundedCornerShape(10.dp))
                 .then(if (selected && !focused) Modifier.border(2.dp, Palette.Accent, RoundedCornerShape(10.dp)) else Modifier)
-                .padding(PaddingValues(horizontal = 18.dp, vertical = 10.dp)),
+                .padding(PaddingValues(horizontal = 14.dp, vertical = 7.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(label, color = fg, fontSize = 17.sp, fontWeight = if (focused || selected) FontWeight.Bold else FontWeight.Medium)
+            Text(label, color = fg, fontSize = 14.sp, fontWeight = if (focused || selected) FontWeight.Bold else FontWeight.Medium)
         }
     }
 }
