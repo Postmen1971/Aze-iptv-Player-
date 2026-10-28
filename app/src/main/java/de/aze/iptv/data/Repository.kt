@@ -2,6 +2,8 @@ package de.aze.iptv.data
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.File
@@ -25,7 +27,7 @@ class Repository(context: Context) {
 
     suspend fun loadCached(sources: List<PlaylistSource>): List<Channel> = withContext(Dispatchers.IO) {
         // Alle Playlists gleichzeitig lesen (schnellerer Start)
-        sources.map { src -> kotlinx.coroutines.async { readCached(src) } }.flatMap { it.await() }
+        sources.map { src -> async { readCached(src) } }.awaitAll().flatten()
     }
 
     private fun readCached(src: PlaylistSource): List<Channel> {
