@@ -24,6 +24,15 @@ class Store(context: Context) {
         if (!prefs.getBoolean("tunnelReset1", false)) {
             prefs.edit().putBoolean("tunneling", false).putBoolean("tunnelReset1", true).apply()
         }
+        // Einmalig: die bei Aziz auf der SHIELD bewährten Werte übernehmen
+        // (Bildwiederholrate an Sender anpassen, 6 s Wartezeit, immer beste Stufe, keine Fehlersuche-Anzeige)
+        if (!prefs.getBoolean("tuned1", false)) {
+            prefs.edit()
+                .putBoolean("afr", true).putBoolean("afr50", false).putInt("afrDelay", 6)
+                .putBoolean("forceHighest", true).putBoolean("showDiag", false).putBoolean("tunneling", false)
+                .putBoolean("afrReset1", true).putBoolean("tuned1", true)
+                .apply()
+        }
         // Einmalig nach dem Update: Bildwiederholrate anpassen aus (lässt auf manchen Geräten das Bild einfrieren)
         if (!prefs.getBoolean("afrReset1", false)) {
             prefs.edit().putBoolean("afr", false).putBoolean("afrReset1", true).apply()
@@ -127,7 +136,7 @@ class Store(context: Context) {
         set(v) = prefs.edit().putString("engine", v).apply()
 
     var forceHighest: Boolean
-        get() = prefs.getBoolean("forceHighest", false)
+        get() = prefs.getBoolean("forceHighest", true)
         set(v) = prefs.edit().putBoolean("forceHighest", v).apply()
 
     var tunneling: Boolean
@@ -136,7 +145,7 @@ class Store(context: Context) {
 
     /** Bildwiederholrate des Bildschirms an den Sender anpassen (25/50 Hz). */
     var afr: Boolean
-        get() = prefs.getBoolean("afr", false)
+        get() = prefs.getBoolean("afr", true)
         set(v) = prefs.edit().putBoolean("afr", v).apply()
 
     /** Bildschirm fest auf 50 Hz (einmal beim Start umschalten statt bei jedem Sender). */
@@ -146,7 +155,7 @@ class Store(context: Context) {
 
     /** Wartezeit nach dem Umschalten der Frequenz (Sekunden), wie bei TiviMate einstellbar. */
     var afrDelay: Int
-        get() = prefs.getInt("afrDelay", 4)
+        get() = prefs.getInt("afrDelay", 6)
         set(v) = prefs.edit().putInt("afrDelay", v).apply()
 
     /** Kleine Anzeige zur Fehlersuche im Bild (Frequenz, Bilder, Position). */

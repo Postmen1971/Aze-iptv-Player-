@@ -656,7 +656,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                 val before = displayWatch.tick
                 FrameRate.apply(act, mode)
                 displayWatch.awaitChange(before, 6_000)
-                delay(1_500)
+                delay(app.afrDelay * 1_000L)
                 switching = false
                 restartAt(pos)
             }

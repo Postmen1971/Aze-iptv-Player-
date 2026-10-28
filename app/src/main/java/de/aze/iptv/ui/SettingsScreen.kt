@@ -593,49 +593,17 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         )
         Text("Bildqualität", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton("Automatisch (schnelles Umschalten)", selected = !app.forceHighest, onClick = { app.updateForceHighest(false) })
             TvButton("Immer beste Stufe", selected = app.forceHighest, onClick = { app.updateForceHighest(true) })
+            TvButton("Automatisch", selected = !app.forceHighest, onClick = { app.updateForceHighest(false) })
         }
         Text("Bildwiederholrate", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("An Sender anpassen", selected = app.afr || app.afr50, onClick = { app.updateAfr(true) })
             TvButton("Aus", selected = !app.afr && !app.afr50, onClick = { app.updateAfr(false); app.updateAfr50(false) })
-            TvButton("Immer 50 Hz", selected = app.afr50, onClick = { app.updateAfr50(true) })
-            TvButton("An Sender anpassen", selected = app.afr, onClick = { app.updateAfr(true) })
         }
         Text(
-            "Deutsche und türkische Sender laufen mit 25/50 Bildern pro Sekunde; bei 60 Hz ruckelt das Bild leicht. " +
-                "„Immer 50 Hz“ stellt den Bildschirm einmal beim Start um und lässt ihn dann so – am wenigsten anfällig. " +
-                "„An Sender anpassen“ schaltet je nach Sender um (auch 24 Hz bei Filmen).",
-            color = Palette.TextMuted, fontSize = 13.sp,
-        )
-        if (app.afr || app.afr50) {
-            Text("Wartezeit nach dem Umschalten", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                listOf(2, 4, 6, 8).forEach { s ->
-                    TvButton("$s s", selected = app.afrDelay == s, onClick = { app.updateAfrDelay(s) })
-                }
-            }
-            Text(
-                "So lange wartet die App nach dem Umschalten, bis der Fernseher fertig ist. Friert das Bild ein, einen größeren Wert wählen.",
-                color = Palette.TextMuted, fontSize = 13.sp,
-            )
-        }
-        Text("Fehlersuche", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton("Anzeige aus", selected = !app.showDiag, onClick = { app.updateShowDiag(false) })
-            TvButton("Anzeige an", selected = app.showDiag, onClick = { app.updateShowDiag(true) })
-        }
-        Text(
-            "Zeigt oben links Frequenz, Bilder pro Sekunde, ob die Wiedergabe läuft und ob Ton kommt – hilft, Einfrieren einzugrenzen.",
-            color = Palette.TextMuted, fontSize = 13.sp,
-        )
-        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton("Tunneling aus", selected = !app.tunneling, onClick = { app.updateTunneling(false) })
-            TvButton("Tunneling an", selected = app.tunneling, onClick = { app.updateTunneling(true) })
-        }
-        Text(
-            "Tunneling gibt das Bild direkt an den Video-Chip des Geräts. Auf vielen Fire-TV- und Android-TV-Geräten wirkt das Bild " +
-                "dann natürlicher und ruckelfreier. Falls Bild oder Ton danach hängen, wieder ausschalten. Schaltet „Bildwiederholrate anpassen“ automatisch aus (beides zusammen kann das Bild einfrieren).",
+            "Stellt den Bildschirm passend zum Sender um (50 Hz bei deutschen/türkischen Sendern, 24 Hz bei Filmen) – das Bild läuft ruhiger. " +
+                "Beim Umschalten wird der Bildschirm kurz schwarz.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         Text("Untertitel", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
