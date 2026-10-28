@@ -113,6 +113,11 @@ class Store(context: Context) {
         get() = prefs.getBoolean("tunneling", false)
         set(v) = prefs.edit().putBoolean("tunneling", v).apply()
 
+    /** Bildwiederholrate des Bildschirms an den Sender anpassen (25/50 Hz). */
+    var afr: Boolean
+        get() = prefs.getBoolean("afr", true)
+        set(v) = prefs.edit().putBoolean("afr", v).apply()
+
     var autostart: Boolean
         get() = prefs.getBoolean("autostart", false)
         set(v) = prefs.edit().putBoolean("autostart", v).apply()

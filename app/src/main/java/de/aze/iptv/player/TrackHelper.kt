@@ -70,7 +70,7 @@ object TrackHelper {
         }
     }
 
-    private fun select(player: Player, option: TrackOption) {
+    fun select(player: Player, option: TrackOption) {
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(option.group.type, false)
             .setOverrideForType(TrackSelectionOverride(option.group.mediaTrackGroup, option.index))

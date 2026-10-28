@@ -195,7 +195,7 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         )
     }
 
-    /** Farbschema (0 Mitternacht, 1 Schiefer, 2 Ozean, 3 Petrol). */
+    /** Farbschema (Index in [de.aze.iptv.ui.Schemes]). */
     var schemeIndex by mutableStateOf(store.scheme.coerceIn(0, Schemes.lastIndex))
         private set
 
@@ -264,6 +264,15 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     fun updateForceHighest(on: Boolean) {
         forceHighest = on
         store.forceHighest = on
+    }
+
+    /** Bildwiederholrate anpassen (AFR): Bildschirm auf 50 Hz bei 25/50-Bilder-Sendern usw. */
+    var afr by mutableStateOf(store.afr)
+        private set
+
+    fun updateAfr(on: Boolean) {
+        afr = on
+        store.afr = on
     }
 
     fun updateTunneling(on: Boolean) {
@@ -429,6 +438,22 @@ class AppController(context: Context, private val scope: CoroutineScope) {
             editGroups = eg
             current = restoreKey?.let { lu.byKey[it] } ?: current?.let { lu.byKey[it.channel.key] } ?: lu.all.firstOrNull()
         }.also { rebuildJob = it }
+    }
+
+    private val vodProviders = HashMap<String, de.aze.iptv.data.VodProvider>()
+
+    /** Playlists, die Filme & Serien haben können (Server + Login und M3U). */
+    val vodSources: List<PlaylistSource>
+        get() = sources.filter { it.type == SourceType.XTREAM || it.type == SourceType.M3U }
+
+    /** Filme & Serien einer Playlist. Bei M3U wird erkannt, ob ein Xtream-Anbieter dahintersteckt. */
+    fun vodProvider(src: PlaylistSource): de.aze.iptv.data.VodProvider {
+        val file = repo.cacheFileOf(src)
+        val key = "${src.id}|${src.url}|${src.user}|${file.lastModified()}"
+        return vodProviders.getOrPut(key) {
+            if (src.type == SourceType.XTREAM) de.aze.iptv.data.XtreamVod(src)
+            else de.aze.iptv.data.HybridVod(file, src.name)
+        }
     }
 
     /**

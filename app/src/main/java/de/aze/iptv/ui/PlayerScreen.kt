@@ -60,6 +60,8 @@ import de.aze.iptv.data.YouTube
 import androidx.compose.runtime.key
 import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.BufferLevel
+import de.aze.iptv.player.FpsProbe
+import de.aze.iptv.player.FrameRate
 import de.aze.iptv.player.PlaybackConfig
 import de.aze.iptv.player.TrackHelper
 import de.aze.iptv.player.PlayerEngine
@@ -119,6 +121,14 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 }
             }
     }
+
+    // Bildwiederholrate an den Sender anpassen
+    val activity = remember(context) { FrameRate.findActivity(context) }
+    val afrOn = app.afr
+    val probe = remember(player) {
+        FpsProbe { fps -> if (app.afr) activity?.let { FrameRate.match(it, fps) } }.also { it.attach(player) }
+    }
+    LaunchedEffect(afrOn) { if (!afrOn) activity?.let { FrameRate.reset(it) } }
 
     var noPicture by remember { mutableStateOf(true) }
     var digits by remember { mutableStateOf("") }
@@ -243,6 +253,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         val ch = app.current?.channel ?: return@LaunchedEffect
         retryJob?.cancel()
         if (startedKey != ch.key) retries = 0
+        probe.restart()
         startedKey = ch.key
         noPicture = true
         ytError = null

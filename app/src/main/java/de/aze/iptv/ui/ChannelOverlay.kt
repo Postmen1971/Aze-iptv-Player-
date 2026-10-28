@@ -348,7 +348,7 @@ private fun SmallButton(label: String, onClick: () -> Unit) {
 
 /** Schmales Menü links: TV, Filme, Serien, Suchen, Einstellungen. */
 @Composable
-private fun SideMenu(
+internal fun SideMenu(
     multi: Boolean,
     playlistLabel: String,
     onTv: () -> Unit,

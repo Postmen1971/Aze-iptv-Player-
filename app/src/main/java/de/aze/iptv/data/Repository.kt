@@ -20,6 +20,9 @@ class Repository(context: Context) {
 
     private fun cacheFile(source: PlaylistSource) = File(dir, "${source.id}.m3u")
 
+    /** Gespeicherte Kopie der Playlist (für Filme & Serien aus M3U-Listen). */
+    fun cacheFileOf(source: PlaylistSource): File = cacheFile(source)
+
     suspend fun loadCached(sources: List<PlaylistSource>): List<Channel> = withContext(Dispatchers.IO) {
         sources.flatMap { src ->
             val f = cacheFile(src)

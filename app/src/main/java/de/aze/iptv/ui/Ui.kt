@@ -47,7 +47,7 @@ class ColorScheme(
     val highlight: Color,
 )
 
-/** Die vier Farbschemata. */
+/** Die Farbschemata (alle dunkel, mit unterschiedlicher Grundfarbe). */
 val Schemes = listOf(
     ColorScheme(
         "Mitternacht",
@@ -65,10 +65,10 @@ val Schemes = listOf(
     ),
     ColorScheme(
         "Ozean",
-        ground = Color(0xFF0D3A74), panel = Color(0xFF15498F), panelDark = Color(0xFF0F3F7F),
-        raised = Color(0xFF2160AE), line = Color(0xFF2E6BB8),
-        text = Color(0xFFFFFFFF), textSoft = Color(0xFFDCE8F7), textMuted = Color(0xFFA8C3E6),
-        accent = Color(0xFFD2E3F7), onAccent = Color(0xFF0D2E5A), highlight = Color(0xFFFFD54F),
+        ground = Color(0xFF07152B), panel = Color(0xFF0C1E3B), panelDark = Color(0xFF091932),
+        raised = Color(0xFF14305A), line = Color(0xFF1B3966),
+        text = Color(0xFFFFFFFF), textSoft = Color(0xFFC6D4E8), textMuted = Color(0xFF8A9FBF),
+        accent = Color(0xFFD5E3F6), onAccent = Color(0xFF07152B), highlight = Color(0xFF4FA3FF),
     ),
     ColorScheme(
         "Petrol",
@@ -76,6 +76,41 @@ val Schemes = listOf(
         raised = Color(0xFF214249), line = Color(0xFF2A4D55),
         text = Color(0xFFFFFFFF), textSoft = Color(0xFFD2E0E3), textMuted = Color(0xFF9DB5BA),
         accent = Color(0xFFE6EEF0), onAccent = Color(0xFF12292F), highlight = Color(0xFF3AA6E0),
+    ),
+    ColorScheme(
+        "Graphit",
+        ground = Color(0xFF121314), panel = Color(0xFF1A1C1E), panelDark = Color(0xFF151618),
+        raised = Color(0xFF2A2D31), line = Color(0xFF33373C),
+        text = Color(0xFFF1F2F3), textSoft = Color(0xFFC4C8CD), textMuted = Color(0xFF8B9096),
+        accent = Color(0xFFE8EAED), onAccent = Color(0xFF151618), highlight = Color(0xFFFF9F43),
+    ),
+    ColorScheme(
+        "Smaragd",
+        ground = Color(0xFF0A1C17), panel = Color(0xFF0F2620), panelDark = Color(0xFF0C211B),
+        raised = Color(0xFF173A31), line = Color(0xFF1E463B),
+        text = Color(0xFFF0F7F4), textSoft = Color(0xFFC5DBD3), textMuted = Color(0xFF8BA89E),
+        accent = Color(0xFFDDF0E8), onAccent = Color(0xFF0A1C17), highlight = Color(0xFF3DDC97),
+    ),
+    ColorScheme(
+        "Aubergine",
+        ground = Color(0xFF170F22), panel = Color(0xFF20152F), panelDark = Color(0xFF1B1228),
+        raised = Color(0xFF2F2145), line = Color(0xFF3A2A54),
+        text = Color(0xFFF5F0FA), textSoft = Color(0xFFD4C8E3), textMuted = Color(0xFF9D8DB5),
+        accent = Color(0xFFE9E0F5), onAccent = Color(0xFF170F22), highlight = Color(0xFFB98CFF),
+    ),
+    ColorScheme(
+        "Bordeaux",
+        ground = Color(0xFF1C0D10), panel = Color(0xFF261216), panelDark = Color(0xFF201013),
+        raised = Color(0xFF3A1C22), line = Color(0xFF47232A),
+        text = Color(0xFFFAF1F2), textSoft = Color(0xFFE0C9CC), textMuted = Color(0xFFAE8E93),
+        accent = Color(0xFFF4E3E5), onAccent = Color(0xFF1C0D10), highlight = Color(0xFFFF6B7A),
+    ),
+    ColorScheme(
+        "Kupfer",
+        ground = Color(0xFF1A130E), panel = Color(0xFF241A13), panelDark = Color(0xFF1F1610),
+        raised = Color(0xFF36271C), line = Color(0xFF433123),
+        text = Color(0xFFFAF4EE), textSoft = Color(0xFFE0D0C2), textMuted = Color(0xFFAD9682),
+        accent = Color(0xFFF3E6DA), onAccent = Color(0xFF1A130E), highlight = Color(0xFFE8964A),
     ),
 )
 
