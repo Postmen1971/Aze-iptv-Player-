@@ -245,7 +245,8 @@ private fun Browse(
                         Focusable(
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(catFocus) else Modifier),
                             onClick = { selected = i; query = null },
-                            onFocus = { selected = i; query = null },
+                            // Nur beim Wechsel der Kategorie die Suche beenden (nicht wenn der Fokus nach der Suche zurückkommt)
+                            onFocus = { if (i != selected) { selected = i; query = null } },
                         ) { focused ->
                             val count = counts[c.id] ?: items?.size?.takeIf { i == selected }
                             Row(
