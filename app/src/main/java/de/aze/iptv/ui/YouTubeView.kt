@@ -37,7 +37,8 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
         WebView(context).apply {
             isFocusable = false
             isFocusableInTouchMode = false
-            setBackgroundColor(android.graphics.Color.BLACK)
+            // durchsichtig, damit ein "durchgestanztes" Video sichtbar wird; die Seite selbst ist schwarz
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false

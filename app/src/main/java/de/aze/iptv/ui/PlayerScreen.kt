@@ -333,10 +333,27 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         if (!overlay && !quickMenu && !search) runCatching { focus.requestFocus() }
     }
 
+    // YouTube: Manche Geräte (z. B. Fire TV) zeigen das Video der WebView auf einer Ebene HINTER der App
+    // ("durchgestanzt"). Dann muss alles darüber durchsichtig sein – sonst Ton ohne Bild.
+    val ytActive = curCh != null && YouTube.isYouTube(curCh.url) && !inBackground
+    DisposableEffect(ytActive) {
+        val w = activity?.window
+        if (ytActive && w != null) {
+            w.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
+            w.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT))
+        }
+        onDispose {
+            if (ytActive && w != null) {
+                w.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
+                w.setFormat(android.graphics.PixelFormat.OPAQUE)
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(if (ytActive) Color.Transparent else Color.Black)
             .focusRequester(focus)
             .onKeyEvent { e ->
                 val code = e.nativeKeyEvent.keyCode
