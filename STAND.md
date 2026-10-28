@@ -1,4 +1,4 @@
-# Aze-IPTV-Player – Projektstand (28.10.2026, Version 1.0.46)
+# Aze-IPTV-Player – Projektstand (28.10.2026, Version 1.0.48)
 
 ## Wo alles liegt
 - **GitHub-Repository:** https://github.com/Postmen1971/Aze-iptv-Player- (Branch `main`)
@@ -77,6 +77,12 @@
 - Hänger behoben: schnelle Verschlüsselung (eigener Datenschlüssel statt Android-Schlüsselspeicher bei jedem Zugriff), VLC wird im Hintergrund freigegeben und LibVLC nur einmal angelegt, Sendersuche im Hintergrund, „Senderliste wird aktualisiert“ kann nicht mehr hängen bleiben, EPG-Namensvergleich schneller
 - YouTube: WebView liegt direkt im Fenster hinter der Oberfläche (SHIELD: Ton ohne Bild); neue Einstellung „In der YouTube-App“ abspielen
 - Testgerät von Aziz: NVIDIA SHIELD TV (Fire TV beim Bruder zeigt dasselbe Einfrieren)
+
+## Neu in 1.0.48
+- „Fußball im TV“: sucht in der Programmzeitschrift der eigenen Sender nach Fußballspielen (heute/morgen), OK schaltet um. Erreichbar über Seitenmenü und Schnellmenü („Spiele im TV“). Datei `data/Football.kt`, `ui/FootballGuide.kt`
+- Filme & Serien: kleinere Poster (6 nebeneinander), Vorladen der nächsten Poster, Bild-Zwischenspeicher 250 MB
+- Release-Build mit R8-Optimierung (`app/proguard-rules.pro`) – falls Abstürze auftreten, zuerst hier prüfen
+- YouTube läuft jetzt direkt im App-Player (WebView liegt im Fenster hinter der Oberfläche)
 
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
