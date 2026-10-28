@@ -13,6 +13,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.video.VideoFrameMetadataListener
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.first
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -39,8 +40,16 @@ object FrameRate {
      * Gibt true zurück, wenn wirklich umgeschaltet wird – dann muss die Wiedergabe kurz neu gestartet werden,
      * weil manche Geräte (z. B. Fire TV) das Bild nach dem Umschalten sonst einfrieren lassen.
      */
+    /** Umschalten in einem Schritt (ohne Anhalten). */
     fun match(activity: Activity, fps: Float): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || fps < 10f || fps > 125f) return false
+        val id = target(activity, fps) ?: return false
+        apply(activity, id)
+        return true
+    }
+
+    /** Welcher Bildschirm-Modus zur Bildrate passt – null, wenn schon passend oder keiner passt. */
+    fun target(activity: Activity, fps: Float): Int? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || fps < 10f || fps > 125f) return null
         @Suppress("DEPRECATION")
         val display: Display = activity.windowManager.defaultDisplay
         val cur = display.mode
@@ -55,17 +64,21 @@ object FrameRate {
             return n
         }
         val candidates = sameSize.mapNotNull { m -> multiple(m.refreshRate)?.let { m to it } }
-        if (candidates.isEmpty()) return false
+        if (candidates.isEmpty()) return null
         // Bevorzugt 48 Hz und mehr (24/25-Hz-Modi flackern bei manchen Fernsehern im Menü), dann das kleinste Vielfache
         val best = candidates.minWith(
             compareBy<Pair<Display.Mode, Int>>({ if (it.first.refreshRate >= 47f) 0 else 1 }, { it.second }, { abs(it.first.refreshRate / it.second - fps) }),
         ).first
-        if (best.modeId == cur.modeId) return false
+        if (best.modeId == cur.modeId) return null
+        if (activity.window.attributes.preferredDisplayModeId == best.modeId) return null
+        return best.modeId
+    }
+
+    fun apply(activity: Activity, modeId: Int) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
         val attrs = activity.window.attributes
-        if (attrs.preferredDisplayModeId == best.modeId) return false
-        attrs.preferredDisplayModeId = best.modeId
+        attrs.preferredDisplayModeId = modeId
         activity.window.attributes = attrs
-        return true
     }
 
     /** Zurück zur Standard-Frequenz des Geräts. */
@@ -90,6 +103,10 @@ class FpsProbe(private val onFps: (Float) -> Unit) : VideoFrameMetadataListener 
     @Volatile private var count = 0
     @Volatile private var done = false
 
+    /** Zählt alle ausgegebenen Bilder (für den Wächter, der ein stehendes Bild erkennt). */
+    @Volatile var frames = 0L
+        private set
+
     /** Neue Messung (bei jedem Senderwechsel aufrufen). */
     fun restart() {
         count = 0
@@ -102,6 +119,7 @@ class FpsProbe(private val onFps: (Float) -> Unit) : VideoFrameMetadataListener 
         format: androidx.media3.common.Format,
         mediaFormat: android.media.MediaFormat?,
     ) {
+        frames++
         if (done) return
         // Angegebene Bildrate nutzen, wenn vorhanden
         if (format.frameRate > 0f && count == 0) {
@@ -179,3 +197,10 @@ fun createPlayerView(context: Context, texture: Boolean): androidx.media3.ui.Pla
     } else {
         androidx.media3.ui.PlayerView(context)
     }
+
+/** Wartet, bis der Bildschirm den Frequenzwechsel gemeldet hat (oder die Zeit abgelaufen ist). */
+suspend fun DisplayWatch.awaitChange(from: Int, timeoutMs: Long) {
+    kotlinx.coroutines.withTimeoutOrNull(timeoutMs) {
+        androidx.compose.runtime.snapshotFlow { tick }.first { it != from }
+    }
+}

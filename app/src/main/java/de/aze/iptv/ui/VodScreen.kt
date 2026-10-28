@@ -85,7 +85,7 @@ import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.FpsProbe
 import de.aze.iptv.player.FrameRate
 import de.aze.iptv.player.rememberDisplayWatch
-import de.aze.iptv.player.createPlayerView
+import de.aze.iptv.player.awaitChange
 import de.aze.iptv.player.TrackHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -583,16 +583,54 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+            .apply { videoChangeFrameRateStrategy = C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF }
     }
     // Bildwiederholrate an den Film anpassen (z. B. 24 Hz bei Kinofilmen)
     val activity = remember(context) { FrameRate.findActivity(context) }
-    // Nach dem Umschalten der Frequenz wird die Bildfläche neu angelegt (sonst friert das Bild auf manchen Geräten ein)
+    // Umschalten wie bei TiviMate: anhalten → Frequenz umstellen → warten → an gleicher Stelle weiter
     val displayWatch = rememberDisplayWatch()
-    remember(player) {
+    var switching by remember { mutableStateOf(false) }
+    fun restartAt(pos: Long) {
+        player.stop()
+        player.prepare()
+        player.seekTo(pos)
+        player.playWhenReady = true
+    }
+    val probe = remember(player) {
         FpsProbe { fps ->
-            val act = activity
-            if (app.afr && act != null && FrameRate.match(act, fps)) displayWatch.expectSwitch()
+            val act = activity ?: return@FpsProbe
+            if (!app.afr || switching) return@FpsProbe
+            val mode = FrameRate.target(act, fps) ?: return@FpsProbe
+            switching = true
+            val pos = player.currentPosition
+            player.stop()
+            scope.launch {
+                val before = displayWatch.tick
+                FrameRate.apply(act, mode)
+                displayWatch.awaitChange(before, 6_000)
+                delay(1_500)
+                switching = false
+                restartAt(pos)
+            }
         }.also { it.attach(player) }
+    }
+    // Wächter: Film läuft, aber 5 s lang kein neues Bild → an gleicher Stelle neu starten (höchstens 3×)
+    LaunchedEffect(player) {
+        var last = -1L
+        var still = 0
+        var restarts = 0
+        while (true) {
+            delay(1_000)
+            val f = probe.frames
+            val active = !switching && player.playbackState == Player.STATE_READY && player.isPlaying && player.videoFormat != null
+            if (active && f == last) still++ else still = 0
+            last = f
+            if (still >= 5 && restarts < 3) {
+                still = 0
+                restarts++
+                restartAt(player.currentPosition)
+            }
+        }
     }
 
     fun exit() {
@@ -742,29 +780,24 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
         } else {
             Modifier.fillMaxSize()
         }
-        val useTexture = app.afr && !app.tunneling
-        androidx.compose.runtime.key(displayWatch.tick, useTexture) {
-            AndroidView(
-                modifier = videoModifier,
-                factory = { ctx ->
-                    createPlayerView(ctx, useTexture).apply {
-                        this.player = player
-                        useController = false
-                        setShutterBackgroundColor(android.graphics.Color.BLACK)
-                        isFocusable = false
-                    }
-                },
-                update = { v ->
-                    v.player = player
-                    v.resizeMode = when (aspect) {
-                        AspectMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        AspectMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                    }
-                },
-                onRelease = { it.player = null },
-            )
-        }
+        AndroidView(
+            modifier = videoModifier,
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    this.player = player
+                    useController = false
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    isFocusable = false
+                }
+            },
+            update = { v ->
+                v.resizeMode = when (aspect) {
+                    AspectMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    AspectMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                }
+            },
+        )
 
         if (buffering && error == null) {
             Text(

@@ -63,7 +63,7 @@ import de.aze.iptv.player.BufferLevel
 import de.aze.iptv.player.FpsProbe
 import de.aze.iptv.player.FrameRate
 import de.aze.iptv.player.rememberDisplayWatch
-import de.aze.iptv.player.createPlayerView
+import de.aze.iptv.player.awaitChange
 import de.aze.iptv.player.PlaybackConfig
 import de.aze.iptv.player.TrackHelper
 import de.aze.iptv.player.PlayerEngine
@@ -117,6 +117,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             .build()
             .apply {
                 playWhenReady = true
+                // Frequenz wählt die App selbst (siehe FrameRate) – nicht zusätzlich der Player
+                videoChangeFrameRateStrategy = C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
                 // Tunneling: Bild direkt an den Video-Chip des Geräts
                 (trackSelector as? androidx.media3.exoplayer.trackselection.DefaultTrackSelector)?.let { ts ->
                     ts.setParameters(ts.buildUponParameters().setTunnelingEnabled(tunnel))
@@ -127,14 +129,46 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // Bildwiederholrate an den Sender anpassen
     val activity = remember(context) { FrameRate.findActivity(context) }
     val afrOn = app.afr
-    // Nach dem Umschalten der Frequenz wird die Bildfläche neu angelegt (sonst friert das Bild auf manchen Geräten ein)
+    // Umschalten wie bei TiviMate: Sender anhalten → Frequenz umstellen → warten, bis der Fernseher fertig ist →
+    // Sender neu starten. (Umschalten mitten in der Wiedergabe lässt auf SHIELD/Fire TV das Bild einfrieren.)
     val displayWatch = rememberDisplayWatch()
-    val useTexture = app.afr && !app.tunneling
+    var restartTick by remember { mutableIntStateOf(0) }
+    var switching by remember { mutableStateOf(false) }
     val probe = remember(player) {
         FpsProbe { fps ->
-            val act = activity
-            if (app.afr && act != null && FrameRate.match(act, fps)) displayWatch.expectSwitch()
+            val act = activity ?: return@FpsProbe
+            if (!app.afr || switching) return@FpsProbe
+            val mode = FrameRate.target(act, fps) ?: return@FpsProbe
+            switching = true
+            player.stop()
+            scope.launch {
+                val before = displayWatch.tick
+                FrameRate.apply(act, mode)
+                displayWatch.awaitChange(before, 6_000)
+                delay(1_500) // HDMI braucht nach dem Wechsel noch einen Moment
+                switching = false
+                restartTick++
+            }
         }.also { it.attach(player) }
+    }
+    // Wächter: läuft der Sender, aber es kommen 5 s lang keine neuen Bilder, wird er neu gestartet (höchstens 3×).
+    var watchdogRestarts by remember { mutableIntStateOf(0) }
+    LaunchedEffect(player) {
+        var last = -1L
+        var still = 0
+        while (true) {
+            delay(1_000)
+            val f = probe.frames
+            val active = !switching && player.playbackState == Player.STATE_READY && player.playWhenReady &&
+                player.videoFormat != null
+            if (active && f == last) still++ else still = 0
+            last = f
+            if (still >= 5 && watchdogRestarts < 3) {
+                still = 0
+                watchdogRestarts++
+                restartTick++
+            }
+        }
     }
     LaunchedEffect(afrOn) { if (!afrOn) activity?.let { FrameRate.reset(it) } }
 
@@ -259,7 +293,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     }
 
     val currentKey = app.current?.channel?.key
-    LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick) {
+    LaunchedEffect(currentKey) { watchdogRestarts = 0 }
+    LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick, restartTick) {
         val ch = app.current?.channel ?: return@LaunchedEffect
         retryJob?.cancel()
         if (startedKey != ch.key) retries = 0
@@ -520,24 +555,21 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     )
                 }
             }
-        } else key(displayWatch.tick, useTexture) {
-            AndroidView(
-                modifier = videoModifier,
-                factory = { ctx ->
-                    createPlayerView(ctx, useTexture).apply {
-                        useController = false
-                        setShutterBackgroundColor(android.graphics.Color.BLACK)
-                        setKeepContentOnPlayerReset(false)
-                        isFocusable = false
-                    }
-                },
-                update = { view ->
-                    view.player = player
-                    view.resizeMode = resize
-                },
-                onRelease = { it.player = null },
-            )
-        }
+        } else AndroidView(
+            modifier = videoModifier,
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    useController = false
+                    setShutterBackgroundColor(android.graphics.Color.BLACK)
+                    setKeepContentOnPlayerReset(false)
+                    isFocusable = false
+                }
+            },
+            update = { view ->
+                view.player = player
+                view.resizeMode = resize
+            },
+        )
 
         if (app.lineup.all.isEmpty()) {
             Text(
