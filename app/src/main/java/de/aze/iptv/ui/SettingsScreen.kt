@@ -50,6 +50,7 @@ import de.aze.iptv.data.PlaylistSource
 import de.aze.iptv.data.ProxySettings
 import de.aze.iptv.data.ProxyType
 import de.aze.iptv.data.PhoneInputServer
+import de.aze.iptv.data.WebEditServer
 import de.aze.iptv.data.Secure
 import androidx.compose.runtime.DisposableEffect
 import de.aze.iptv.player.AspectMode
@@ -108,7 +109,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
         "Netzwerk", "Sicherheit", "Autostart", "App-Update", "Über",
     )
 
-    // Kompakt wie bei TiviMate: links die Bereiche, rechts nur der gewählte Bereich.
+    // Kompakt: links die Bereiche, rechts nur der gewählte Bereich.
     Row(modifier = Modifier.fillMaxSize().background(Palette.Ground)) {
         Column(
             modifier = Modifier
@@ -412,6 +413,53 @@ private fun PhoneInputSection(app: AppController) {
     }
 }
 
+/** Senderliste am Handy oder PC bearbeiten (Ziehen zum Sortieren). */
+@Composable
+private fun WebEditSection(app: AppController) {
+    var server by remember { mutableStateOf<WebEditServer?>(null) }
+    var address by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(Unit) { onDispose { server?.stop() } }
+
+    Section("Senderliste am Handy/PC bearbeiten") {
+        val s = server
+        if (s == null) {
+            Text(
+                "Gruppen und Sender im Browser per Ziehen sortieren, ein- und ausblenden, Gruppen umbenennen. " +
+                    "Gleiches WLAN nötig; mit Code geschützt.",
+                color = Palette.TextMuted, fontSize = 13.sp,
+            )
+            TvButton("Web-Bearbeitung starten", onClick = {
+                val ip = PhoneInputServer.localAddress()
+                if (ip == null) {
+                    app.message = "Keine WLAN-/LAN-Adresse gefunden. Ist das Gerät mit dem Heimnetz verbunden?"
+                    return@TvButton
+                }
+                val srv = WebEditServer(
+                    groups = { app.editGroups },
+                    hiddenChannels = { app.hiddenChannels },
+                    onSave = { edits, snap -> app.applyWebEdit(edits, snap) },
+                    onStopped = { server = null },
+                )
+                if (srv.start()) {
+                    address = "http://$ip:${srv.port}"
+                    server = srv
+                } else {
+                    app.message = "Web-Bearbeitung konnte nicht gestartet werden."
+                }
+            })
+        } else {
+            Text("Am Handy oder PC im Browser öffnen:", color = Palette.TextSoft, fontSize = 14.sp)
+            Text(address ?: "", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Code:", color = Palette.TextSoft, fontSize = 18.sp)
+                Text(s.code, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            }
+            Text("Bleibt offen, solange du bearbeitest; schließt sich 30 Minuten nach der letzten Änderung.", color = Palette.TextMuted, fontSize = 13.sp)
+            TvButton("Beenden", onClick = { s.stop() })
+        }
+    }
+}
+
 @Composable
 private fun YouTubeSection(app: AppController) {
     Section("YouTube Live") {
@@ -463,6 +511,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         }
         TvButton("Senderliste bearbeiten (Gruppen und Sender sortieren, ausblenden)", onClick = onEditList)
     }
+    if (part != 2) WebEditSection(app)
     if (part != 1) Section("Wiedergabe") {
         Text("Puffer", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

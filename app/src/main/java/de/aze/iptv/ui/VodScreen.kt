@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -76,7 +77,7 @@ import kotlinx.coroutines.launch
 private class Playing(val url: String, val title: String, val resumeKey: String, val startMs: Long)
 
 /**
- * Filme & Serien im TiviMate-Stil:
+ * Filme & Serien:
  *  links die Kategorien, rechts die Poster; OK öffnet die Detailseite mit Beschreibung,
  *  bei Serien mit Staffeln und Folgen; "Weiterschauen" merkt sich die Stelle.
  */
@@ -150,7 +151,13 @@ private fun Browse(
     var selected by remember(api, series) { mutableIntStateOf(0) }
     var items by remember(api, series) { mutableStateOf<List<VodItem>?>(null) }
     var error by remember(api, series) { mutableStateOf<String?>(null) }
+    var counts by remember(api, series) { mutableStateOf<Map<String, Int>>(emptyMap()) }
     val firstCat = remember { FocusRequester() }
+
+    // Anzahl je Kategorie im Hintergrund holen (große Listen brauchen ein paar Sekunden)
+    LaunchedEffect(api, series) {
+        counts = runCatching { api.counts(series) }.getOrDefault(emptyMap())
+    }
 
     LaunchedEffect(api, series) {
         cats = runCatching { if (series) api.seriesCategories() else api.movieCategories() }
@@ -191,17 +198,31 @@ private fun Browse(
                         onClick = { selected = i },
                         onFocus = { selected = i },
                     ) { focused ->
-                        Text(
-                            c.name,
-                            color = if (focused) Palette.OnAccent else if (i == selected) Palette.Accent else Palette.Text,
-                            fontSize = 14.sp,
-                            fontWeight = if (focused || i == selected) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        val count = counts[c.id] ?: items?.size?.takeIf { i == selected }
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(if (focused) Palette.Accent else Color.Transparent, RoundedCornerShape(6.dp))
                                 .padding(horizontal = 10.dp, vertical = 7.dp),
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                c.name,
+                                color = if (focused) Palette.OnAccent else if (i == selected) Palette.Accent else Palette.Text,
+                                fontSize = 14.sp,
+                                fontWeight = if (focused || i == selected) FontWeight.Bold else FontWeight.Normal,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (count != null) {
+                                Text(
+                                    "$count",
+                                    color = if (focused) Palette.OnAccent else Palette.TextMuted,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(start = 6.dp),
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -212,13 +233,27 @@ private fun Browse(
             when {
                 list == null -> Text("Lade …", color = Palette.TextMuted, fontSize = 15.sp)
                 list.isEmpty() -> Text("Keine Einträge in dieser Kategorie.", color = Palette.TextMuted, fontSize = 15.sp)
-                else -> LazyVerticalGrid(
-                    columns = GridCells.Adaptive(132.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(list, key = { it.id }) { item ->
-                        PosterCard(item, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0) { onOpen(item) }
+                else -> Column {
+                    // Oben rechts: Kategorie und Anzahl
+                    Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            catList.getOrNull(selected)?.name.orEmpty(),
+                            color = Palette.TextSoft, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            "${list.size} ${if (series) "Serien" else "Filme"}",
+                            color = Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(132.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        gridItemsIndexed(list, key = { _, it -> it.id }) { idx, item ->
+                            PosterCard(item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0) { onOpen(item) }
+                        }
                     }
                 }
             }
@@ -227,7 +262,7 @@ private fun Browse(
 }
 
 @Composable
-private fun PosterCard(item: VodItem, resumed: Boolean, onClick: () -> Unit) {
+private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, onClick: () -> Unit) {
     Focusable(onClick = onClick) { focused ->
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(
@@ -257,6 +292,14 @@ private fun PosterCard(item: VodItem, resumed: Boolean, onClick: () -> Unit) {
                             .padding(horizontal = 5.dp, vertical = 1.dp),
                     )
                 }
+                // Laufende Nummer oben links
+                Text(
+                    "$number",
+                    color = Palette.Text, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.TopStart).padding(5.dp)
+                        .background(Palette.Ground.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 5.dp, vertical = 1.dp),
+                )
                 if (resumed) {
                     Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Palette.Accent))
                 }

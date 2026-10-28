@@ -113,7 +113,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             .build()
             .apply {
                 playWhenReady = true
-                // Tunneling: Bild direkt an den Video-Chip des Geräts (wie bei TiviMate einstellbar)
+                // Tunneling: Bild direkt an den Video-Chip des Geräts
                 (trackSelector as? androidx.media3.exoplayer.trackselection.DefaultTrackSelector)?.let { ts ->
                     ts.setParameters(ts.buildUponParameters().setTunnelingEnabled(tunnel))
                 }

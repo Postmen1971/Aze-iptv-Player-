@@ -62,7 +62,7 @@ fun ChannelOverlay(
     onSearch: () -> Unit,
     onVod: (series: Boolean) -> Unit = {},
 ) {
-    // Wie bei TiviMate: Links in der Senderliste → Gruppen, nochmal Links → Menü (TV, Filme, Serien, Suchen, Einstellungen).
+    // Links in der Senderliste → Gruppen, nochmal Links → Menü (TV, Filme, Serien, Suchen, Einstellungen).
     // Zurück geht immer eine Ebene zurück.
     var showGroups by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
@@ -346,7 +346,7 @@ private fun SmallButton(label: String, onClick: () -> Unit) {
     }
 }
 
-/** Schmales Menü links (wie bei TiviMate): TV, Filme, Serien, Suchen, Einstellungen. */
+/** Schmales Menü links: TV, Filme, Serien, Suchen, Einstellungen. */
 @Composable
 private fun SideMenu(
     multi: Boolean,

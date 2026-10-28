@@ -77,6 +77,37 @@ class XtreamVod(private val src: PlaylistSource) {
         }
     }
 
+    /**
+     * Anzahl der Filme bzw. Serien je Kategorie. Liest die Gesamtliste Stück für Stück,
+     * damit auch sehr große Anbieter-Listen wenig Speicher brauchen.
+     */
+    suspend fun counts(series: Boolean): Map<String, Int> = withContext(Dispatchers.IO) {
+        val conn = Http.open("$api&action=${if (series) "get_series" else "get_vod_streams"}")
+        try {
+            android.util.JsonReader(conn.inputStream.bufferedReader()).use { r ->
+                val m = HashMap<String, Int>()
+                if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) return@use m
+                r.beginArray()
+                while (r.hasNext()) {
+                    if (r.peek() != android.util.JsonToken.BEGIN_OBJECT) { r.skipValue(); continue }
+                    r.beginObject()
+                    var cat: String? = null
+                    while (r.hasNext()) {
+                        val n = r.nextName()
+                        val t = r.peek()
+                        if (n == "category_id" && (t == android.util.JsonToken.STRING || t == android.util.JsonToken.NUMBER)) cat = r.nextString()
+                        else r.skipValue()
+                    }
+                    r.endObject()
+                    cat?.let { m[it] = (m[it] ?: 0) + 1 }
+                }
+                m
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     suspend fun movies(categoryId: String): List<VodItem> = withContext(Dispatchers.IO) {
         val a = arr("get_vod_streams", "&category_id=${enc(categoryId)}")
         (0 until a.length()).map { i ->

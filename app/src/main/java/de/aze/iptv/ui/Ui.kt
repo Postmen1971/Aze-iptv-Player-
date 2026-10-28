@@ -40,14 +40,14 @@ class ColorScheme(
     val text: Color,
     val textSoft: Color,
     val textMuted: Color,
-    /** Auswahl (Fokus) – wie bei TiviMate hell hinterlegt */
+    /** Auswahl (Fokus) – hell hinterlegt */
     val accent: Color,
     val onAccent: Color,
     /** Hervorhebung: laufender Sender, Fortschritt */
     val highlight: Color,
 )
 
-/** Die vier Farbschemata nach TiviMate- bzw. Apollo-Vorbild. */
+/** Die vier Farbschemata. */
 val Schemes = listOf(
     ColorScheme(
         "Mitternacht",
@@ -57,14 +57,14 @@ val Schemes = listOf(
         accent = Color(0xFFE9EDF3), onAccent = Color(0xFF111722), highlight = Color(0xFF5AA0FF),
     ),
     ColorScheme(
-        "TiviMate Grau",
+        "Schiefer",
         ground = Color(0xFF2E3B42), panel = Color(0xFF37474F), panelDark = Color(0xFF2A353B),
         raised = Color(0xFF455A64), line = Color(0xFF52666F),
         text = Color(0xFFFFFFFF), textSoft = Color(0xFFD5DEE3), textMuted = Color(0xFFA9B8C0),
         accent = Color(0xFFECEFF1), onAccent = Color(0xFF263238), highlight = Color(0xFF4FC3F7),
     ),
     ColorScheme(
-        "TiviMate Blau",
+        "Ozean",
         ground = Color(0xFF0D3A74), panel = Color(0xFF15498F), panelDark = Color(0xFF0F3F7F),
         raised = Color(0xFF2160AE), line = Color(0xFF2E6BB8),
         text = Color(0xFFFFFFFF), textSoft = Color(0xFFDCE8F7), textMuted = Color(0xFFA8C3E6),

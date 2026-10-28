@@ -125,6 +125,29 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         rebuild(restoreKey = current?.channel?.key)
     }
 
+    /** Neue Anordnung aus der Web-Oberfläche (Handy/PC) übernehmen. */
+    fun applyWebEdit(edits: List<de.aze.iptv.data.WebGroupEdit>, snapshot: List<EditGroup>) {
+        val groupKeys = snapshot.map { it.key }.toSet()
+        val channelKeys = snapshot.flatMap { g -> g.channels.map { it.key } }.toSet()
+        val originals = snapshot.associate { it.key to it.originalName }
+        var names = layout.groupNames
+        edits.forEach { e ->
+            val t = e.name.trim()
+            names = if (t.isEmpty() || t == originals[e.key]) names - e.key else names + (e.key to t)
+        }
+        saveLayout(
+            layout.copy(
+                groupOrder = edits.map { it.key },
+                hiddenGroups = (layout.hiddenGroups - groupKeys) + edits.filter { it.hidden }.map { it.key },
+                groupNames = names,
+                channelOrder = layout.channelOrder + edits.associate { e -> e.key to e.channels.map { it.first } },
+                hiddenChannels = (layout.hiddenChannels - channelKeys) +
+                    edits.flatMap { e -> e.channels.filter { it.second }.map { it.first } },
+            )
+        )
+        message = "Senderliste vom Handy übernommen."
+    }
+
     fun moveGroup(key: String, delta: Int) {
         val keys = editGroups.map { it.key }.toMutableList()
         val i = keys.indexOf(key)
@@ -172,7 +195,7 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         )
     }
 
-    /** Farbschema (0 Mitternacht, 1 TiviMate Grau, 2 TiviMate Blau, 3 Petrol). */
+    /** Farbschema (0 Mitternacht, 1 Schiefer, 2 Ozean, 3 Petrol). */
     var schemeIndex by mutableStateOf(store.scheme.coerceIn(0, Schemes.lastIndex))
         private set
 
