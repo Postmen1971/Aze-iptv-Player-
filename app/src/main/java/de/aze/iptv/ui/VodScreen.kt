@@ -84,6 +84,7 @@ import de.aze.iptv.data.VodProvider
 import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.FpsProbe
 import de.aze.iptv.player.FrameRate
+import de.aze.iptv.player.rememberDisplayWatch
 import de.aze.iptv.player.TrackHelper
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -584,19 +585,12 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
     }
     // Bildwiederholrate an den Film anpassen (z. B. 24 Hz bei Kinofilmen)
     val activity = remember(context) { FrameRate.findActivity(context) }
+    // Nach dem Umschalten der Frequenz wird die Bildfläche neu angelegt (sonst friert das Bild auf manchen Geräten ein)
+    val displayWatch = rememberDisplayWatch()
     remember(player) {
         FpsProbe { fps ->
             val act = activity
-            if (app.afr && act != null && FrameRate.match(act, fps)) {
-                // Nach dem Umschalten an gleicher Stelle neu starten (sonst friert das Bild auf manchen Geräten ein)
-                scope.launch {
-                    delay(1_800)
-                    val pos = player.currentPosition
-                    player.stop()
-                    player.prepare()
-                    player.seekTo(pos)
-                }
-            }
+            if (app.afr && act != null && FrameRate.match(act, fps)) displayWatch.expectSwitch()
         }.also { it.attach(player) }
     }
 
@@ -747,24 +741,28 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
         } else {
             Modifier.fillMaxSize()
         }
-        AndroidView(
-            modifier = videoModifier,
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    this.player = player
-                    useController = false
-                    setShutterBackgroundColor(android.graphics.Color.BLACK)
-                    isFocusable = false
-                }
-            },
-            update = { v ->
-                v.resizeMode = when (aspect) {
-                    AspectMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    AspectMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                }
-            },
-        )
+        androidx.compose.runtime.key(displayWatch.tick) {
+            AndroidView(
+                modifier = videoModifier,
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        this.player = player
+                        useController = false
+                        setShutterBackgroundColor(android.graphics.Color.BLACK)
+                        isFocusable = false
+                    }
+                },
+                update = { v ->
+                    v.player = player
+                    v.resizeMode = when (aspect) {
+                        AspectMode.FIT -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        AspectMode.ZOOM -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                        else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    }
+                },
+                onRelease = { it.player = null },
+            )
+        }
 
         if (buffering && error == null) {
             Text(

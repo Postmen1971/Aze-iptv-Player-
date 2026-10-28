@@ -11,6 +11,8 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.video.VideoFrameMetadataListener
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -120,4 +122,47 @@ class FpsProbe(private val onFps: (Float) -> Unit) : VideoFrameMetadataListener 
     }
 
     fun attach(player: ExoPlayer) = player.setVideoFrameMetadataListener(this)
+}
+
+/**
+ * Merkt, wenn der Bildschirm die Frequenz gewechselt hat. Danach muss die Bildfläche des Players neu angelegt werden –
+ * sonst bleibt auf manchen Geräten (z. B. Fire TV) das Bild stehen, bis man ein Menü öffnet.
+ */
+class DisplayWatch {
+    /** Ändert sich nach jedem Frequenzwechsel → Bildfläche neu anlegen. */
+    var tick by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+    private val main = Handler(Looper.getMainLooper())
+    private val bump = Runnable { tick++ }
+
+    /** Vom System gemeldete Änderung: kurz warten, bis der Wechsel fertig ist. */
+    fun changed() {
+        main.removeCallbacks(bump)
+        main.postDelayed(bump, 500)
+    }
+
+    /** Nach eigenem Umschalten: falls das System nichts meldet, nach 3 s trotzdem neu anlegen. */
+    fun expectSwitch() {
+        val start = tick
+        main.postDelayed({ if (tick == start) tick++ }, 3_000)
+    }
+}
+
+@androidx.compose.runtime.Composable
+fun rememberDisplayWatch(): DisplayWatch {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val watch = androidx.compose.runtime.remember { DisplayWatch() }
+    androidx.compose.runtime.DisposableEffect(context) {
+        val dm = context.getSystemService(Context.DISPLAY_SERVICE) as? android.hardware.display.DisplayManager
+        val listener = object : android.hardware.display.DisplayManager.DisplayListener {
+            override fun onDisplayAdded(displayId: Int) = Unit
+            override fun onDisplayRemoved(displayId: Int) = Unit
+            override fun onDisplayChanged(displayId: Int) {
+                if (displayId == Display.DEFAULT_DISPLAY) watch.changed()
+            }
+        }
+        dm?.registerDisplayListener(listener, Handler(Looper.getMainLooper()))
+        onDispose { dm?.unregisterDisplayListener(listener) }
+    }
+    return watch
 }

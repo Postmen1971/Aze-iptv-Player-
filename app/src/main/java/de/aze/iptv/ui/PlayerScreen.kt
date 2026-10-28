@@ -62,6 +62,7 @@ import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.BufferLevel
 import de.aze.iptv.player.FpsProbe
 import de.aze.iptv.player.FrameRate
+import de.aze.iptv.player.rememberDisplayWatch
 import de.aze.iptv.player.PlaybackConfig
 import de.aze.iptv.player.TrackHelper
 import de.aze.iptv.player.PlayerEngine
@@ -125,17 +126,12 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // Bildwiederholrate an den Sender anpassen
     val activity = remember(context) { FrameRate.findActivity(context) }
     val afrOn = app.afr
-    // Nach dem Umschalten der Frequenz Wiedergabe neu starten (sonst friert das Bild auf manchen Geräten ein)
-    var afrRestart by remember { mutableIntStateOf(0) }
+    // Nach dem Umschalten der Frequenz wird die Bildfläche neu angelegt (sonst friert das Bild auf manchen Geräten ein)
+    val displayWatch = rememberDisplayWatch()
     val probe = remember(player) {
         FpsProbe { fps ->
             val act = activity
-            if (app.afr && act != null && FrameRate.match(act, fps)) {
-                scope.launch {
-                    delay(1_800)
-                    afrRestart++
-                }
-            }
+            if (app.afr && act != null && FrameRate.match(act, fps)) displayWatch.expectSwitch()
         }.also { it.attach(player) }
     }
     LaunchedEffect(afrOn) { if (!afrOn) activity?.let { FrameRate.reset(it) } }
@@ -261,7 +257,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     }
 
     val currentKey = app.current?.channel?.key
-    LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick, afrRestart) {
+    LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick) {
         val ch = app.current?.channel ?: return@LaunchedEffect
         retryJob?.cancel()
         if (startedKey != ch.key) retries = 0
@@ -491,21 +487,24 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     )
                 }
             }
-        } else AndroidView(
-            modifier = videoModifier,
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    setShutterBackgroundColor(android.graphics.Color.BLACK)
-                    setKeepContentOnPlayerReset(false)
-                    isFocusable = false
-                }
-            },
-            update = { view ->
-                view.player = player
-                view.resizeMode = resize
-            },
-        )
+        } else key(displayWatch.tick) {
+            AndroidView(
+                modifier = videoModifier,
+                factory = { ctx ->
+                    PlayerView(ctx).apply {
+                        useController = false
+                        setShutterBackgroundColor(android.graphics.Color.BLACK)
+                        setKeepContentOnPlayerReset(false)
+                        isFocusable = false
+                    }
+                },
+                update = { view ->
+                    view.player = player
+                    view.resizeMode = resize
+                },
+                onRelease = { it.player = null },
+            )
+        }
 
         if (app.lineup.all.isEmpty()) {
             Text(
