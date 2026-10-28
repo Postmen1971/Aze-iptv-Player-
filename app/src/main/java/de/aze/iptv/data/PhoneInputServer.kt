@@ -119,17 +119,25 @@ class PhoneInputServer(
                 stop()
                 return
             }
-            val type = if (form["type"] == "xtream") SourceType.XTREAM else SourceType.M3U
+            val type = when (form["type"]) {
+                "xtream" -> SourceType.XTREAM
+                "portal" -> SourceType.STALKER
+                else -> SourceType.M3U
+            }
             val url = form["url"].orEmpty().trim()
-            val user = form["user"].orEmpty().trim()
+            val user = (if (type == SourceType.STALKER) form["mac"] else form["user"]).orEmpty().trim().let {
+                if (type == SourceType.STALKER) it.uppercase() else it
+            }
             val pass = form["pass"].orEmpty()
-            if (url.isEmpty() || (type == SourceType.XTREAM && (user.isEmpty() || pass.isEmpty()))) {
+            if (url.isEmpty() || (type == SourceType.XTREAM && (user.isEmpty() || pass.isEmpty())) ||
+                (type == SourceType.STALKER && !Regex("^([0-9A-F]{2}:){5}[0-9A-F]{2}$").matches(user))
+            ) {
                 respond(out, 400, page("Angaben fehlen", "Bitte Link bzw. Server, Benutzer und Passwort ausfüllen.", back = true))
                 return
             }
             val source = PlaylistSource(
                 id = UUID.randomUUID().toString(),
-                name = form["name"].orEmpty().trim().ifEmpty { if (type == SourceType.M3U) "Playlist" else "Anbieter" },
+                name = form["name"].orEmpty().trim().ifEmpty { if (type == SourceType.M3U) "Playlist" else if (type == SourceType.STALKER) "Portal" else "Anbieter" },
                 type = type,
                 url = url,
                 user = user,
@@ -204,6 +212,7 @@ class PhoneInputServer(
           <div class="tabs">
             <label><input type="radio" name="type" value="m3u" checked onchange="sw()">M3U-Link</label>
             <label><input type="radio" name="type" value="xtream" onchange="sw()">Server + Login</label>
+            <label><input type="radio" name="type" value="portal" onchange="sw()">Portal</label>
             <label><input type="radio" name="type" value="youtube" onchange="sw()">YouTube</label>
           </div>
           <label for="name">Name</label>
@@ -216,15 +225,20 @@ class PhoneInputServer(
             <label for="pass">Passwort</label>
             <input id="pass" name="pass" type="password">
           </div>
+          <div id="pt" style="display:none">
+            <label for="mac">MAC-Adresse</label>
+            <input id="mac" name="mac" value="00:1A:79:" autocapitalize="characters" autocorrect="off">
+          </div>
           <label for="code">Code vom Fernseher</label>
           <input id="code" name="code" inputmode="numeric" maxlength="4" required>
           <button type="submit">An den Fernseher senden</button>
         </form>
         <script>
-        function sw(){var t=document.querySelector('input[name=type]:checked').value,x=t==='xtream',y=t==='youtube';
+        function sw(){var t=document.querySelector('input[name=type]:checked').value,x=t==='xtream',y=t==='youtube',p=t==='portal';
           document.getElementById('xt').style.display=x?'block':'none';
-          document.getElementById('urlLabel').textContent=x?'Server-Adresse':(y?'YouTube-Link (Kanal oder Livestream)':'M3U-Link (komplett)');
-          document.getElementById('url').placeholder=x?'http://server:port':(y?'In YouTube: Teilen → Link kopieren, hier einfügen':'http://…');
+          document.getElementById('pt').style.display=p?'block':'none';
+          document.getElementById('urlLabel').textContent=x?'Server-Adresse':(y?'YouTube-Link (Kanal oder Livestream)':(p?'Portal-Adresse':'M3U-Link (komplett)'));
+          document.getElementById('url').placeholder=x?'http://server:port':(y?'In YouTube: Teilen → Link kopieren, hier einfügen':(p?'http://server:port/c/':'http://…'));
           document.getElementById('name').placeholder=y?'z. B. TRT Haber (leer = Kanalname)':'z. B. Mein Anbieter';}
         </script>
         </body></html>

@@ -227,7 +227,11 @@ private fun PlaylistSection(app: AppController) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(src.name, color = Palette.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text(
-                        (if (src.type == SourceType.M3U) "M3U-Link · " else "Server + Login · ") + Secure.shortUrl(src.url),
+                        when (src.type) {
+                            SourceType.M3U -> "M3U-Link · "
+                            SourceType.XTREAM -> "Server + Login · "
+                            SourceType.STALKER -> "Portal + MAC · "
+                        } + Secure.shortUrl(src.url),
                         color = Palette.TextMuted,
                         fontSize = 14.sp,
                     )
@@ -259,23 +263,38 @@ private fun PlaylistSection(app: AppController) {
         Text("Playlist hinzufügen", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("M3U-Link", selected = mode == SourceType.M3U, onClick = { mode = SourceType.M3U })
-            TvButton("Server + Login", selected = mode == SourceType.XTREAM, onClick = { mode = SourceType.XTREAM })
+            TvButton("Server + Login", selected = mode == SourceType.XTREAM, onClick = {
+                if (mode == SourceType.STALKER) user = ""
+                mode = SourceType.XTREAM
+            })
+            TvButton("Portal + MAC", selected = mode == SourceType.STALKER, onClick = {
+                mode = SourceType.STALKER
+                if (user.isBlank()) user = "00:1A:79:"
+            })
         }
         InputRow("Name", name, placeholder = "z. B. Mein Anbieter") { name = it }
         if (mode == SourceType.M3U) {
             InputRow("M3U-Link (komplett)", url, placeholder = "http://…", keyboard = KeyboardType.Uri) { url = it }
+        } else if (mode == SourceType.STALKER) {
+            InputRow("Portal-Adresse", url, placeholder = "http://server:port/c/", keyboard = KeyboardType.Uri) { url = it }
+            InputRow("MAC-Adresse", user, placeholder = "00:1A:79:XX:XX:XX") { user = it.uppercase() }
         } else {
             InputRow("Server-Adresse", url, placeholder = "http://server:port", keyboard = KeyboardType.Uri) { url = it }
             InputRow("Benutzer", user) { user = it }
             InputRow("Passwort", pass, password = true) { pass = it }
         }
-        val valid = url.isNotBlank() && (mode == SourceType.M3U || (user.isNotBlank() && pass.isNotBlank()))
+        val macOk = Regex("^([0-9A-F]{2}:){5}[0-9A-F]{2}$").matches(user.trim().uppercase())
+        val valid = url.isNotBlank() && when (mode) {
+            SourceType.M3U -> true
+            SourceType.XTREAM -> user.isNotBlank() && pass.isNotBlank()
+            SourceType.STALKER -> macOk
+        }
         TvButton(if (valid) "Speichern und laden" else "Speichern und laden (Angaben fehlen)", onClick = {
             if (!valid) return@TvButton
             app.addSource(
                 PlaylistSource(
                     id = UUID.randomUUID().toString(),
-                    name = name.ifBlank { if (mode == SourceType.M3U) "Playlist" else "Anbieter" },
+                    name = name.ifBlank { if (mode == SourceType.M3U) "Playlist" else if (mode == SourceType.STALKER) "Portal" else "Anbieter" },
                     type = mode,
                     url = url.trim(),
                     user = user.trim(),

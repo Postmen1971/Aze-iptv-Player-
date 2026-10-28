@@ -24,6 +24,7 @@ import de.aze.iptv.data.Numbering
 import de.aze.iptv.data.PlaylistSource
 import de.aze.iptv.data.Repository
 import de.aze.iptv.data.SourceType
+import de.aze.iptv.data.StalkerClient
 import de.aze.iptv.data.Store
 import de.aze.iptv.data.YouTube
 import de.aze.iptv.data.YtEntry
@@ -405,6 +406,22 @@ class AppController(context: Context, private val scope: CoroutineScope) {
             editGroups = eg
             current = restoreKey?.let { lu.byKey[it] } ?: current?.let { lu.byKey[it.channel.key] } ?: lu.all.firstOrNull()
         }.also { rebuildJob = it }
+    }
+
+    /**
+     * Abspiel-Adresse für einen Sender. Bei Portal + MAC (Stalker) wird der gültige Link erst jetzt beim Portal angefordert.
+     */
+    suspend fun resolveStreamUrl(url: String): String {
+        if (!StalkerClient.isStalker(url)) return url
+        val (sid, cmd) = StalkerClient.parse(url) ?: throw java.io.IOException("Ungültiger Portal-Sender")
+        val src = sources.firstOrNull { it.id == sid } ?: throw java.io.IOException("Portal nicht mehr vorhanden")
+        return withContext(Dispatchers.IO) {
+            runCatching { StalkerClient.forSource(src).createLink(cmd) }.getOrElse { e ->
+                // Manche Portale liefern schon einen direkten Link mit
+                val direct = StalkerClient.cleanCmd(cmd)
+                if (direct.startsWith("http") && !direct.contains("localhost")) direct else throw e
+            }
+        }
     }
 
     /** Der zuletzt geschaute Sender (für OK = zurückspringen). */

@@ -4,7 +4,7 @@ IPTV-Player für Android (Handy, Tablet, Android TV, Fire TV Stick), ab Android 
 
 ## Funktionen (Version 1)
 
-- Playlist per **M3U-Link** oder **Server + Benutzer + Passwort** (Xtream)
+- Playlist per **M3U-Link**, **Server + Benutzer + Passwort** (Xtream) oder **Portal + MAC** (Stalker/Ministra, nur Live-TV)
 - Sender nach **Gruppen** getrennt, wie in der Playlist (`group-title`)
 - **Favoriten** bekommen die Nummern 1, 2, 3 …, alle anderen Sender zählen danach weiter und rücken automatisch nach
 - **Direktwahl** mit den Zifferntasten, Hoch/Runter schaltet um

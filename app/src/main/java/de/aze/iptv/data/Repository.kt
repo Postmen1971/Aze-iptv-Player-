@@ -41,8 +41,14 @@ class Repository(context: Context) {
         sources.forEach { src ->
             val tmp = File(dir, "${src.id}.tmp")
             try {
-                val viaApi = src.type == SourceType.XTREAM && runCatching { writeXtreamLive(src, tmp) }.getOrDefault(false)
-                if (!viaApi) Http.download(src.m3uUrl(), tmp)
+                if (src.type == SourceType.STALKER) {
+                    // Portal + MAC: Senderliste über die Portal-Schnittstelle
+                    val n = StalkerClient.forSource(src).writeLive(src.id, tmp)
+                    if (n == 0) throw java.io.IOException("Portal liefert keine Sender – MAC freigeschaltet?")
+                } else {
+                    val viaApi = src.type == SourceType.XTREAM && runCatching { writeXtreamLive(src, tmp) }.getOrDefault(false)
+                    if (!viaApi) Http.download(src.m3uUrl(), tmp)
+                }
                 if (!looksLikeM3u(tmp)) {
                     errors[src.id] = describeBadAnswer(tmp, src)
                     tmp.delete()

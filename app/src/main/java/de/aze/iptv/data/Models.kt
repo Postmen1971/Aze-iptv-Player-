@@ -16,7 +16,8 @@ data class Channel(
     val key: String get() = url
 }
 
-enum class SourceType { M3U, XTREAM }
+/** M3U-Link, Server + Login (Xtream) oder Portal + MAC (Stalker). Bei STALKER steht die MAC in [PlaylistSource.user]. */
+enum class SourceType { M3U, XTREAM, STALKER }
 
 /**
  * Eine Playlist-Quelle: entweder ein kompletter M3U-Link
@@ -31,7 +32,7 @@ data class PlaylistSource(
     val pass: String = "",
 ) {
     fun m3uUrl(): String = when (type) {
-        SourceType.M3U -> url.trim()
+        SourceType.M3U, SourceType.STALKER -> url.trim()
         SourceType.XTREAM -> {
             val raw = url.trim().trimEnd('/')
             val base = if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "http://$raw"

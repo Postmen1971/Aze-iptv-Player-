@@ -55,6 +55,7 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import de.aze.iptv.AppController
 import de.aze.iptv.data.Http
+import de.aze.iptv.data.StalkerClient
 import de.aze.iptv.data.YouTube
 import androidx.compose.runtime.key
 import de.aze.iptv.player.AspectMode
@@ -134,6 +135,10 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     var retryJob by remember { mutableStateOf<Job?>(null) }
     var retries by remember { mutableIntStateOf(0) }
     var okLong by remember { mutableStateOf(false) }
+    // Abspiel-Adresse (bei Portal + MAC erst beim Umschalten angefordert)
+    var resolvedUrl by remember { mutableStateOf<String?>(null) }
+    var relinkTick by remember { mutableIntStateOf(0) }
+    var startedKey by remember { mutableStateOf<String?>(null) }
     val focus = remember { FocusRequester() }
     val vlcHandle = remember { VlcHandle() }
     val curCh = app.current?.channel
@@ -173,6 +178,17 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 if (app.playerEngine == PlayerEngine.AUTO && key != null && (group == 3 || group == 4 || retries >= 2)) {
                     player.stop()
                     app.markVlc(key)
+                    return
+                }
+                // Portal-Links laufen ab: nach kurzer Pause einen neuen Link anfordern.
+                if (key != null && StalkerClient.isStalker(key) &&
+                    error.errorCode != PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW
+                ) {
+                    retryJob = scope.launch {
+                        delay(minOf(2_000L shl minOf(retries, 3), 15_000L))
+                        retries++
+                        relinkTick++
+                    }
                     return
                 }
                 retryJob = scope.launch {
@@ -223,22 +239,35 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     }
 
     val currentKey = app.current?.channel?.key
-    LaunchedEffect(currentKey, player, resumeTick, useVlc) {
+    LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick) {
         val ch = app.current?.channel ?: return@LaunchedEffect
         retryJob?.cancel()
-        retries = 0
+        if (startedKey != ch.key) retries = 0
+        startedKey = ch.key
         noPicture = true
         ytError = null
+        resolvedUrl = null
         // Altes Programm sofort anhalten, damit beim schnellen Durchschalten nichts nachläuft.
         player.stop()
-        if (YouTube.isYouTube(ch.url) || useVlc) {
-            // YouTube bzw. VLC laufen in eigenen Playern; Media3 leeren.
+        if (YouTube.isYouTube(ch.url)) {
+            // YouTube läuft in einem eigenen Player; Media3 leeren.
             player.clearMediaItems()
             return@LaunchedEffect
         }
+        if (useVlc) player.clearMediaItems()
         // Kurz warten: wer mehrfach schnell ▲/▼ drückt, lädt nur den Sender, bei dem er stehen bleibt.
         // (Ein neuer Tastendruck bricht diese Wartezeit ab.)
         delay(220)
+        val url = try {
+            app.resolveStreamUrl(ch.url)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ytError = "Portal: Sender nicht verfügbar"
+            return@LaunchedEffect
+        }
+        resolvedUrl = url
+        if (useVlc) return@LaunchedEffect
         // Bevorzugte Tonsprache und Untertitel-Wahl gelten für jeden neuen Sender.
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .clearOverrides()
@@ -247,9 +276,9 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             .setForceHighestSupportedBitrate(app.forceHighest)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !app.subtitlesOn)
             .build()
-        val builder = MediaItem.Builder().setUri(ch.url)
-        if (ch.url.contains(".m3u8", ignoreCase = true)) builder.setMimeType(MimeTypes.APPLICATION_M3U8)
-        if (ch.url.contains(".mpd", ignoreCase = true)) builder.setMimeType(MimeTypes.APPLICATION_MPD)
+        val builder = MediaItem.Builder().setUri(url)
+        if (url.contains(".m3u8", ignoreCase = true)) builder.setMimeType(MimeTypes.APPLICATION_M3U8)
+        if (url.contains(".mpd", ignoreCase = true)) builder.setMimeType(MimeTypes.APPLICATION_MPD)
         level.liveOffsetMs?.let {
             builder.setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(it).build())
         }
@@ -418,15 +447,23 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 )
             }
         } else if (useVlc) {
-            if (!inBackground) {
-                key(currentKey) {
+            val vlcUrl = resolvedUrl
+            if (!inBackground && vlcUrl != null) {
+                key(currentKey, vlcUrl) {
                     VlcVideo(
-                        url = curCh!!.url,
+                        url = vlcUrl,
                         cachingMs = level.vlcCachingMs(),
                         aspect = aspect,
                         handle = vlcHandle,
                         onFirstFrame = { noPicture = false },
-                        onError = { noPicture = true },
+                        onError = {
+                            noPicture = true
+                            // Portal-Link abgelaufen? Neuen anfordern.
+                            if (currentKey != null && StalkerClient.isStalker(currentKey) && retries < 5) {
+                                retries++
+                                scope.launch { delay(3_000); relinkTick++ }
+                            }
+                        },
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
