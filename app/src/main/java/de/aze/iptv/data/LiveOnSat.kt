@@ -16,12 +16,25 @@ object LiveOnSat {
 
     private val urls = listOf("https://liveonsat.com/2day.php", "https://www.liveonsat.com/2day.php")
 
+    /** Zuletzt geladene Seite und Ergebnis – zur Fehlersuche (abrufbar über die Web-Bearbeitung: /liveonsat). */
+    @Volatile var lastHtml: String? = null
+    @Volatile var lastStatus: String = "noch nicht geladen"
+
     fun today(): List<Fixture> {
+        val errors = ArrayList<String>()
         for (u in urls) {
-            val html = runCatching { fetch(u) }.getOrNull() ?: continue
+            val html = try {
+                fetch(u)
+            } catch (e: Exception) {
+                errors.add(e.message ?: e.javaClass.simpleName)
+                continue
+            }
+            lastHtml = html
             val list = parse(html)
+            lastStatus = "${html.length / 1024} KB geladen, ${list.size} Spiele erkannt"
             if (list.isNotEmpty()) return list
         }
+        if (errors.isNotEmpty() && lastHtml == null) lastStatus = "nicht erreichbar (" + errors.joinToString(", ") + ")"
         return emptyList()
     }
 

@@ -114,6 +114,17 @@ class WebEditServer(
         val method = parts.getOrNull(0) ?: ""
         val path = parts.getOrNull(1) ?: "/"
 
+        // Fehlersuche: zuletzt von liveonsat.com geladene Seite herunterladen (Code als ?c=…)
+        if (path.startsWith("/liveonsat")) {
+            val c = Regex("[?&]c=(\\d{4})").find(path)?.groupValues?.get(1)
+            if (c != code) {
+                respond(out, 403, "text/plain; charset=utf-8", "Code fehlt: /liveonsat?c=CODE")
+                return
+            }
+            touch()
+            respond(out, 200, "text/plain; charset=utf-8", LiveOnSat.lastHtml ?: "Noch nichts geladen – erst am Fernseher „Fußball heute“ öffnen.")
+            return
+        }
         if (!path.startsWith("/api/")) {
             respond(out, 200, "text/html; charset=utf-8", PAGE)
             return

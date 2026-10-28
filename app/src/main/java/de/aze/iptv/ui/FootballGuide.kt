@@ -52,6 +52,8 @@ private class GuideData(
     /** alle Sender laut TV-Plan je Spiel */
     val listed: Map<String, List<de.aze.iptv.data.TvListings.Broadcast>>,
     val error: String?,
+    /** Woher kamen Daten – zur Fehlersuche unten angezeigt */
+    val diag: String = "",
 )
 
 /**
@@ -95,6 +97,8 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
                 },
                 listed = listed,
                 error = matches.exceptionOrNull()?.let { "Spiele konnten nicht geladen werden (Internet?)" },
+                diag = "Quellen – liveonsat: ${de.aze.iptv.data.LiveOnSat.lastStatus} · TV-Plan: ${plan.size} Einträge · " +
+                    "Programmzeitschrift: ${idx.items.size} deiner Sender mit Programm",
             )
         }
     }
@@ -127,6 +131,7 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
                 )
             }
             val d = data
+            d?.diag?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Palette.TextMuted, fontSize = 11.sp) }
             when {
                 d == null -> Text("Lade Spiele …", color = Palette.TextMuted, fontSize = 15.sp)
                 d.matches.isEmpty() -> {

@@ -124,8 +124,9 @@ fun VlcVideo(
     }
 
     LaunchedEffect(aspect) {
+        mp.aspectRatio = if (aspect == AspectMode.CINEMA) "47:20" else null
         mp.videoScale = when (aspect) {
-            AspectMode.FIT -> MediaPlayer.ScaleType.SURFACE_BEST_FIT
+            AspectMode.FIT, AspectMode.CINEMA -> MediaPlayer.ScaleType.SURFACE_BEST_FIT
             AspectMode.ZOOM -> MediaPlayer.ScaleType.SURFACE_FIT_SCREEN
             AspectMode.STRETCH -> MediaPlayer.ScaleType.SURFACE_FILL
             AspectMode.WIDE -> MediaPlayer.ScaleType.SURFACE_16_9

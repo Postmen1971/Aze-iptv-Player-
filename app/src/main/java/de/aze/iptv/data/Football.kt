@@ -150,6 +150,8 @@ object Football {
         norm(team).split(Regex("[^a-z0-9]+")).filter { it.length >= 3 && it !in generic }
             .ifEmpty { listOf(norm(team).replace(Regex("[^a-z0-9]"), "")) }
 
+    private val genericFootball = listOf("fussball", "football", "futbol", "canli mac", "live-fussball", "livefussball")
+
     private val footballWords = listOf("fussball", "football", "futbol", "liga", "lig ", "league", "cup", "kupa", "pokal", "mac", "canli")
 
     // ---- Sendernamen aus dem TV-Plan den eigenen Sendern zuordnen ----
@@ -188,6 +190,8 @@ object Football {
         val t1 = tokens(m.home)
         val t2 = tokens(m.away)
         val out = ArrayList<MatchChannel>()
+        val possible = ArrayList<MatchChannel>()
+        val leagueKey = norm(m.league)
         idx.items.forEach { (nc, progs) ->
             for ((p, t) in progs) {
                 // Sendung muss den Anstoß abdecken (Vorberichte zählen mit)
@@ -200,8 +204,14 @@ object Football {
                     out.add(MatchChannel(nc, p, sure))
                     break
                 }
+                // Notlösung: zur Anstoßzeit läuft dort Fußball aus diesem Wettbewerb (ohne Mannschaftsnamen im Titel)
+                if (t.contains(leagueKey) || genericFootball.any { t.contains(it) }) {
+                    possible.add(MatchChannel(nc, p, false))
+                    break
+                }
             }
         }
-        return out.sortedWith(compareBy({ !it.sure }, { it.channel.number }))
+        val sorted = out.sortedWith(compareBy({ !it.sure }, { it.channel.number }))
+        return if (sorted.isNotEmpty()) sorted else possible.sortedBy { it.channel.number }.take(10)
     }
 }

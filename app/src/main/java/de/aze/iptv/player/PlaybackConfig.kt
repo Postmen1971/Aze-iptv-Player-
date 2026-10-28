@@ -38,7 +38,9 @@ enum class AspectMode(val label: String, val ratio: Float?) {
     ZOOM("Füllen (Zoom)", null),
     STRETCH("Strecken", null),
     WIDE("16:9", 16f / 9f),
-    CLASSIC("4:3", 4f / 3f);
+    CLASSIC("4:3", 4f / 3f),
+    /** Kinoformat – für Filme, die sonst gestreckt aussehen */
+    CINEMA("2,35:1", 2.35f);
 
     companion object {
         fun of(name: String?): AspectMode = entries.firstOrNull { it.name == name } ?: FIT
