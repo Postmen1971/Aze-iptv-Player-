@@ -144,6 +144,16 @@ class Store(context: Context) {
         get() = prefs.getBoolean("ytExternal", false)
         set(v) = prefs.edit().putBoolean("ytExternal", v).apply()
 
+    /** PIN-Abfrage vor den Einstellungen (an/aus). */
+    var pinEnabled: Boolean
+        get() = prefs.getBoolean("pinEnabled", true)
+        set(v) = prefs.edit().putBoolean("pinEnabled", v).apply()
+
+    /** Optional: Schlüssel für omdbapi.com, um IMDb-Bewertungen anzuzeigen. */
+    var omdbKey: String
+        get() = Secure.decrypt(prefs.getString("omdbKey", "")) ?: ""
+        set(v) = prefs.edit().putString("omdbKey", if (v.isBlank()) "" else Secure.encrypt(v.trim())).apply()
+
     var autostart: Boolean
         get() = prefs.getBoolean("autostart", false)
         set(v) = prefs.edit().putBoolean("autostart", v).apply()

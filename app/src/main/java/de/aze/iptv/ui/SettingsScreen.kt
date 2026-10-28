@@ -163,6 +163,16 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                             "und die App macht keine Sicherungen in die Cloud oder auf andere Geräte.",
                         color = Palette.TextMuted, fontSize = 13.sp,
                     )
+                    Text("PIN-Abfrage", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TvButton(if (app.pinEnabled) "✓ An" else "An", selected = app.pinEnabled, onClick = { app.updatePinEnabled(true) })
+                        TvButton(if (!app.pinEnabled) "✓ Aus" else "Aus", selected = !app.pinEnabled, onClick = { app.updatePinEnabled(false) })
+                    }
+                    Text(
+                        if (app.pinEnabled) "Vor den Einstellungen wird die PIN abgefragt."
+                        else "Die Einstellungen öffnen sich ohne PIN – jeder mit der Fernbedienung kommt hinein.",
+                        color = Palette.TextMuted, fontSize = 13.sp,
+                    )
                     TvButton("PIN ändern", onClick = { pinStep = 1 })
                 }
                 7 -> AutostartSection(app)
@@ -554,6 +564,14 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         TvButton("Senderliste bearbeiten (Gruppen und Sender sortieren, ausblenden)", onClick = onEditList)
     }
     if (part != 2) WebEditSection(app)
+    if (part != 2) Section("Filme: IMDb-Bewertung") {
+        Text(
+            "Die Bewertung des Anbieters (★ von 10) wird immer angezeigt. Für die echte IMDb-Bewertung einen kostenlosen " +
+                "Schlüssel auf omdbapi.com holen (\"API Key\" → FREE, kommt per E-Mail) und hier eintragen.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        InputRow("OMDb-Schlüssel", app.omdbKey, placeholder = "z. B. a1b2c3d4") { app.updateOmdbKey(it) }
+    }
     if (part != 1) Section("Wiedergabe") {
         Text("Puffer", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

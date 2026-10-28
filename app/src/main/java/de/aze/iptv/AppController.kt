@@ -434,6 +434,22 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    var pinEnabled by mutableStateOf(store.pinEnabled)
+        private set
+
+    fun updatePinEnabled(on: Boolean) {
+        pinEnabled = on
+        store.pinEnabled = on
+    }
+
+    var omdbKey by mutableStateOf(store.omdbKey)
+        private set
+
+    fun updateOmdbKey(k: String) {
+        omdbKey = k.trim()
+        store.omdbKey = omdbKey
+    }
+
     var youtubeExternal by mutableStateOf(store.youtubeExternal)
         private set
 

@@ -432,6 +432,8 @@ private fun DetailView(
     var sd by remember(item.id) { mutableStateOf<SeriesDetails?>(null) }
     var season by remember(item.id) { mutableIntStateOf(-1) }
     var failed by remember(item.id) { mutableStateOf(false) }
+    // IMDb-Bewertung (nur mit eigenem OMDb-Schlüssel in den Einstellungen)
+    var imdb by remember(item.id) { mutableStateOf<de.aze.iptv.data.Omdb.Rating?>(null) }
     val playButton = remember { FocusRequester() }
 
     LaunchedEffect(item.id) {
@@ -465,9 +467,32 @@ private fun DetailView(
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(item.name, color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                val key = app.omdbKey
+                LaunchedEffect(item.id, key, i) {
+                    if (key.isBlank() || i == null) return@LaunchedEffect
+                    imdb = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { de.aze.iptv.data.Omdb.rating(key, item.name, i.originalName, i.year ?: item.year) }.getOrNull()
+                    }
+                }
+                // Bewertungen gut sichtbar: IMDb (falls Schlüssel) und die des Anbieters (meist TMDB), jeweils von 10
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    imdb?.let { r ->
+                        Text(
+                            "IMDb ${r.imdb}/10" + (r.votes?.let { "  ($it Stimmen)" } ?: ""),
+                            color = Color(0xFF111111), fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.background(Color(0xFFF5C518), RoundedCornerShape(5.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                    (i?.rating ?: item.rating)?.toDoubleOrNull()?.takeIf { it > 0 }?.let { r ->
+                        Text(
+                            "★ ${"%.1f".format(r)}/10",
+                            color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            modifier = Modifier.background(Palette.Raised, RoundedCornerShape(5.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                        )
+                    }
+                }
                 val meta = listOfNotNull(
                     i?.year ?: item.year,
-                    (i?.rating ?: item.rating)?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "★ ${"%.1f".format(it)}" },
                     i?.duration,
                     i?.genre,
                 ).joinToString("  ·  ")

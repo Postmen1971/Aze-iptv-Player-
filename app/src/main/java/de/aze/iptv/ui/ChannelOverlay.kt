@@ -167,9 +167,6 @@ fun ChannelOverlay(
                                         fontSize = 15.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
-                                    if (multi && filter == null && g.sourceName != null) {
-                                        Text(g.sourceName, color = if (focused) Palette.OnAccent else Palette.GroupSoft, fontSize = 10.sp, maxLines = 1)
-                                    }
                                 }
                                 Text(g.range, color = if (focused) Palette.OnAccent else Palette.GroupSoft, fontSize = 11.sp)
                             }
@@ -372,7 +369,7 @@ internal fun SideMenu(
         add("Filme" to { onVod(false) })
         add("Serien" to { onVod(true) })
         add("Suchen" to onSearch)
-        if (onFootball != null) add("Fußball im TV" to onFootball)
+        if (onFootball != null) add("Fußball heute" to onFootball)
         if (multi) add("Playlist: $playlistLabel" to onPlaylist)
         add("Einstellungen" to onSettings)
     }

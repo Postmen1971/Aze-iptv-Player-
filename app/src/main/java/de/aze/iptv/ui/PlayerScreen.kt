@@ -664,7 +664,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     quickMenu = false
                     teletext = true
                 },
-                QuickItem("Spiele", "im TV") {
+                QuickItem("Spiele", "heute") {
                     quickMenu = false
                     football = true
                 },

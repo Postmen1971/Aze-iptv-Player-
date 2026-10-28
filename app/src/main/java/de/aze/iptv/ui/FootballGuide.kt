@@ -2,7 +2,6 @@ package de.aze.iptv.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,20 +9,23 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -34,7 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.aze.iptv.AppController
 import de.aze.iptv.data.Football
-import de.aze.iptv.data.FootballMatch
+import de.aze.iptv.data.MatchChannel
+import de.aze.iptv.data.TodayMatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -42,96 +45,195 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+private class GuideData(val matches: List<TodayMatch>, val channels: Map<String, List<MatchChannel>>, val error: String?)
+
 /**
- * „Fußball im TV“: welches Spiel läuft wann auf welchem Sender (aus der Programmzeitschrift der eigenen Sender).
- * OK auf einem Sender schaltet direkt hin.
+ * „Fußball heute“: alle Spiele des Tages (wie in SkorText) – OK öffnet ein Fenster mit den Sendern,
+ * die das Spiel laut Programmzeitschrift zeigen. OK auf einem Sender schaltet hin, Zurück schließt das Fenster.
  */
 @Composable
 fun FootballGuide(app: AppController, onClose: () -> Unit) {
-    BackHandler(onBack = onClose)
     val epg = app.epg
     val lineup = app.lineup
-    val matches by produceState<List<FootballMatch>?>(null, epg, lineup) {
-        value = withContext(Dispatchers.Default) { Football.find(epg, lineup) }
+    var popup by remember { mutableStateOf<TodayMatch?>(null) }
+    var reload by remember { mutableIntStateOf(0) }
+
+    BackHandler { if (popup != null) popup = null else onClose() }
+
+    val data by produceState<GuideData?>(null, epg, lineup, reload) {
+        value = withContext(Dispatchers.IO) {
+            val matches = runCatching { Football.today() }
+            val list = matches.getOrDefault(emptyList())
+            val dayStart = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
+            }.timeInMillis
+            val idx = Football.index(epg, lineup, dayStart, dayStart + 30 * 3_600_000L)
+            GuideData(
+                matches = list,
+                channels = list.associate { it.id to Football.channelsFor(it, idx) },
+                error = matches.exceptionOrNull()?.let { "Spiele konnten nicht geladen werden (Internet?)" },
+            )
+        }
     }
+
     val first = remember { FocusRequester() }
-    LaunchedEffect(matches) {
-        if (matches != null) {
+    LaunchedEffect(data, popup) {
+        if (data != null && popup == null) {
             withFrameNanos { }
             runCatching { first.requestFocus() }
         }
     }
     val time = remember { SimpleDateFormat("HH:mm", Locale.GERMANY) }
-    val dayFmt = remember { SimpleDateFormat("EEE dd.MM.", Locale.GERMANY) }
-    val today = remember { Calendar.getInstance().get(Calendar.DAY_OF_YEAR) }
-    val now = System.currentTimeMillis()
 
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))) {
         Column(
             Modifier
                 .fillMaxHeight()
-                .fillMaxWidth(0.72f)
+                .fillMaxWidth(0.62f)
                 .background(Palette.Ground.copy(alpha = 0.97f))
                 .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text("Fußball heute", color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("OK zeigt die Sender · Zurück schließt", color = Palette.TextMuted, fontSize = 12.sp)
+            if (epg.channelCount == 0) {
+                Text(
+                    "Hinweis: Noch keine Programmzeitschrift geladen – ohne sie können keine Sender gefunden werden.",
+                    color = Palette.Highlight, fontSize = 12.sp,
+                )
+            }
+            val d = data
+            when {
+                d == null -> Text("Lade Spiele …", color = Palette.TextMuted, fontSize = 15.sp)
+                d.matches.isEmpty() -> {
+                    Text(d.error ?: "Heute keine Spiele in den SkorText-Ligen.", color = Palette.TextSoft, fontSize = 15.sp)
+                    TvButton(if (d.error != null) "Nochmal versuchen" else "Schließen", modifier = Modifier.focusRequester(first), onClick = {
+                        if (d.error != null) reload++ else onClose()
+                    })
+                }
+                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    itemsIndexed(d.matches, key = { _, m -> m.id + m.kickoff }) { i, m ->
+                        val newLeague = i == 0 || d.matches[i - 1].league != m.league
+                        if (newLeague) {
+                            Text(
+                                m.league, color = Palette.Highlight, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = if (i == 0) 0.dp else 8.dp, start = 4.dp),
+                            )
+                        }
+                        val n = d.channels[m.id].orEmpty().size
+                        Focusable(
+                            modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                            onClick = { popup = m },
+                        ) { focused ->
+                            val fg = if (focused) Palette.OnAccent else Palette.Text
+                            val soft = if (focused) Palette.OnAccent else Palette.TextMuted
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(if (focused) Palette.Accent else Palette.Panel, RoundedCornerShape(7.dp))
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Text(
+                                    if (m.live) m.status else time.format(Date(m.kickoff)),
+                                    color = if (m.live && !focused) Palette.Live else fg,
+                                    fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(52.dp),
+                                )
+                                Text(
+                                    "${m.home} – ${m.away}", color = fg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+                                )
+                                m.score?.let { Text(it, color = fg, fontSize = 15.sp, fontWeight = FontWeight.Bold) }
+                                Text(
+                                    when (n) { 0 -> "–"; 1 -> "1 Sender"; else -> "$n Sender" },
+                                    color = if (n > 0 && !focused) Palette.Highlight else soft, fontSize = 12.sp,
+                                    modifier = Modifier.width(64.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        val p = popup
+        if (p != null) {
+            MatchPopup(
+                match = p,
+                channels = data?.channels?.get(p.id).orEmpty(),
+                current = app.current?.channel?.key,
+                onPlay = { nc ->
+                    app.play(nc)
+                    popup = null
+                    onClose()
+                },
+                onClose = { popup = null },
+            )
+        }
+    }
+}
+
+@Composable
+private fun MatchPopup(
+    match: TodayMatch,
+    channels: List<MatchChannel>,
+    current: String?,
+    onPlay: (de.aze.iptv.data.NumberedChannel) -> Unit,
+    onClose: () -> Unit,
+) {
+    val first = remember(match.id) { FocusRequester() }
+    LaunchedEffect(match.id) {
+        withFrameNanos { }
+        runCatching { first.requestFocus() }
+    }
+    val time = remember { SimpleDateFormat("HH:mm", Locale.GERMANY) }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
+        Column(
+            Modifier
+                .width(480.dp)
+                .heightIn(max = 420.dp)
+                .background(Palette.Panel, RoundedCornerShape(12.dp))
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text("Fußball im TV", color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text("${match.home} – ${match.away}", color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 2)
             Text(
-                "Aus der Programmzeitschrift deiner Sender · OK schaltet um · Zurück schließt",
-                color = Palette.TextMuted, fontSize = 12.sp,
+                match.league + " · " + (if (match.live) "läuft (${match.status})" else time.format(Date(match.kickoff)) + " Uhr"),
+                color = Palette.TextMuted, fontSize = 13.sp,
             )
-            val list = matches
-            when {
-                list == null -> Text("Suche Spiele …", color = Palette.TextMuted, fontSize = 15.sp)
-                epg.channelCount == 0 -> {
-                    Text(
-                        "Noch keine Programmzeitschrift geladen. In den Einstellungen unter „Programmzeitschrift“ laden.",
-                        color = Palette.TextSoft, fontSize = 15.sp,
-                    )
-                    TvButton("Programm jetzt laden", modifier = Modifier.focusRequester(first), onClick = { app.refreshEpg() })
-                }
-                list.isEmpty() -> {
-                    Text("Heute und morgen keine Fußballspiele in deinen Sendern gefunden.", color = Palette.TextSoft, fontSize = 15.sp)
-                    TvButton("Schließen", modifier = Modifier.focusRequester(first), onClick = onClose)
-                }
-                else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    itemsIndexed(list) { i, m ->
-                        val p = m.programme
-                        val live = p.start <= now && p.stop > now
-                        val cal = Calendar.getInstance().apply { timeInMillis = p.start }
-                        val day = if (cal.get(Calendar.DAY_OF_YEAR) == today) "" else dayFmt.format(Date(p.start)) + " "
-                        Row(
-                            Modifier
-                                .fillMaxWidth()
-                                .background(Palette.Panel, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 10.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Column(Modifier.width(86.dp)) {
-                                if (live) {
-                                    Text("LIVE", color = Palette.Live, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                    Box(Modifier.fillMaxWidth().height(3.dp).background(Palette.Line)) {
-                                        Box(Modifier.fillMaxWidth(p.progress(now)).height(3.dp).background(Palette.Live))
-                                    }
-                                } else {
-                                    Text(day + time.format(Date(p.start)), color = Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            if (channels.isEmpty()) {
+                Text(
+                    "In der Programmzeitschrift deiner Sender wurde kein Sender für dieses Spiel gefunden.",
+                    color = Palette.TextSoft, fontSize = 14.sp,
+                )
+                TvButton("Schließen", modifier = Modifier.focusRequester(first), onClick = onClose)
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    itemsIndexed(channels) { i, mc ->
+                        Focusable(
+                            modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                            onClick = { onPlay(mc.channel) },
+                        ) { focused ->
+                            val fg = if (focused) Palette.OnAccent else Palette.Text
+                            Column(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        if (focused) Palette.Accent else if (mc.channel.channel.key == current) Palette.Raised else Palette.PanelDark,
+                                        RoundedCornerShape(8.dp),
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("${mc.channel.number}", color = if (focused) fg else Palette.Highlight, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(52.dp))
+                                    Text(mc.channel.channel.name, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                    if (!mc.sure) Text("vermutlich", color = if (focused) fg else Palette.TextMuted, fontSize = 11.sp)
                                 }
-                            }
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(p.title, color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    m.channels.forEachIndexed { j, nc ->
-                                        TvButton(
-                                            "${nc.number} · ${nc.channel.name}",
-                                            selected = app.current?.channel?.key == nc.channel.key,
-                                            modifier = if (i == 0 && j == 0) Modifier.focusRequester(first) else Modifier,
-                                            onClick = {
-                                                app.play(nc)
-                                                onClose()
-                                            },
-                                        )
-                                    }
-                                }
+                                Text(
+                                    time.format(Date(mc.programme.start)) + "  " + mc.programme.title,
+                                    color = if (focused) fg else Palette.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                )
                             }
                         }
                     }

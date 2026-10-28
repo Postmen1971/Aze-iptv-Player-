@@ -66,13 +66,13 @@ class MainActivity : ComponentActivity() {
                 when (screen) {
                     Screen.PLAYER -> PlayerScreen(
                         app,
-                        onOpenSettings = { screen = Screen.PIN },
+                        onOpenSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS },
                         onOpenVod = { series ->
                             vodSeries = series
                             screen = Screen.VOD
                         },
                     )
-                    Screen.VOD -> VodScreen(app, startWithSeries = vodSeries, onExit = { screen = Screen.PLAYER }, onOpenSettings = { screen = Screen.PIN })
+                    Screen.VOD -> VodScreen(app, startWithSeries = vodSeries, onExit = { screen = Screen.PLAYER }, onOpenSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS })
                     Screen.PIN -> PinScreen(
                         title = "PIN für die Einstellungen",
                         hint = if (app.pinIsDefault) "Standard-PIN: 0000 – bitte in den Einstellungen ändern" else null,

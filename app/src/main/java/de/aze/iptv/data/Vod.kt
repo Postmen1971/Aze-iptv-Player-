@@ -29,6 +29,8 @@ class VodDetails(
     val backdrop: String?,
     val year: String?,
     val rating: String?,
+    /** Originaltitel (für die IMDb-Suche) */
+    val originalName: String? = null,
 )
 
 class Episode(
@@ -167,7 +169,9 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
                             id = id,
                             name = f["name"].orEmpty(),
                             poster = g(if (series) "cover" else "stream_icon"),
-                            rating = g("rating"),
+                            // Bewertung von 0–10; manche Anbieter liefern nur die 5er-Skala
+                            rating = g("rating")?.takeIf { (it.toDoubleOrNull() ?: 0.0) > 0 }
+                                ?: g("rating_5based")?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "%.1f".format(java.util.Locale.ROOT, it * 2) },
                             year = g("year") ?: g("releaseDate")?.take(4),
                             ext = if (series) "" else g("container_extension") ?: "mp4",
                         ),
@@ -181,7 +185,7 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
     }
 
     private companion object {
-        val WANTED = setOf("stream_id", "series_id", "name", "stream_icon", "cover", "rating", "year", "releaseDate", "container_extension")
+        val WANTED = setOf("stream_id", "series_id", "name", "stream_icon", "cover", "rating", "rating_5based", "year", "releaseDate", "container_extension")
     }
 
     override suspend fun movieDetails(id: String): VodDetails = withContext(Dispatchers.IO) {
@@ -226,7 +230,9 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
             duration = i.str("duration"),
             backdrop = backdrop?.takeIf { it.startsWith("http") },
             year = i.str("releasedate")?.take(4) ?: i.str("releaseDate")?.take(4) ?: i.str("year"),
-            rating = i.str("rating"),
+            rating = i.str("rating")?.takeIf { (it.toDoubleOrNull() ?: 0.0) > 0 }
+                ?: i.str("rating_5based")?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "%.1f".format(java.util.Locale.ROOT, it * 2) },
+            originalName = i.str("o_name") ?: i.str("original_name"),
         )
     }
 
