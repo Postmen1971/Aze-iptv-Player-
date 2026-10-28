@@ -117,6 +117,10 @@ class Store(context: Context) {
         get() = prefs.getBoolean("autostart", false)
         set(v) = prefs.edit().putBoolean("autostart", v).apply()
 
+    var scheme: Int
+        get() = prefs.getInt("scheme", 0)
+        set(v) = prefs.edit().putInt("scheme", v).apply()
+
     /** "MODERN" oder "ENIGMA" */
     var listStyle: String?
         get() = prefs.getString("listStyle", null)

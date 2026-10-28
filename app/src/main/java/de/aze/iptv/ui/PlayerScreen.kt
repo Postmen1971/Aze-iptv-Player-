@@ -459,13 +459,13 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         // Kleine Anzeige oben rechts: getippte Ziffern, sonst Nummer + Name nur bei schwarzem Bild.
         val cur = app.current
         val corner: (@Composable () -> Unit)? = when {
-            digits.isNotEmpty() -> { { Text(digits, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
+            digits.isNotEmpty() -> { { Text(digits, color = Palette.Highlight, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             notFound != null -> { { Text(notFound ?: "", color = Palette.Live, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             ytError != null && !overlay && !search -> { { Text(ytError ?: "", color = Palette.Live, fontSize = 22.sp, fontWeight = FontWeight.Bold) } }
             noPicture && cur != null && !overlay && !search && !teletext -> {
                 {
                     Row {
-                        Text("${cur.number}", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                        Text("${cur.number}", color = Palette.Highlight, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                         Text("  ${cur.channel.name}", color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
@@ -491,11 +491,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 overlay = false
                 search = true
             }
-            if (app.enigmaStyle) {
-                BouquetOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch, onVod = { overlay = false; onOpenVod(it) })
-            } else {
-                ChannelOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch, onVod = { overlay = false; onOpenVod(it) })
-            }
+            ChannelOverlay(app = app, onClose = { overlay = false }, onOpenSettings = openSettings, onSearch = openSearch, onVod = { overlay = false; onOpenVod(it) })
         }
 
         if (search) {

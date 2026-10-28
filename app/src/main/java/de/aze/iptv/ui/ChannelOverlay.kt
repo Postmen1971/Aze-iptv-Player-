@@ -160,15 +160,15 @@ fun ChannelOverlay(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         (if (g.isFavorites) "★ " else "") + g.name,
-                                        color = Palette.Text,
+                                        color = if (focused) Palette.OnAccent else Palette.Text,
                                         fontSize = 15.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
                                     if (multi && filter == null && g.sourceName != null) {
-                                        Text(g.sourceName, color = Palette.GroupSoft, fontSize = 10.sp, maxLines = 1)
+                                        Text(g.sourceName, color = if (focused) Palette.OnAccent else Palette.GroupSoft, fontSize = 10.sp, maxLines = 1)
                                     }
                                 }
-                                Text(g.range, color = if (focused) Palette.Text else Palette.GroupSoft, fontSize = 11.sp)
+                                Text(g.range, color = if (focused) Palette.OnAccent else Palette.GroupSoft, fontSize = 11.sp)
                             }
                         }
                     }
@@ -265,13 +265,13 @@ fun ChannelOverlay(
                                         .fillMaxWidth()
                                         .height(if (prog != null) 40.dp else 34.dp)
                                         .background(if (focused) Palette.Accent else Palette.PanelDark.copy(alpha = 0f), RoundedCornerShape(7.dp))
-                                        .then(if (playing && !focused) Modifier.border(1.5.dp, Palette.Accent, RoundedCornerShape(7.dp)) else Modifier)
+                                        .then(if (playing && !focused) Modifier.border(1.5.dp, Palette.Highlight, RoundedCornerShape(7.dp)) else Modifier)
                                         .padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
                                         "${nc.number}",
-                                        color = if (focused) Palette.OnAccent else if (playing) Palette.Accent else Palette.TextSoft,
+                                        color = if (focused) Palette.OnAccent else if (playing) Palette.Highlight else Palette.TextSoft,
                                         fontSize = 16.sp, fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.End, modifier = Modifier.width(38.dp),
                                     )
@@ -294,12 +294,12 @@ fun ChannelOverlay(
                                             Box(Modifier.fillMaxWidth().height(2.dp).background(if (focused) Palette.OnAccent.copy(alpha = 0.25f) else Palette.Line)) {
                                                 Box(
                                                     Modifier.fillMaxWidth(prog.progress(System.currentTimeMillis())).height(2.dp)
-                                                        .background(if (focused) Palette.OnAccent else Palette.Accent),
+                                                        .background(if (focused) Palette.OnAccent else Palette.Highlight),
                                                 )
                                             }
                                         }
                                     }
-                                    if (nc.favorite) Text("★", color = if (focused) Palette.OnAccent else Palette.Accent, fontSize = 12.sp)
+                                    if (nc.favorite) Text("★", color = if (focused) Palette.OnAccent else Palette.Highlight, fontSize = 12.sp)
                                 }
                             }
                         }

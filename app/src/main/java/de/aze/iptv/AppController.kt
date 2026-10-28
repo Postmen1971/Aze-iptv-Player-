@@ -16,6 +16,8 @@ import de.aze.iptv.data.ProxySettings
 import de.aze.iptv.player.AspectMode
 import de.aze.iptv.player.BufferLevel
 import de.aze.iptv.player.PlayerEngine
+import de.aze.iptv.ui.Palette
+import de.aze.iptv.ui.Schemes
 import androidx.compose.runtime.mutableStateListOf
 import de.aze.iptv.data.NumberedChannel
 import de.aze.iptv.data.Numbering
@@ -167,6 +169,20 @@ class AppController(context: Context, private val scope: CoroutineScope) {
                 groupNames = layout.groupNames - groupKey,
             )
         )
+    }
+
+    /** Farbschema (0 Mitternacht, 1 TiviMate Grau, 2 TiviMate Blau, 3 Petrol). */
+    var schemeIndex by mutableStateOf(store.scheme.coerceIn(0, Schemes.lastIndex))
+        private set
+
+    init {
+        Palette.scheme = Schemes[schemeIndex]
+    }
+
+    fun updateScheme(i: Int) {
+        schemeIndex = i.coerceIn(0, Schemes.lastIndex)
+        store.scheme = schemeIndex
+        Palette.scheme = Schemes[schemeIndex]
     }
 
     /** Senderliste im Enigma2-Stil (Bouquets) statt der modernen Ansicht. */

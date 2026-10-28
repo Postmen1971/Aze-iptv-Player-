@@ -29,24 +29,78 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /** Farben aus den Entwürfen. */
+/** Ein Farbschema der App. */
+class ColorScheme(
+    val name: String,
+    val ground: Color,
+    val panel: Color,
+    val panelDark: Color,
+    val raised: Color,
+    val line: Color,
+    val text: Color,
+    val textSoft: Color,
+    val textMuted: Color,
+    /** Auswahl (Fokus) – wie bei TiviMate hell hinterlegt */
+    val accent: Color,
+    val onAccent: Color,
+    /** Hervorhebung: laufender Sender, Fortschritt */
+    val highlight: Color,
+)
+
+/** Die vier Farbschemata nach TiviMate- bzw. Apollo-Vorbild. */
+val Schemes = listOf(
+    ColorScheme(
+        "Mitternacht",
+        ground = Color(0xFF0B0F16), panel = Color(0xFF111722), panelDark = Color(0xFF0D121B),
+        raised = Color(0xFF1E2735), line = Color(0xFF263245),
+        text = Color(0xFFF2F4F8), textSoft = Color(0xFFC9D1DD), textMuted = Color(0xFF8E99A8),
+        accent = Color(0xFFE9EDF3), onAccent = Color(0xFF111722), highlight = Color(0xFF5AA0FF),
+    ),
+    ColorScheme(
+        "TiviMate Grau",
+        ground = Color(0xFF2E3B42), panel = Color(0xFF37474F), panelDark = Color(0xFF2A353B),
+        raised = Color(0xFF455A64), line = Color(0xFF52666F),
+        text = Color(0xFFFFFFFF), textSoft = Color(0xFFD5DEE3), textMuted = Color(0xFFA9B8C0),
+        accent = Color(0xFFECEFF1), onAccent = Color(0xFF263238), highlight = Color(0xFF4FC3F7),
+    ),
+    ColorScheme(
+        "TiviMate Blau",
+        ground = Color(0xFF0D3A74), panel = Color(0xFF15498F), panelDark = Color(0xFF0F3F7F),
+        raised = Color(0xFF2160AE), line = Color(0xFF2E6BB8),
+        text = Color(0xFFFFFFFF), textSoft = Color(0xFFDCE8F7), textMuted = Color(0xFFA8C3E6),
+        accent = Color(0xFFD2E3F7), onAccent = Color(0xFF0D2E5A), highlight = Color(0xFFFFD54F),
+    ),
+    ColorScheme(
+        "Petrol",
+        ground = Color(0xFF12292F), panel = Color(0xFF173238), panelDark = Color(0xFF10242A),
+        raised = Color(0xFF214249), line = Color(0xFF2A4D55),
+        text = Color(0xFFFFFFFF), textSoft = Color(0xFFD2E0E3), textMuted = Color(0xFF9DB5BA),
+        accent = Color(0xFFE6EEF0), onAccent = Color(0xFF12292F), highlight = Color(0xFF3AA6E0),
+    ),
+)
+
+/** Farben der Oberfläche – folgen dem gewählten Farbschema. */
 object Palette {
-    val Ground = Color(0xFF0E1116)
-    val Panel = Color(0xFF151A21)
-    val PanelDark = Color(0xFF0B0E12)
-    val Raised = Color(0xFF1F2630)
-    val Line = Color(0xFF262D38)
-    val Text = Color(0xFFEDEFF3)
-    val TextSoft = Color(0xFFC7CDD6)
-    val TextMuted = Color(0xFF9AA3AF)
-    val Accent = Color(0xFFF2B544)
-    val OnAccent = Color(0xFF15130E)
+    var scheme by mutableStateOf(Schemes[0])
+
+    val Ground get() = scheme.ground
+    val Panel get() = scheme.panel
+    val PanelDark get() = scheme.panelDark
+    val Raised get() = scheme.raised
+    val Line get() = scheme.line
+    val Text get() = scheme.text
+    val TextSoft get() = scheme.textSoft
+    val TextMuted get() = scheme.textMuted
+    val Accent get() = scheme.accent
+    val OnAccent get() = scheme.onAccent
+    val Highlight get() = scheme.highlight
     val Live = Color(0xFFD64545)
 
-    // Gruppenübersicht im Enigma2-Blau
-    val GroupBlue = Color(0xF2122347)
-    val GroupSelect = Color(0xFF2F64C8)
-    val GroupActive = Color(0xFF1E3566)
-    val GroupSoft = Color(0xFFB8C2D6)
+    // Gruppenübersicht: etwas heller abgesetzt im gleichen Farbton
+    val GroupBlue get() = scheme.panel.copy(alpha = 0.96f)
+    val GroupSelect get() = scheme.accent
+    val GroupActive get() = scheme.raised
+    val GroupSoft get() = scheme.textMuted
 }
 
 fun isOkKey(key: Key): Boolean =

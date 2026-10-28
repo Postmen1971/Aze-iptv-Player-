@@ -436,20 +436,12 @@ private fun YouTubeSection(app: AppController) {
 
 @Composable
 private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: Int = 0) {
-    if (part != 2) Section("Ansicht der Senderliste") {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton("Modern", selected = !app.enigmaStyle, onClick = { app.updateListStyle(false) })
-            TvButton("Enigma2 (Bouquets)", selected = app.enigmaStyle, onClick = { app.updateListStyle(true) })
+    if (part != 2) Section("Farbschema") {
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Schemes.forEachIndexed { i, sc ->
+                TvButton(sc.name, selected = app.schemeIndex == i, onClick = { app.updateScheme(i) })
+            }
         }
-        Text(
-            if (app.enigmaStyle) {
-                "Wie bei Enigma2-Receivern: Liste des aktuellen Bouquets, Links/Rechts blättert seitenweise, " +
-                    "Zurück zeigt alle Bouquets."
-            } else {
-                "Gruppen links, Sender in der Mitte, rechts läuft das Programm weiter."
-            },
-            color = Palette.TextMuted, fontSize = 13.sp,
-        )
         TvButton("Senderliste bearbeiten (Gruppen und Sender sortieren, ausblenden)", onClick = onEditList)
     }
     if (part != 1) Section("Wiedergabe") {
