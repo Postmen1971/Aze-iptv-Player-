@@ -122,7 +122,11 @@ class WebEditServer(
                 return
             }
             touch()
-            respond(out, 200, "text/plain; charset=utf-8", LiveOnSat.lastHtml ?: "Noch nichts geladen – erst am Fernseher „Fußball heute“ öffnen.")
+            respond(
+                out, 200, "text/plain; charset=utf-8",
+                LiveOnSat.lastHtml ?: "Noch nichts geladen – erst am Fernseher „Fußball heute“ öffnen.",
+                download = "liveonsat.txt",
+            )
             return
         }
         if (!path.startsWith("/api/")) {
@@ -226,7 +230,7 @@ class WebEditServer(
         }
     }
 
-    private fun respond(out: OutputStream, status: Int, type: String, body: String) {
+    private fun respond(out: OutputStream, status: Int, type: String, body: String, download: String? = null) {
         val bytes = body.toByteArray(Charsets.UTF_8)
         val reason = when (status) { 200 -> "OK"; 400 -> "Bad Request"; 404 -> "Not Found"; 409 -> "Conflict"; else -> "Forbidden" }
         val head = "HTTP/1.1 $status $reason\r\n" +
@@ -234,6 +238,7 @@ class WebEditServer(
             "Content-Length: ${bytes.size}\r\n" +
             "Cache-Control: no-store\r\n" +
             "X-Content-Type-Options: nosniff\r\n" +
+            (if (download != null) "Content-Disposition: attachment; filename=\"$download\"\r\n" else "") +
             "Connection: close\r\n\r\n"
         out.write(head.toByteArray(Charsets.US_ASCII))
         out.write(bytes)

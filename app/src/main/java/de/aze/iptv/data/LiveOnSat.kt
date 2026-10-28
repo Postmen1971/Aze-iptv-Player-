@@ -20,22 +20,46 @@ object LiveOnSat {
     @Volatile var lastHtml: String? = null
     @Volatile var lastStatus: String = "noch nicht geladen"
 
+    /**
+     * liveonsat rechnet in britischer Zeit: Zwischen Mitternacht (bei uns) und 1 Uhr zeigt „2day“ noch den Vortag.
+     * Deshalb zusätzlich die Seite mit unserem heutigen Datum laden und beides zusammenführen.
+     */
     fun today(): List<Fixture> {
+        val cal = java.util.Calendar.getInstance()
+        val dd = cal.get(java.util.Calendar.DAY_OF_MONTH)
+        val mm = cal.get(java.util.Calendar.MONTH) + 1
+        val yy = cal.get(java.util.Calendar.YEAR)
+        val dated = "?start_dd=$dd&start_mm=$mm&start_yyyy=$yy&end_dd=$dd&end_mm=$mm&end_yyyy=$yy"
+        val candidates = listOf(urls[0] + dated, urls[0], urls[1] + dated, urls[1])
         val errors = ArrayList<String>()
-        for (u in urls) {
+        val all = LinkedHashMap<String, Fixture>()
+        var bytes = 0
+        var pages = 0
+        for (u in candidates) {
+            if (pages >= 2) break
             val html = try {
                 fetch(u)
             } catch (e: Exception) {
                 errors.add(e.message ?: e.javaClass.simpleName)
                 continue
             }
-            lastHtml = html
-            val list = parse(html)
-            lastStatus = "${html.length / 1024} KB geladen, ${list.size} Spiele erkannt"
-            if (list.isNotEmpty()) return list
+            pages++
+            bytes += html.length
+            if (lastHtml == null || u.contains("start_dd")) lastHtml = html
+            parse(html).forEach { f -> all.putIfAbsent(Football.norm(f.home) + "|" + Football.norm(f.away), f) }
         }
-        if (errors.isNotEmpty() && lastHtml == null) lastStatus = "nicht erreichbar (" + errors.joinToString(", ") + ")"
-        return emptyList()
+        lastStatus = if (pages == 0) "nicht erreichbar (" + errors.joinToString(", ") + ")"
+        else "${bytes / 1024} KB geladen, ${all.size} Spiele mit Sendern erkannt"
+        return all.values.toList()
+    }
+
+    /** Zur Fehlersuche: Spiele bei liveonsat, in denen eine der beiden Mannschaften vorkommt. */
+    fun similar(m: TodayMatch, all: List<Fixture>): List<Fixture> {
+        val t = Football.tokens(m.home) + Football.tokens(m.away)
+        return all.filter { f ->
+            val s = Football.norm(f.home + " " + f.away)
+            t.any { s.contains(it) }
+        }.take(3)
     }
 
     private fun fetch(url: String): String {

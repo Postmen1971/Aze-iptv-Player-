@@ -54,6 +54,8 @@ private class GuideData(
     val error: String?,
     /** Woher kamen Daten – zur Fehlersuche unten angezeigt */
     val diag: String = "",
+    /** zur Fehlersuche: ähnliche Spiele bei liveonsat je Spiel */
+    val similar: Map<String, List<String>> = emptyMap(),
 )
 
 /**
@@ -97,6 +99,9 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
                 },
                 listed = listed,
                 error = matches.exceptionOrNull()?.let { "Spiele konnten nicht geladen werden (Internet?)" },
+                similar = list.associate { m ->
+                    m.id to de.aze.iptv.data.LiveOnSat.similar(m, los).map { "${it.home} v ${it.away} (${it.channels.size} Sender)" }
+                },
                 diag = "Quellen – liveonsat: ${de.aze.iptv.data.LiveOnSat.lastStatus} · TV-Plan: ${plan.size} Einträge · " +
                     "Programmzeitschrift: ${idx.items.size} deiner Sender mit Programm",
             )
@@ -199,6 +204,7 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
                 match = p,
                 channels = data?.channels?.get(p.id).orEmpty(),
                 listed = data?.listed?.get(p.id).orEmpty(),
+                similar = data?.similar?.get(p.id).orEmpty(),
                 current = app.current?.channel?.key,
                 onPlay = { nc ->
                     app.play(nc)
@@ -216,6 +222,7 @@ private fun MatchPopup(
     match: TodayMatch,
     channels: List<MatchChannel>,
     listed: List<de.aze.iptv.data.TvListings.Broadcast>,
+    similar: List<String>,
     current: String?,
     onPlay: (de.aze.iptv.data.NumberedChannel) -> Unit,
     onClose: () -> Unit,
@@ -246,6 +253,9 @@ private fun MatchPopup(
                     else "Keiner dieser Sender ist in deiner Senderliste:",
                     color = Palette.TextSoft, fontSize = 14.sp,
                 )
+                if (listed.isEmpty() && similar.isNotEmpty()) {
+                    Text("Bei liveonsat gefunden (Name passt nicht genau): " + similar.joinToString(" · "), color = Palette.TextMuted, fontSize = 12.sp)
+                }
                 listed.take(12).forEach { b ->
                     Text("• ${b.channel}" + (if (b.country.isNotBlank()) "  (${b.country})" else ""), color = Palette.Text, fontSize = 14.sp)
                 }
