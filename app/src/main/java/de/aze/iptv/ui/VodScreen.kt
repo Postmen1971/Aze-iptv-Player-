@@ -234,7 +234,8 @@ private fun Browse(
                 Modifier
                     .width(260.dp)
                     .fillMaxHeight()
-                    .background(Palette.PanelDark)
+                    // wie die Gruppenübersicht beim Fernsehen
+                    .background(if (menu) Palette.GroupBlue else Palette.PanelDark)
                     .padding(10.dp)
                     .onPreviewKeyEvent { e ->
                         if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) {
