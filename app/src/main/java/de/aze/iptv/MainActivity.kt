@@ -34,6 +34,22 @@ class MainActivity : ComponentActivity() {
         app = AppController(applicationContext, lifecycleScope)
         app.start()
 
+        // Bilder (Poster, Logos): großer Speicher-Zwischenspeicher und dauerhafter Zwischenspeicher auf dem Gerät,
+        // auch wenn der Server "nicht speichern" meldet – so sind Poster beim zweiten Mal sofort da.
+        coil.Coil.setImageLoader(
+            coil.ImageLoader.Builder(this)
+                .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(0.25).build() }
+                .diskCache {
+                    coil.disk.DiskCache.Builder()
+                        .directory(cacheDir.resolve("bilder"))
+                        .maxSizeBytes(250L * 1024 * 1024)
+                        .build()
+                }
+                .respectCacheHeaders(false)
+                .crossfade(false)
+                .build(),
+        )
+
         setContent {
             MaterialTheme(
                 colorScheme = darkColorScheme(

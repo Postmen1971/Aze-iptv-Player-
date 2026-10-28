@@ -35,6 +35,9 @@ class Epg(
     fun now(ch: Channel, at: Long = System.currentTimeMillis()): Programme? =
         idFor(ch)?.let { id -> byId[id]?.firstOrNull { it.start <= at && it.stop > at } }
 
+    /** Alle geladenen Sendungen eines Senders (zeitlich sortiert) oder null. */
+    fun programmes(ch: Channel): List<Programme>? = idFor(ch)?.let { byId[it] }
+
     fun next(ch: Channel, at: Long = System.currentTimeMillis()): Programme? =
         idFor(ch)?.let { id -> byId[id]?.firstOrNull { it.start > at } }
 

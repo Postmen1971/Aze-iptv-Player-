@@ -35,7 +35,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: Code optimieren – Compose läuft im optimierten Build deutlich flüssiger
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (keystoreFile != null) {
                 signingConfigs.getByName("release")
             } else {

@@ -318,14 +318,29 @@ private fun Browse(
                     when {
                         list == null -> Text(if (q != null) "Suche …" else "Lade …", color = Palette.TextMuted, fontSize = 15.sp)
                         list.isEmpty() -> Text(if (q != null) "Nichts gefunden." else "Keine Einträge in dieser Kategorie.", color = Palette.TextMuted, fontSize = 15.sp)
-                        else -> LazyVerticalGrid(
-                            columns = GridCells.Adaptive(132.dp),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        else -> {
+                          val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+                          // Poster der nächsten Reihen schon vorladen, damit beim schnellen Blättern Bilder da sind
+                          val ctx = LocalContext.current
+                          LaunchedEffect(list, gridState) {
+                              val requested = HashSet<String>()
+                              androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }.collect { first ->
+                                  list.drop(first).take(48).forEach { item ->
+                                      val url = item.poster ?: return@forEach
+                                      if (requested.add(url)) coil.Coil.imageLoader(ctx).enqueue(posterRequest(ctx, url))
+                                  }
+                              }
+                          }
+                          LazyVerticalGrid(
+                            state = gridState,
+                            columns = GridCells.Adaptive(100.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             gridItemsIndexed(list, key = { _, it -> it.id }) { idx, item ->
                                 PosterCard(item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0) { onOpen(item) }
                             }
+                          }
                         }
                     }
                 }
@@ -340,6 +355,14 @@ private fun Browse(
         }
     }
 }
+
+/** Poster in fester, kleiner Größe laden: schneller und passt immer in den Zwischenspeicher. */
+private fun posterRequest(context: android.content.Context, url: String): coil.request.ImageRequest =
+    coil.request.ImageRequest.Builder(context)
+        .data(url)
+        .size(200, 300)
+        .crossfade(false)
+        .build()
 
 @Composable
 private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, onClick: () -> Unit) {
@@ -357,7 +380,7 @@ private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, onClick: ()
                 Text(item.name, color = Palette.TextMuted, fontSize = 12.sp, maxLines = 4, modifier = Modifier.padding(8.dp))
                 if (item.poster != null) {
                     AsyncImage(
-                        model = item.poster,
+                        model = posterRequest(LocalContext.current, item.poster),
                         contentDescription = item.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
@@ -387,7 +410,7 @@ private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, onClick: ()
             Text(
                 item.name,
                 color = if (focused) Palette.Accent else Palette.Text,
-                fontSize = 13.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Normal,
+                fontSize = 11.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }

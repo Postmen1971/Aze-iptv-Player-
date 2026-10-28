@@ -62,6 +62,7 @@ fun ChannelOverlay(
     onSearch: () -> Unit,
     onVod: (series: Boolean) -> Unit = {},
     onExitApp: () -> Unit = onClose,
+    onFootball: (() -> Unit)? = null,
 ) {
     // Links in der Senderliste → Gruppen, nochmal Links → Menü (TV, Filme, Serien, Suchen, Einstellungen).
     // Zurück: Senderliste → Gruppen → App beenden.
@@ -112,6 +113,7 @@ fun ChannelOverlay(
                     groupIndex = 0
                 },
                 onRight = { showMenu = false },
+                onFootball = onFootball,
             )
         }
         Column(
@@ -358,6 +360,7 @@ internal fun SideMenu(
     onSettings: () -> Unit,
     onPlaylist: () -> Unit,
     onRight: () -> Unit,
+    onFootball: (() -> Unit)? = null,
 ) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -369,6 +372,7 @@ internal fun SideMenu(
         add("Filme" to { onVod(false) })
         add("Serien" to { onVod(true) })
         add("Suchen" to onSearch)
+        if (onFootball != null) add("Fußball im TV" to onFootball)
         if (multi) add("Playlist: $playlistLabel" to onPlaylist)
         add("Einstellungen" to onSettings)
     }
