@@ -44,14 +44,87 @@ class Episode(
 
 class SeriesDetails(val info: VodDetails, val seasons: Map<Int, List<Episode>>)
 
+/** Quelle für Filme & Serien – Xtream-Schnittstelle oder Einträge aus einer M3U-Liste. */
+interface VodProvider {
+    suspend fun movieCategories(): List<VodCategory>
+    suspend fun seriesCategories(): List<VodCategory>
+    suspend fun movies(categoryId: String): List<VodItem>
+    suspend fun series(categoryId: String): List<VodItem>
+    /** Anzahl je Kategorie-id */
+    suspend fun counts(series: Boolean): Map<String, Int>
+    /** Alle Filme bzw. Serien (für die Suche) */
+    suspend fun all(series: Boolean): List<VodItem>
+    suspend fun movieDetails(id: String): VodDetails
+    suspend fun seriesDetails(id: String): SeriesDetails
+    fun movieUrl(item: VodItem): String
+    fun episodeUrl(e: Episode): String
+}
+
 /**
  * Filme und Serien über die Xtream-Schnittstelle des Anbieters (player_api.php).
  * Geladen wird immer nur eine Kategorie bzw. ein Titel – so bleibt es auch auf schwachen Sticks flüssig.
  */
-/** Quelle für Filme & Serien – Xtream-Schnittstelle oder Einträge aus einer M3U-Liste. */
-interface VodProvider {
-    override suspend fun movieCategories(): List<VodCategory>
-    override suspend fun seriesCategories(): List<VodCategory>
+class XtreamVod(private val src: PlaylistSource) : VodProvider {
+
+    private val base: String = src.url.trim().trimEnd('/').let {
+        if (it.startsWith("http://") || it.startsWith("https://")) it else "http://$it"
+    }
+    private val api = "$base/player_api.php?username=${enc(src.user.trim())}&password=${enc(src.pass)}"
+
+    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+
+    private fun arr(action: String, extra: String = ""): JSONArray {
+        val t = Http.text("$api&action=$action$extra").trim()
+        return if (t.startsWith("[")) JSONArray(t) else JSONArray()
+    }
+
+    private fun obj(action: String, extra: String): JSONObject = JSONObject(Http.text("$api&action=$action$extra"))
+
+    private fun JSONObject.str(key: String): String? =
+        optString(key).takeIf { it.isNotBlank() && it != "null" }
+
+    override suspend fun movieCategories(): List<VodCategory> = withContext(Dispatchers.IO) { cats("get_vod_categories") }
+    override suspend fun seriesCategories(): List<VodCategory> = withContext(Dispatchers.IO) { cats("get_series_categories") }
+
+    private fun cats(action: String): List<VodCategory> {
+        val a = arr(action)
+        return (0 until a.length()).map { i ->
+            val o = a.getJSONObject(i)
+            VodCategory(o.optString("category_id"), o.optString("category_name"))
+        }
+    }
+
+    /**
+     * Anzahl der Filme bzw. Serien je Kategorie. Liest die Gesamtliste Stück für Stück,
+     * damit auch sehr große Anbieter-Listen wenig Speicher brauchen.
+     */
+    override suspend fun counts(series: Boolean): Map<String, Int> = withContext(Dispatchers.IO) {
+        val conn = Http.open("$api&action=${if (series) "get_series" else "get_vod_streams"}")
+        try {
+            android.util.JsonReader(conn.inputStream.bufferedReader()).use { r ->
+                val m = HashMap<String, Int>()
+                if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) return@use m
+                r.beginArray()
+                while (r.hasNext()) {
+                    if (r.peek() != android.util.JsonToken.BEGIN_OBJECT) { r.skipValue(); continue }
+                    r.beginObject()
+                    var cat: String? = null
+                    while (r.hasNext()) {
+                        val n = r.nextName()
+                        val t = r.peek()
+                        if (n == "category_id" && (t == android.util.JsonToken.STRING || t == android.util.JsonToken.NUMBER)) cat = r.nextString()
+                        else r.skipValue()
+                    }
+                    r.endObject()
+                    cat?.let { m[it] = (m[it] ?: 0) + 1 }
+                }
+                m
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     override suspend fun movies(categoryId: String): List<VodItem> = withContext(Dispatchers.IO) {
         streamItems("get_vod_streams", "&category_id=${enc(categoryId)}", series = false)
     }
@@ -111,109 +184,12 @@ interface VodProvider {
         val WANTED = setOf("stream_id", "series_id", "name", "stream_icon", "cover", "rating", "year", "releaseDate", "container_extension")
     }
 
-    override suspend fun movieDetails(id: String): VodDetails
-    override suspend fun seriesDetails(id: String): SeriesDetails
-    override fun movieUrl(item: VodItem): String
-    override fun episodeUrl(e: Episode): String
-}
-
-class XtreamVod(private val src: PlaylistSource) : VodProvider {
-
-    private val base: String = src.url.trim().trimEnd('/').let {
-        if (it.startsWith("http://") || it.startsWith("https://")) it else "http://$it"
-    }
-    private val api = "$base/player_api.php?username=${enc(src.user.trim())}&password=${enc(src.pass)}"
-
-    private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
-
-    private fun arr(action: String, extra: String = ""): JSONArray {
-        val t = Http.text("$api&action=$action$extra").trim()
-        return if (t.startsWith("[")) JSONArray(t) else JSONArray()
-    }
-
-    private fun obj(action: String, extra: String): JSONObject = JSONObject(Http.text("$api&action=$action$extra"))
-
-    private fun JSONObject.str(key: String): String? =
-        optString(key).takeIf { it.isNotBlank() && it != "null" }
-
-    suspend fun movieCategories(): List<VodCategory> = withContext(Dispatchers.IO) { cats("get_vod_categories") }
-    suspend fun seriesCategories(): List<VodCategory> = withContext(Dispatchers.IO) { cats("get_series_categories") }
-
-    private fun cats(action: String): List<VodCategory> {
-        val a = arr(action)
-        return (0 until a.length()).map { i ->
-            val o = a.getJSONObject(i)
-            VodCategory(o.optString("category_id"), o.optString("category_name"))
-        }
-    }
-
-    /**
-     * Anzahl der Filme bzw. Serien je Kategorie. Liest die Gesamtliste Stück für Stück,
-     * damit auch sehr große Anbieter-Listen wenig Speicher brauchen.
-     */
-    suspend fun counts(series: Boolean): Map<String, Int> = withContext(Dispatchers.IO) {
-        val conn = Http.open("$api&action=${if (series) "get_series" else "get_vod_streams"}")
-        try {
-            android.util.JsonReader(conn.inputStream.bufferedReader()).use { r ->
-                val m = HashMap<String, Int>()
-                if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) return@use m
-                r.beginArray()
-                while (r.hasNext()) {
-                    if (r.peek() != android.util.JsonToken.BEGIN_OBJECT) { r.skipValue(); continue }
-                    r.beginObject()
-                    var cat: String? = null
-                    while (r.hasNext()) {
-                        val n = r.nextName()
-                        val t = r.peek()
-                        if (n == "category_id" && (t == android.util.JsonToken.STRING || t == android.util.JsonToken.NUMBER)) cat = r.nextString()
-                        else r.skipValue()
-                    }
-                    r.endObject()
-                    cat?.let { m[it] = (m[it] ?: 0) + 1 }
-                }
-                m
-            }
-        } finally {
-            conn.disconnect()
-        }
-    }
-
-    suspend fun movies(categoryId: String): List<VodItem> = withContext(Dispatchers.IO) {
-        val a = arr("get_vod_streams", "&category_id=${enc(categoryId)}")
-        (0 until a.length()).map { i ->
-            val o = a.getJSONObject(i)
-            VodItem(
-                id = o.optString("stream_id"),
-                name = o.optString("name"),
-                poster = o.str("stream_icon"),
-                rating = o.str("rating"),
-                year = o.str("year") ?: o.str("releaseDate")?.take(4),
-                ext = o.str("container_extension") ?: "mp4",
-            )
-        }
-    }
-
-    suspend fun series(categoryId: String): List<VodItem> = withContext(Dispatchers.IO) {
-        val a = arr("get_series", "&category_id=${enc(categoryId)}")
-        (0 until a.length()).map { i ->
-            val o = a.getJSONObject(i)
-            VodItem(
-                id = o.optString("series_id"),
-                name = o.optString("name"),
-                poster = o.str("cover"),
-                rating = o.str("rating"),
-                year = o.str("year") ?: o.str("releaseDate")?.take(4),
-                ext = "",
-            )
-        }
-    }
-
-    suspend fun movieDetails(id: String): VodDetails = withContext(Dispatchers.IO) {
+    override suspend fun movieDetails(id: String): VodDetails = withContext(Dispatchers.IO) {
         val info = obj("get_vod_info", "&vod_id=${enc(id)}").optJSONObject("info") ?: JSONObject()
         details(info)
     }
 
-    suspend fun seriesDetails(id: String): SeriesDetails = withContext(Dispatchers.IO) {
+    override suspend fun seriesDetails(id: String): SeriesDetails = withContext(Dispatchers.IO) {
         val o = obj("get_series_info", "&series_id=${enc(id)}")
         val info = details(o.optJSONObject("info") ?: JSONObject())
         val seasons = sortedMapOf<Int, List<Episode>>()
@@ -254,8 +230,8 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
         )
     }
 
-    fun movieUrl(item: VodItem) = "$base/movie/${src.user.trim()}/${src.pass}/${item.id}.${item.ext}"
-    fun episodeUrl(e: Episode) = "$base/series/${src.user.trim()}/${src.pass}/${e.id}.${e.ext}"
+    override fun movieUrl(item: VodItem) = "$base/movie/${src.user.trim()}/${src.pass}/${item.id}.${item.ext}"
+    override fun episodeUrl(e: Episode) = "$base/series/${src.user.trim()}/${src.pass}/${e.id}.${e.ext}"
 }
 
 
