@@ -14,6 +14,10 @@ class Store(context: Context) {
         if (!prefs.getBoolean("tunnelReset1", false)) {
             prefs.edit().putBoolean("tunneling", false).putBoolean("tunnelReset1", true).apply()
         }
+        // Einmalig nach dem Update: Bildwiederholrate anpassen aus (lässt auf manchen Geräten das Bild einfrieren)
+        if (!prefs.getBoolean("afrReset1", false)) {
+            prefs.edit().putBoolean("afr", false).putBoolean("afrReset1", true).apply()
+        }
     }
 
     fun sources(): List<PlaylistSource> {
@@ -122,7 +126,7 @@ class Store(context: Context) {
 
     /** Bildwiederholrate des Bildschirms an den Sender anpassen (25/50 Hz). */
     var afr: Boolean
-        get() = prefs.getBoolean("afr", true)
+        get() = prefs.getBoolean("afr", false)
         set(v) = prefs.edit().putBoolean("afr", v).apply()
 
     var autostart: Boolean

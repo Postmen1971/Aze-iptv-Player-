@@ -570,13 +570,13 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         }
         Text("Bildwiederholrate", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton("An Sender anpassen", selected = app.afr, onClick = { app.updateAfr(true) })
-            TvButton("Aus", selected = !app.afr, onClick = { app.updateAfr(false) })
+            TvButton("Aus (empfohlen)", selected = !app.afr, onClick = { app.updateAfr(false) })
+            TvButton("An Sender anpassen (Test)", selected = app.afr, onClick = { app.updateAfr(true) })
         }
         Text(
             "Deutsche Sender laufen mit 25/50 Bildern pro Sekunde. Steht das Gerät auf 60 Hz, ruckelt das Bild leicht. " +
                 "„An Sender anpassen“ stellt den Bildschirm passend um (z. B. 50 Hz) – das Bild läuft ruhiger. " +
-                "Beim ersten Umschalten kann der Fernseher kurz schwarz werden.",
+                "Noch im Test: Auf manchen Geräten (z. B. Fire TV) bleibt das Bild danach stehen – dann wieder auf „Aus“ stellen.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
