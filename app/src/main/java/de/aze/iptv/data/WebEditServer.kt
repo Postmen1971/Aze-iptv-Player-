@@ -390,6 +390,7 @@ function save(){
     .catch(function(e){msg(e.message,true);${'$'}('save').disabled=false});
 }
 window.addEventListener('beforeunload',function(e){if(dirty){e.preventDefault();e.returnValue=''}});
+try{var qc=new URLSearchParams(location.search).get('c');if(qc){CODE=qc;${'$'}('code').value=qc}}catch(e){}
 if(CODE){load().catch(function(){CODE=''})}
 </script></body></html>
 """

@@ -50,6 +50,12 @@ object YouTube {
         "Halk TV" to "@halktvkanali",
     )
 
+    /** Normale YouTube-Adresse (zum Öffnen in der YouTube-App). */
+    fun watchUrl(url: String): String = when {
+        url.startsWith("youtube:channel:") -> "https://www.youtube.com/channel/${url.removePrefix("youtube:channel:")}/live"
+        else -> "https://www.youtube.com/watch?v=${url.removePrefix("youtube:video:")}"
+    }
+
     /** Adresse für den eingebetteten Player. */
     fun embedUrl(url: String, origin: String): String {
         val params = "autoplay=1&controls=0&rel=0&playsinline=1&enablejsapi=1&origin=$origin"

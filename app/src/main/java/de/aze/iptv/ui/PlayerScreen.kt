@@ -372,7 +372,21 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                         }
                         KeyEventType.KeyUp -> {
                             if (!okLong) {
-                                if (digits.isNotEmpty()) commitDigits() else app.playPrevious()
+                                val yt = app.current?.channel?.url?.takeIf { YouTube.isYouTube(it) }
+                                when {
+                                    digits.isNotEmpty() -> commitDigits()
+                                    // YouTube-Sender, der nicht eingebettet laufen darf: OK öffnet ihn in der YouTube-App
+                                    yt != null && ytError != null -> {
+                                        val ok = runCatching {
+                                            context.startActivity(
+                                                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(YouTube.watchUrl(yt)))
+                                                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+                                            )
+                                        }.isSuccess
+                                        if (!ok) ytError = "YouTube-App ist nicht installiert"
+                                    }
+                                    else -> app.playPrevious()
+                                }
                             }
                             okLong = false
                         }
@@ -462,7 +476,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     url = ytUrl,
                     modifier = Modifier.fillMaxSize(),
                     onPlaying = { noPicture = false },
-                    onError = { ytError = it },
+                    onError = { ytError = "$it · OK = in YouTube-App öffnen" },
                 )
             }
         } else if (useVlc) {

@@ -92,6 +92,8 @@ dependencies {
 
     // Poster und Bilder für Filme & Serien
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // QR-Code für die Handy-Verbindung
+    implementation("com.google.zxing:core:3.5.3")
 
     // VLC als Ausweich-Player (LGPL 2.1, unverändert eingebunden)
     implementation("org.videolan.android:libvlc-all:3.6.0")

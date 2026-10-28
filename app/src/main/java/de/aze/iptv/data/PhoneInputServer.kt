@@ -234,6 +234,7 @@ class PhoneInputServer(
           <button type="submit">An den Fernseher senden</button>
         </form>
         <script>
+        try{var qc=new URLSearchParams(location.search).get('c');if(qc)document.getElementById('code').value=qc}catch(e){}
         function sw(){var t=document.querySelector('input[name=type]:checked').value,x=t==='xtream',y=t==='youtube',p=t==='portal';
           document.getElementById('xt').style.display=x?'block':'none';
           document.getElementById('pt').style.display=p?'block':'none';

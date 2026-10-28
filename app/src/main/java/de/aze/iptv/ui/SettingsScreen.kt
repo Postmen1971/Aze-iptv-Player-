@@ -401,11 +401,17 @@ private fun PhoneInputSection(app: AppController) {
                 }
             })
         } else {
-            Text("Am Handy im Browser öffnen:", color = Palette.TextSoft, fontSize = 14.sp)
-            Text(address ?: "", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Code:", color = Palette.TextSoft, fontSize = 18.sp)
-                Text(s.code, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                // QR-Code: mit der Handy-Kamera scannen – öffnet die Seite mit dem Code schon eingetragen
+                QrCode("${address ?: ""}/?c=${s.code}")
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("QR-Code mit der Handy-Kamera scannen – oder im Browser öffnen:", color = Palette.TextSoft, fontSize = 14.sp)
+                    Text(address ?: "", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Code:", color = Palette.TextSoft, fontSize = 18.sp)
+                        Text(s.code, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
             Text("Schließt sich nach der Eingabe oder nach 5 Minuten von selbst.", color = Palette.TextMuted, fontSize = 13.sp)
             TvButton("Beenden", onClick = { s.stop() })
@@ -448,11 +454,17 @@ private fun WebEditSection(app: AppController) {
                 }
             })
         } else {
-            Text("Am Handy oder PC im Browser öffnen:", color = Palette.TextSoft, fontSize = 14.sp)
-            Text(address ?: "", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Code:", color = Palette.TextSoft, fontSize = 18.sp)
-                Text(s.code, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                // QR-Code: mit der Handy-Kamera scannen – öffnet die Seite mit dem Code schon eingetragen
+                QrCode("${address ?: ""}/?c=${s.code}")
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("QR-Code mit der Handy-Kamera scannen – oder im Browser öffnen:", color = Palette.TextSoft, fontSize = 14.sp)
+                    Text(address ?: "", color = Palette.Accent, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Code:", color = Palette.TextSoft, fontSize = 18.sp)
+                        Text(s.code, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
             Text("Bleibt offen, solange du bearbeitest; schließt sich 30 Minuten nach der letzten Änderung.", color = Palette.TextMuted, fontSize = 13.sp)
             TvButton("Beenden", onClick = { s.stop() })
