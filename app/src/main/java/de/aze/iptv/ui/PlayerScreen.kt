@@ -103,6 +103,12 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             .setHandleAudioBecomingNoisy(true)
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .setLoadControl(PlaybackConfig.loadControl(context, level))
+            // Leitung von Anfang an gut einschätzen: schneller Start, aber gleich mit hoher Qualitätsstufe
+            .setBandwidthMeter(
+                androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(context)
+                    .setInitialBitrateEstimate(8_000_000L)
+                    .build(),
+            )
             .build()
             .apply {
                 playWhenReady = true

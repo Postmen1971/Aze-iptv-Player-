@@ -428,8 +428,8 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit) {
         )
         Text("Bildqualität", color = Palette.TextSoft, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Automatisch (schnelles Umschalten)", selected = !app.forceHighest, onClick = { app.updateForceHighest(false) })
             TvButton("Immer beste Stufe", selected = app.forceHighest, onClick = { app.updateForceHighest(true) })
-            TvButton("Automatisch nach Leitung", selected = !app.forceHighest, onClick = { app.updateForceHighest(false) })
         }
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Tunneling aus", selected = !app.tunneling, onClick = { app.updateTunneling(false) })

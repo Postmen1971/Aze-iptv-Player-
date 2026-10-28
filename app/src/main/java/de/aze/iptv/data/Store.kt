@@ -106,7 +106,7 @@ class Store(context: Context) {
         set(v) = prefs.edit().putString("engine", v).apply()
 
     var forceHighest: Boolean
-        get() = prefs.getBoolean("forceHighest", true)
+        get() = prefs.getBoolean("forceHighest", false)
         set(v) = prefs.edit().putBoolean("forceHighest", v).apply()
 
     var tunneling: Boolean

@@ -52,7 +52,7 @@ import de.aze.iptv.AppController
  * Schmale Senderliste am linken Rand – das Bild bleibt groß sichtbar.
  *  Oben: Gruppenname mit ◀ ▶, darunter die Sender der Gruppe.
  *  Hoch/Runter: Sender, Links/Rechts: Gruppe wechseln, OK: umschalten, OK lang: Favorit.
- *  Ganz oben (Hoch am Listenanfang): Suchen und Einstellungen.
+ *  Links in der Gruppenübersicht: Menü mit TV, Filme, Serien, Suchen, Einstellungen.
  */
 @Composable
 fun ChannelOverlay(
@@ -62,9 +62,17 @@ fun ChannelOverlay(
     onSearch: () -> Unit,
     onVod: (series: Boolean) -> Unit = {},
 ) {
-    // Zurück / Links in der Senderliste: Gruppenübersicht; Zurück in der Übersicht: schließen.
+    // Wie bei TiviMate: Links in der Senderliste → Gruppen, nochmal Links → Menü (TV, Filme, Serien, Suchen, Einstellungen).
+    // Zurück geht immer eine Ebene zurück.
     var showGroups by remember { mutableStateOf(false) }
-    BackHandler { if (showGroups) onClose() else showGroups = true }
+    var showMenu by remember { mutableStateOf(false) }
+    BackHandler {
+        when {
+            showMenu -> showMenu = false
+            showGroups -> onClose()
+            else -> showGroups = true
+        }
+    }
 
     val filter = app.playlistFilter
     val multi = app.sources.size > 1
@@ -90,6 +98,21 @@ fun ChannelOverlay(
     val group = groups[groupIndex.coerceIn(0, groups.lastIndex)]
 
     Row(modifier = Modifier.fillMaxSize()) {
+        if (showMenu) {
+            SideMenu(
+                multi = multi,
+                playlistLabel = app.playlistName(filter),
+                onTv = { showMenu = false },
+                onVod = onVod,
+                onSearch = onSearch,
+                onSettings = onOpenSettings,
+                onPlaylist = {
+                    app.nextPlaylistFilter()
+                    groupIndex = 0
+                },
+                onRight = { showMenu = false },
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxHeight()
@@ -100,18 +123,6 @@ fun ChannelOverlay(
                 .padding(horizontal = 8.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            // Kleine Knöpfe ganz oben
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(bottom = 4.dp)) {
-                SmallButton("Suchen", onClick = onSearch)
-                SmallButton("Filme", onClick = { onVod(false) })
-                SmallButton("Serien", onClick = { onVod(true) })
-                SmallButton("Einstellungen", onClick = onOpenSettings)
-                if (multi) SmallButton(app.playlistName(filter), onClick = {
-                    app.nextPlaylistFilter()
-                    groupIndex = 0
-                })
-            }
-
             if (showGroups) {
                 Text("Gruppen", color = Palette.GroupSoft, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
                 val gState = rememberLazyListState(initialFirstVisibleItemIndex = (groupIndex - 5).coerceAtLeast(0))
@@ -120,7 +131,7 @@ fun ChannelOverlay(
                     state = gState,
                     verticalArrangement = Arrangement.spacedBy(1.dp),
                     modifier = Modifier.onPreviewKeyEvent { e ->
-                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { onClose(); true } else false
+                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { showMenu = true; true } else false
                     },
                 ) {
                     itemsIndexed(groups) { i, g ->
@@ -162,9 +173,12 @@ fun ChannelOverlay(
                         }
                     }
                 }
-                LaunchedEffect(Unit) {
-                    withFrameNanos { }
-                    runCatching { gFirst.requestFocus() }
+                // Fokus auf die Gruppen – auch wenn man aus dem Menü (Rechts) zurückkommt
+                LaunchedEffect(showMenu) {
+                    if (!showMenu) {
+                        withFrameNanos { }
+                        runCatching { gFirst.requestFocus() }
+                    }
                     firstOpen = 0
                 }
             } else {
@@ -329,5 +343,62 @@ private fun SmallButton(label: String, onClick: () -> Unit) {
                 .background(if (focused) Palette.Accent else Palette.Raised, RoundedCornerShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 4.dp),
         )
+    }
+}
+
+/** Schmales Menü links (wie bei TiviMate): TV, Filme, Serien, Suchen, Einstellungen. */
+@Composable
+private fun SideMenu(
+    multi: Boolean,
+    playlistLabel: String,
+    onTv: () -> Unit,
+    onVod: (series: Boolean) -> Unit,
+    onSearch: () -> Unit,
+    onSettings: () -> Unit,
+    onPlaylist: () -> Unit,
+    onRight: () -> Unit,
+) {
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { first.requestFocus() }
+    }
+    val entries = buildList {
+        add("TV" to onTv)
+        add("Filme" to { onVod(false) })
+        add("Serien" to { onVod(true) })
+        add("Suchen" to onSearch)
+        if (multi) add("Playlist: $playlistLabel" to onPlaylist)
+        add("Einstellungen" to onSettings)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(170.dp)
+            .background(Palette.Ground.copy(alpha = 0.96f))
+            .padding(horizontal = 8.dp, vertical = 16.dp)
+            .onPreviewKeyEvent { e ->
+                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onRight(); true } else false
+            },
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        entries.forEachIndexed { i, (label, action) ->
+            Focusable(
+                modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                onClick = action,
+            ) { focused ->
+                Text(
+                    label,
+                    color = if (focused) Palette.OnAccent else Palette.Text,
+                    fontSize = 16.sp,
+                    fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(if (focused) Palette.Accent else Palette.Ground.copy(alpha = 0f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
+        }
     }
 }
