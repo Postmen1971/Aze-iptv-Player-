@@ -18,7 +18,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -47,71 +49,59 @@ class ColorScheme(
     val highlight: Color,
 )
 
-/** Die Farbschemata (alle dunkel, mit unterschiedlicher Grundfarbe). */
+/** Die Farbschemata: dunkel, ruhig, mit dezenten Verläufen (angelehnt an moderne TV-Apps). */
 val Schemes = listOf(
     ColorScheme(
         "Mitternacht",
-        ground = Color(0xFF0B0F16), panel = Color(0xFF111722), panelDark = Color(0xFF0D121B),
-        raised = Color(0xFF1E2735), line = Color(0xFF263245),
+        ground = Color(0xFF0B0F16), panel = Color(0xFF131A26), panelDark = Color(0xFF0D121B),
+        raised = Color(0xFF212B3B), line = Color(0xFF2A3549),
         text = Color(0xFFF2F4F8), textSoft = Color(0xFFC9D1DD), textMuted = Color(0xFF8E99A8),
         accent = Color(0xFFE9EDF3), onAccent = Color(0xFF111722), highlight = Color(0xFF5AA0FF),
     ),
     ColorScheme(
-        "Schiefer",
-        ground = Color(0xFF2E3B42), panel = Color(0xFF37474F), panelDark = Color(0xFF2A353B),
-        raised = Color(0xFF455A64), line = Color(0xFF52666F),
-        text = Color(0xFFFFFFFF), textSoft = Color(0xFFD5DEE3), textMuted = Color(0xFFA9B8C0),
-        accent = Color(0xFFECEFF1), onAccent = Color(0xFF263238), highlight = Color(0xFF4FC3F7),
-    ),
-    ColorScheme(
         "Ozean",
-        ground = Color(0xFF07152B), panel = Color(0xFF0C1E3B), panelDark = Color(0xFF091932),
-        raised = Color(0xFF14305A), line = Color(0xFF1B3966),
+        ground = Color(0xFF07152B), panel = Color(0xFF0E2242), panelDark = Color(0xFF091932),
+        raised = Color(0xFF173563), line = Color(0xFF1E3D6C),
         text = Color(0xFFFFFFFF), textSoft = Color(0xFFC6D4E8), textMuted = Color(0xFF8A9FBF),
         accent = Color(0xFFD5E3F6), onAccent = Color(0xFF07152B), highlight = Color(0xFF4FA3FF),
     ),
     ColorScheme(
-        "Petrol",
-        ground = Color(0xFF12292F), panel = Color(0xFF173238), panelDark = Color(0xFF10242A),
-        raised = Color(0xFF214249), line = Color(0xFF2A4D55),
-        text = Color(0xFFFFFFFF), textSoft = Color(0xFFD2E0E3), textMuted = Color(0xFF9DB5BA),
-        accent = Color(0xFFE6EEF0), onAccent = Color(0xFF12292F), highlight = Color(0xFF3AA6E0),
-    ),
-    ColorScheme(
         "Graphit",
-        ground = Color(0xFF121314), panel = Color(0xFF1A1C1E), panelDark = Color(0xFF151618),
-        raised = Color(0xFF2A2D31), line = Color(0xFF33373C),
+        ground = Color(0xFF121314), panel = Color(0xFF1C1E21), panelDark = Color(0xFF151618),
+        raised = Color(0xFF2C3035), line = Color(0xFF35393F),
         text = Color(0xFFF1F2F3), textSoft = Color(0xFFC4C8CD), textMuted = Color(0xFF8B9096),
         accent = Color(0xFFE8EAED), onAccent = Color(0xFF151618), highlight = Color(0xFFFF9F43),
     ),
     ColorScheme(
-        "Smaragd",
-        ground = Color(0xFF0A1C17), panel = Color(0xFF0F2620), panelDark = Color(0xFF0C211B),
-        raised = Color(0xFF173A31), line = Color(0xFF1E463B),
-        text = Color(0xFFF0F7F4), textSoft = Color(0xFFC5DBD3), textMuted = Color(0xFF8BA89E),
-        accent = Color(0xFFDDF0E8), onAccent = Color(0xFF0A1C17), highlight = Color(0xFF3DDC97),
+        "Kobalt",
+        ground = Color(0xFF0A0E24), panel = Color(0xFF141A3D), panelDark = Color(0xFF0E1330),
+        raised = Color(0xFF222B5C), line = Color(0xFF2B3569),
+        text = Color(0xFFF4F5FF), textSoft = Color(0xFFCBD0F0), textMuted = Color(0xFF8E95C2),
+        accent = Color(0xFFE3E7FF), onAccent = Color(0xFF0E1330), highlight = Color(0xFF7C8CFF),
     ),
     ColorScheme(
-        "Aubergine",
-        ground = Color(0xFF170F22), panel = Color(0xFF20152F), panelDark = Color(0xFF1B1228),
-        raised = Color(0xFF2F2145), line = Color(0xFF3A2A54),
-        text = Color(0xFFF5F0FA), textSoft = Color(0xFFD4C8E3), textMuted = Color(0xFF9D8DB5),
-        accent = Color(0xFFE9E0F5), onAccent = Color(0xFF170F22), highlight = Color(0xFFB98CFF),
+        "Stahl",
+        ground = Color(0xFF0E1318), panel = Color(0xFF17202A), panelDark = Color(0xFF111820),
+        raised = Color(0xFF223040), line = Color(0xFF2A394B),
+        text = Color(0xFFF0F5F9), textSoft = Color(0xFFC3D0DC), textMuted = Color(0xFF8798A9),
+        accent = Color(0xFFE2EEF7), onAccent = Color(0xFF111820), highlight = Color(0xFF38BDF8),
     ),
     ColorScheme(
-        "Bordeaux",
-        ground = Color(0xFF1C0D10), panel = Color(0xFF261216), panelDark = Color(0xFF201013),
-        raised = Color(0xFF3A1C22), line = Color(0xFF47232A),
-        text = Color(0xFFFAF1F2), textSoft = Color(0xFFE0C9CC), textMuted = Color(0xFFAE8E93),
-        accent = Color(0xFFF4E3E5), onAccent = Color(0xFF1C0D10), highlight = Color(0xFFFF6B7A),
+        "Schwarz",
+        ground = Color(0xFF000000), panel = Color(0xFF111111), panelDark = Color(0xFF080808),
+        raised = Color(0xFF1F1F1F), line = Color(0xFF2A2A2A),
+        text = Color(0xFFFFFFFF), textSoft = Color(0xFFCCCCCC), textMuted = Color(0xFF8C8C8C),
+        accent = Color(0xFFF2F2F2), onAccent = Color(0xFF0A0A0A), highlight = Color(0xFFE50914),
     ),
-    ColorScheme(
-        "Kupfer",
-        ground = Color(0xFF1A130E), panel = Color(0xFF241A13), panelDark = Color(0xFF1F1610),
-        raised = Color(0xFF36271C), line = Color(0xFF433123),
-        text = Color(0xFFFAF4EE), textSoft = Color(0xFFE0D0C2), textMuted = Color(0xFFAD9682),
-        accent = Color(0xFFF3E6DA), onAccent = Color(0xFF1A130E), highlight = Color(0xFFE8964A),
-    ),
+)
+
+/** Wählbare Schriftfarben (null = wie im Farbschema). */
+val TextColors: List<Pair<String, Color?>> = listOf(
+    "Standard" to null,
+    "Reinweiß" to Color(0xFFFFFFFF),
+    "Warmweiß" to Color(0xFFFFF3DD),
+    "Hellblau" to Color(0xFFD8E8FF),
+    "Gelb" to Color(0xFFFFE27A),
 )
 
 /** Farben der Oberfläche – folgen dem gewählten Farbschema. */
@@ -123,13 +113,31 @@ object Palette {
     val PanelDark get() = scheme.panelDark
     val Raised get() = scheme.raised
     val Line get() = scheme.line
-    val Text get() = scheme.text
+    /** Eigene Schriftfarbe (Einstellungen → Darstellung) */
+    var textOverride by mutableStateOf<Color?>(null)
+    val Text get() = textOverride ?: scheme.text
     val TextSoft get() = scheme.textSoft
     val TextMuted get() = scheme.textMuted
     val Accent get() = scheme.accent
     val OnAccent get() = scheme.onAccent
     val Highlight get() = scheme.highlight
     val Live = Color(0xFFD64545)
+
+    // ---- Dezente Verläufe ----
+    /** Bildschirm-Hintergrund: oben etwas heller */
+    val ScreenBrush get() = Brush.verticalGradient(listOf(lerp(scheme.ground, scheme.raised, 0.45f), scheme.ground, scheme.ground))
+    /** Seitenleisten und Kopfzeilen */
+    val PanelBrush get() = Brush.verticalGradient(listOf(lerp(scheme.panel, scheme.raised, 0.35f), scheme.panelDark))
+    /** Ebenen über dem laufenden Bild (Senderliste, Menü) */
+    fun overlayBrush(alpha: Float = 0.94f) = Brush.horizontalGradient(
+        listOf(scheme.panelDark.copy(alpha = alpha), lerp(scheme.panel, scheme.raised, 0.25f).copy(alpha = alpha * 0.95f)),
+    )
+    /** Gruppenübersicht: leicht im Akzentton */
+    val GroupBrush get() = Brush.verticalGradient(
+        listOf(lerp(scheme.panel, scheme.highlight, 0.12f).copy(alpha = 0.97f), scheme.panelDark.copy(alpha = 0.97f)),
+    )
+    /** Fokus: heller Verlauf */
+    val FocusBrush get() = Brush.verticalGradient(listOf(scheme.accent, lerp(scheme.accent, scheme.highlight, 0.22f)))
 
     // Gruppenübersicht: etwas heller abgesetzt im gleichen Farbton
     val GroupBlue get() = scheme.panel.copy(alpha = 0.96f)
@@ -203,11 +211,7 @@ fun TvButton(
     onClick: () -> Unit,
 ) {
     Focusable(modifier = modifier, onClick = onClick) { focused ->
-        val bg = when {
-            focused -> Palette.Accent
-            selected -> Palette.Raised
-            else -> Palette.Panel
-        }
+        val shape = RoundedCornerShape(12.dp)
         val fg = when {
             focused -> Palette.OnAccent
             danger -> Palette.Live
@@ -216,8 +220,17 @@ fun TvButton(
         Box(
             modifier = Modifier
                 .heightIn(min = 38.dp)
-                .background(bg, RoundedCornerShape(10.dp))
-                .then(if (selected && !focused) Modifier.border(2.dp, Palette.Accent, RoundedCornerShape(10.dp)) else Modifier)
+                .then(
+                    when {
+                        focused -> Modifier.background(Palette.FocusBrush, shape)
+                        selected -> Modifier
+                            .background(Palette.Highlight.copy(alpha = 0.20f), shape)
+                            .border(1.5.dp, Palette.Highlight.copy(alpha = 0.85f), shape)
+                        else -> Modifier
+                            .background(Palette.Panel.copy(alpha = 0.75f), shape)
+                            .border(1.dp, Palette.Line.copy(alpha = 0.7f), shape)
+                    },
+                )
                 .padding(PaddingValues(horizontal = 14.dp, vertical = 7.dp)),
             contentAlignment = Alignment.Center,
         ) {

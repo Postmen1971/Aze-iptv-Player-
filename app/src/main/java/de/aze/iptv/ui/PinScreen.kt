@@ -67,7 +67,7 @@ fun PinScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Palette.Ground)
+            .background(Palette.ScreenBrush)
             .onKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
                 val code = e.nativeKeyEvent.keyCode

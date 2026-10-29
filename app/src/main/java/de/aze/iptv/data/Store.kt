@@ -24,6 +24,18 @@ class Store(context: Context) {
         if (!prefs.getBoolean("tunnelReset1", false)) {
             prefs.edit().putBoolean("tunneling", false).putBoolean("tunnelReset1", true).apply()
         }
+        // Einmalig: von Aziz festgelegte Standardwerte (Puffer groß, immer Media3, Bildqualität automatisch, 50 Hz in der App)
+        if (!prefs.getBoolean("tuned3", false)) {
+            prefs.edit().putString("buffer", "LARGE").putString("engine", "MEDIA3").putBoolean("forceHighest", false)
+                .putBoolean("afr50", true).putBoolean("afr", false)
+                .putBoolean("tuned1", true).putBoolean("tuned2", true).putBoolean("afrReset1", true).putBoolean("tuned3", true).apply()
+        }
+        // Farbschemata neu sortiert: Mitternacht 0, Ozean 1, Graphit 2 bleiben – alle anderen werden Ozean
+        if (!prefs.getBoolean("schemes2", false)) {
+            val old = prefs.getInt("scheme", 0)
+            val neu = when (old) { 0 -> 0; 2 -> 1; 4 -> 2; else -> 1 }
+            prefs.edit().putInt("scheme", neu).putBoolean("schemes2", true).apply()
+        }
         // Einmalig: fest 50 Hz statt Umschalten je Sender (ständiges Umschalten beim Zappen ließ das Bild stehen)
         if (!prefs.getBoolean("tuned2", false)) {
             prefs.edit().putBoolean("afr", false).putBoolean("afr50", true).putInt("afrDelay", 6)
@@ -141,7 +153,7 @@ class Store(context: Context) {
         set(v) = prefs.edit().putString("engine", v).apply()
 
     var forceHighest: Boolean
-        get() = prefs.getBoolean("forceHighest", true)
+        get() = prefs.getBoolean("forceHighest", false)
         set(v) = prefs.edit().putBoolean("forceHighest", v).apply()
 
     var tunneling: Boolean
@@ -191,6 +203,11 @@ class Store(context: Context) {
     var autostart: Boolean
         get() = prefs.getBoolean("autostart", false)
         set(v) = prefs.edit().putBoolean("autostart", v).apply()
+
+    /** Schriftfarbe (Index in TextColors, 0 = Standard) */
+    var textColor: Int
+        get() = prefs.getInt("textColor", 0)
+        set(v) = prefs.edit().putInt("textColor", v).apply()
 
     var scheme: Int
         get() = prefs.getInt("scheme", 0)

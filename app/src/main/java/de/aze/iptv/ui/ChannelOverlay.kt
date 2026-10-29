@@ -147,7 +147,7 @@ fun ChannelOverlay(
                 .widthIn(min = 240.dp)
                 .fillMaxWidth(0.27f)
                 // Gruppenübersicht blau (wie Enigma2), Senderliste dunkel
-                .background(if (showGroups) Palette.GroupBlue else Palette.PanelDark.copy(alpha = 0.88f))
+                .background(if (showGroups) Palette.GroupBrush else Palette.overlayBrush(0.9f))
                 .padding(horizontal = 8.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -398,36 +398,49 @@ internal fun SideMenu(
         if (onFootball != null) add("Fußball heute" to onFootball)
         if (multi) add("Playlist: $playlistLabel" to onPlaylist)
         add("Einstellungen" to onSettings)
-        if (onQuit != null) add("App beenden" to onQuit)
     }
     Column(
         modifier = Modifier
             .fillMaxHeight()
             .width(170.dp)
-            .background(Palette.Ground.copy(alpha = 0.96f))
+            .background(Palette.overlayBrush(0.96f))
             .padding(horizontal = 8.dp, vertical = 16.dp)
             .onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onRight(); true } else false
             },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        entries.forEachIndexed { i, (label, action) ->
+        @Composable
+        fun entry(label: String, action: () -> Unit, isFirst: Boolean = false, danger: Boolean = false) {
             Focusable(
-                modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                modifier = Modifier.fillMaxWidth().then(if (isFirst) Modifier.focusRequester(first) else Modifier),
                 onClick = action,
             ) { focused ->
                 Text(
                     label,
-                    color = if (focused) Palette.OnAccent else Palette.Text,
+                    color = if (focused) Palette.OnAccent else if (danger) Palette.Live else Palette.Text,
                     fontSize = 16.sp,
                     fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(if (focused) Palette.Accent else Palette.Ground.copy(alpha = 0f), RoundedCornerShape(8.dp))
+                        .then(
+                            if (focused) Modifier.background(Palette.FocusBrush, RoundedCornerShape(10.dp))
+                            else Modifier,
+                        )
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                 )
             }
+        }
+        entries.forEachIndexed { i, (label, action) ->
+            // Eine Zeile Abstand vor „Einstellungen“
+            if (label == "Einstellungen") Spacer(Modifier.height(18.dp))
+            entry(label, action, isFirst = i == 0)
+        }
+        // „App beenden“ ganz unten, gut sichtbar
+        if (onQuit != null) {
+            Spacer(Modifier.weight(1f))
+            entry("App beenden", onQuit, danger = true)
         }
     }
 }

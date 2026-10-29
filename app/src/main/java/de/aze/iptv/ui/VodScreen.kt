@@ -110,7 +110,7 @@ fun VodScreen(app: AppController, startWithSeries: Boolean, onExit: () -> Unit, 
 
     if (vodSources.isEmpty()) {
         BackHandler(onBack = onExit)
-        Box(Modifier.fillMaxSize().background(Palette.Ground).padding(32.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().background(Palette.ScreenBrush).padding(32.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("Noch keine Playlist vorhanden.", color = Palette.TextSoft, fontSize = 18.sp)
                 TvButton("Zurück zum Fernsehen", onClick = onExit)
@@ -225,11 +225,11 @@ private fun Browse(
 
     val ctxTouch = LocalContext.current
     val touchDevice = remember(ctxTouch) { !de.aze.iptv.player.FrameRate.isTv(ctxTouch) }
-    Column(Modifier.fillMaxSize().background(Palette.Ground)) {
+    Column(Modifier.fillMaxSize().background(Palette.ScreenBrush)) {
     // Tablet/Handy: Leiste oben zum Wechseln (auf dem Fernseher über ◀ im Seitenmenü)
     if (touchDevice) {
         Row(
-            Modifier.fillMaxWidth().background(Palette.PanelDark).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 6.dp),
+            Modifier.fillMaxWidth().background(Palette.PanelBrush).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             TvButton("📺 Live-TV", onClick = onExit)
@@ -260,7 +260,7 @@ private fun Browse(
                     .width(260.dp)
                     .fillMaxHeight()
                     // wie die Gruppenübersicht beim Fernsehen
-                    .background(if (menu) Palette.GroupBlue else Palette.PanelDark)
+                    .background(if (menu) Palette.GroupBrush else Palette.PanelBrush)
                     .padding(10.dp)
                     .onPreviewKeyEvent { e ->
                         if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) {

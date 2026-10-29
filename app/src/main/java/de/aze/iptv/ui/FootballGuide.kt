@@ -125,7 +125,7 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
             Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(0.62f)
-                .background(Palette.Ground.copy(alpha = 0.97f))
+                .background(Palette.overlayBrush(0.97f))
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {

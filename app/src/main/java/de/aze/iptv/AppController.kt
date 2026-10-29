@@ -199,8 +199,18 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     var schemeIndex by mutableStateOf(store.scheme.coerceIn(0, Schemes.lastIndex))
         private set
 
+    var textColorIndex by mutableStateOf(store.textColor.coerceIn(0, de.aze.iptv.ui.TextColors.lastIndex))
+        private set
+
     init {
         Palette.scheme = Schemes[schemeIndex]
+        Palette.textOverride = de.aze.iptv.ui.TextColors[textColorIndex].second
+    }
+
+    fun updateTextColor(i: Int) {
+        textColorIndex = i.coerceIn(0, de.aze.iptv.ui.TextColors.lastIndex)
+        store.textColor = textColorIndex
+        Palette.textOverride = de.aze.iptv.ui.TextColors[textColorIndex].second
     }
 
     fun updateScheme(i: Int) {

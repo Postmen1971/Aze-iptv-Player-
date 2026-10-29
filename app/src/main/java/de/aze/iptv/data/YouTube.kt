@@ -43,11 +43,16 @@ object YouTube {
      */
     val suggestions: List<Pair<String, String>> = listOf(
         "TRT Haber" to "UCBgTP2LOFVPmq15W-RH-WXA",
-        "Habertürk" to "UClGZC_r-sUcBdElAtDSrQ5g",
-        "CNN Türk" to "UCV6zcRug6Hqp1UX_FdyUeBg",
-        "A Haber" to "UCKQhfw-lzz0uKnE1fY1PsAA",
-        "Sözcü TV" to "UCOulx_rep5O4i9y6AyDqVvw",
-        "Halk TV" to "@halktvkanali",
+        "NOW TV" to "https://www.youtube.com/live/AS8Cbp-MQ4Q",
+        "TV100" to "https://www.youtube.com/live/4WSvLRk83-c",
+        "Sözcü TV" to "https://www.youtube.com/live/ztmY_cCtUl0",
+        "Star TV" to "https://www.youtube.com/live/82O6yOy_XwE",
+        "NTV" to "https://www.youtube.com/live/pqq5c6k70kk",
+        "Show TV" to "https://www.youtube.com/live/cbgKyiqOljQ",
+        "Haber Global" to "https://www.youtube.com/live/EqoCJ8BPxtE",
+        "beIN Haber" to "https://www.youtube.com/live/i7UpPgxfZZ8",
+        "Kanal D" to "https://www.youtube.com/live/b94j0fwsPGQ",
+        "Kanal 7" to "https://www.youtube.com/live/2exv1i3jgIY",
     )
 
     /** Normale YouTube-Adresse (zum Öffnen in der YouTube-App). */

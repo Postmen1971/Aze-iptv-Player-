@@ -110,12 +110,12 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     )
 
     // Kompakt: links die Bereiche, rechts nur der gewählte Bereich.
-    Row(modifier = Modifier.fillMaxSize().background(Palette.Ground)) {
+    Row(modifier = Modifier.fillMaxSize().background(Palette.ScreenBrush)) {
         Column(
             modifier = Modifier
                 .width(210.dp)
                 .fillMaxHeight()
-                .background(Palette.PanelDark)
+                .background(Palette.PanelBrush)
                 .padding(horizontal = 8.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
@@ -574,6 +574,12 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Schemes.forEachIndexed { i, sc ->
                 TvButton(sc.name, selected = app.schemeIndex == i, onClick = { app.updateScheme(i) })
+            }
+        }
+        Text("Schriftfarbe", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextColors.forEachIndexed { i, (name, _) ->
+                TvButton(name, selected = app.textColorIndex == i, onClick = { app.updateTextColor(i) })
             }
         }
         TvButton("Senderliste bearbeiten (Gruppen und Sender sortieren, ausblenden)", onClick = onEditList)

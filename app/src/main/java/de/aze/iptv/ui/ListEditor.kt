@@ -44,7 +44,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     val back = remember { FocusRequester() }
     LaunchedEffect(openGroup) { runCatching { back.requestFocus() } }
 
-    Box(modifier = Modifier.fillMaxSize().background(Palette.Ground), contentAlignment = Alignment.TopCenter) {
+    Box(modifier = Modifier.fillMaxSize().background(Palette.ScreenBrush), contentAlignment = Alignment.TopCenter) {
         Column(
             modifier = Modifier.widthIn(max = 980.dp).fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
