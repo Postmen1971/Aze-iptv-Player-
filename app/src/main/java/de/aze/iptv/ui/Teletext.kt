@@ -141,20 +141,17 @@ object Teletext {
     }
 }
 
-/** Videotext-Ebene. onReady liefert die WebView, damit die App Tasten weiterreichen kann. */
+/**
+ * Videotext-Ebene. Die WebView wird einmal angelegt und beim Schließen nur versteckt (nicht zerstört):
+ * Beim nächsten Öffnen ist SkorText sofort da, und Tastendrücke gehen nicht verloren, während die Seite lädt.
+ */
 @Composable
-fun TeletextView(modifier: Modifier, onReady: (WebView?) -> Unit, onClose: () -> Unit) {
-    val context = LocalContext.current
-    val web = remember { Teletext.create(context, onCrash = onClose) }
-    DisposableEffect(web) {
-        onReady(web)
-        onDispose {
-            onReady(null)
-            runCatching {
-                web.loadUrl("about:blank")
-                web.destroy()
-            }
-        }
-    }
-    AndroidView(factory = { web }, modifier = modifier)
+fun TeletextView(web: WebView, modifier: Modifier) {
+    AndroidView(
+        factory = {
+            (web.parent as? android.view.ViewGroup)?.removeView(web)
+            web
+        },
+        modifier = modifier,
+    )
 }

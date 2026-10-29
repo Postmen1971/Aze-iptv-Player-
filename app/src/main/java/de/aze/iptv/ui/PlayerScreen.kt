@@ -234,6 +234,17 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     var touchBar by remember { mutableStateOf(false) }
     var touchTick by remember { mutableIntStateOf(0) }
     var teletextWeb by remember { mutableStateOf<android.webkit.WebView?>(null) }
+    // Versteckter Videotext rechnet nicht weiter im Hintergrund
+    LaunchedEffect(teletext) { teletextWeb?.let { if (teletext) it.onResume() else it.onPause() } }
+    // SkorText-WebView erst beim Verlassen des Players freigeben
+    DisposableEffect(Unit) {
+        onDispose {
+            runCatching {
+                teletextWeb?.loadUrl("about:blank")
+                teletextWeb?.destroy()
+            }
+        }
+    }
     // Zurück beim Fernsehen: erst die Senderliste zeigen (weiter: Gruppen, dann App beenden)
     androidx.activity.compose.BackHandler(enabled = !overlay && !quickMenu && !search && !teletext && !football) { overlay = true }
     var tracksVersion by remember { mutableIntStateOf(0) }
@@ -782,11 +793,12 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
 
         if (teletext) {
-            TeletextView(
-                modifier = Modifier.fillMaxSize(),
-                onReady = { teletextWeb = it },
-                onClose = { teletext = false },
-            )
+            val w = teletextWeb ?: Teletext.create(context, onCrash = {
+                // Absturz der Anzeige: nur den Videotext schließen und beim nächsten Mal neu anlegen
+                teletext = false
+                teletextWeb = null
+            }).also { teletextWeb = it }
+            TeletextView(web = w, modifier = Modifier.fillMaxSize())
         }
 
         if (quickMenu) {
