@@ -178,6 +178,11 @@ class Store(context: Context) {
         get() = Secure.decrypt(prefs.getString("omdbKey", "")) ?: ""
         set(v) = prefs.edit().putString("omdbKey", if (v.isBlank()) "" else Secure.encrypt(v.trim())).apply()
 
+    /** Erwachsenen-Inhalte ausblenden (Standard: an). */
+    var adultFilter: Boolean
+        get() = prefs.getBoolean("adultFilter", true)
+        set(v) = prefs.edit().putBoolean("adultFilter", v).apply()
+
     var autostart: Boolean
         get() = prefs.getBoolean("autostart", false)
         set(v) = prefs.edit().putBoolean("autostart", v).apply()

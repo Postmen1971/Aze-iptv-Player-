@@ -163,6 +163,15 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                             "und die App macht keine Sicherungen in die Cloud oder auf andere Geräte.",
                         color = Palette.TextMuted, fontSize = 13.sp,
                     )
+                    Text("Erwachsenen-Filter", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TvButton(if (app.adultFilter) "✓ An" else "An", selected = app.adultFilter, onClick = { app.updateAdultFilter(true) })
+                        TvButton(if (!app.adultFilter) "✓ Aus" else "Aus", selected = !app.adultFilter, onClick = { app.updateAdultFilter(false) })
+                    }
+                    Text(
+                        "Blendet Gruppen, Sender, Filme und Serien mit Erwachsenen-Inhalten aus (erkannt an Namen wie XXX, Adult, 18+, Erotik, Yetişkin).",
+                        color = Palette.TextMuted, fontSize = 13.sp,
+                    )
                     Text("PIN-Abfrage", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         TvButton(if (app.pinEnabled) "✓ An" else "An", selected = app.pinEnabled, onClick = { app.updatePinEnabled(true) })
@@ -456,7 +465,7 @@ private fun WebEditSection(app: AppController) {
     var address by remember { mutableStateOf<String?>(null) }
     DisposableEffect(Unit) { onDispose { server?.stop() } }
 
-    Section("Senderliste am Handy/PC bearbeiten") {
+    Section("Senderliste & YouTube am Handy/PC bearbeiten") {
         val s = server
         if (s == null) {
             Text(
@@ -475,6 +484,12 @@ private fun WebEditSection(app: AppController) {
                     hiddenChannels = { app.hiddenChannels },
                     onSave = { edits, snap -> app.applyWebEdit(edits, snap) },
                     onStopped = { server = null },
+                    yt = object : de.aze.iptv.data.YtBridge {
+                        override fun list() = app.youtube
+                        override fun add(link: String, name: String) = app.addYoutube(link, name)
+                        override fun remove(id: String) { app.youtube.firstOrNull { it.id == id }?.let { app.removeYoutube(it) } }
+                        override fun import(entries: List<de.aze.iptv.data.YtEntry>) = app.importYoutube(entries)
+                    },
                 )
                 if (srv.start()) {
                     address = "http://$ip:${srv.port}"

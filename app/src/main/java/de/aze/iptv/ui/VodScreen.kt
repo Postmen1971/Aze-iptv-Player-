@@ -195,7 +195,11 @@ private fun Browse(
     LaunchedEffect(api, series) {
         counts = runCatching { api.counts(series) }.getOrDefault(emptyMap())
     }
-    val catList = cats.orEmpty()
+    // Erwachsenen-Filter: solche Kategorien gar nicht erst zeigen
+    val adultOff = app.adultFilter
+    val catList = remember(cats, adultOff) {
+        cats.orEmpty().let { l -> if (adultOff) l.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.name) } else l }
+    }
     LaunchedEffect(api, series, selected, cats) {
         val c = catList.getOrNull(selected) ?: return@LaunchedEffect
         items = null
@@ -303,7 +307,10 @@ private fun Browse(
 
             Box(Modifier.weight(1f).fillMaxHeight().padding(12.dp)) {
                 val q = query
-                val list = if (q != null) results else items
+                val raw = if (q != null) results else items
+                val list = remember(raw, adultOff) {
+                    raw?.let { l -> if (adultOff) l.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.name) } else l }
+                }
                 val title = if (q != null) "Suche: „$q“" else catList.getOrNull(selected)?.name.orEmpty()
                 Column {
                     // Oben: Kategorie bzw. Suche und rechts die Anzahl

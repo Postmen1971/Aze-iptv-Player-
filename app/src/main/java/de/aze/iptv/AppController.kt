@@ -468,6 +468,16 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         }
     }
 
+    /** Erwachsenen-Filter: Gruppen, Sender und Film-Kategorien mit Erwachsenen-Inhalten ausblenden. */
+    var adultFilter by mutableStateOf(store.adultFilter)
+        private set
+
+    fun updateAdultFilter(on: Boolean) {
+        adultFilter = on
+        store.adultFilter = on
+        rebuild(restoreKey = current?.channel?.key)
+    }
+
     var pinEnabled by mutableStateOf(store.pinEnabled)
         private set
 
@@ -490,6 +500,17 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     fun updateYoutubeExternal(on: Boolean) {
         youtubeExternal = on
         store.youtubeExternal = on
+    }
+
+    /** Kanäle aus einer Export-Datei übernehmen (vorhandene bleiben, doppelte werden übersprungen). */
+    fun importYoutube(entries: List<YtEntry>): Int {
+        val known = youtube.map { it.ref }.toHashSet()
+        val fresh = entries.filter { known.add(it.ref) }.map { it.copy(id = java.util.UUID.randomUUID().toString()) }
+        if (fresh.isEmpty()) return 0
+        youtube = youtube + fresh
+        store.youtube = youtube
+        rebuild(restoreKey = current?.channel?.key)
+        return fresh.size
     }
 
     fun removeYoutube(entry: YtEntry) {
@@ -517,7 +538,9 @@ class AppController(context: Context, private val scope: CoroutineScope) {
      */
     private fun rebuild(restoreKey: String?): Job {
         // YouTube-Gruppe kommt direkt nach den Favoriten (in "Senderliste bearbeiten" verschiebbar).
-        val all = youtube.map { it.toChannel() } + channels
+        val all = (youtube.map { it.toChannel() } + channels).let { list ->
+            if (adultFilter) list.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.group) || de.aze.iptv.data.AdultFilter.isAdult(it.name) } else list
+        }
         val named = sources + PlaylistSource(YouTube.SOURCE, "YouTube", SourceType.M3U, "")
         val favs = favorites
         val lay = layout

@@ -29,6 +29,15 @@ class WebGroupEdit(
  *  - beendet sich 30 Minuten nach der letzten Benutzung
  *  - Sender-Links (die oft Zugangsdaten enthalten) verlassen das Gerät nicht – das Handy sieht nur Namen und Nummern.
  */
+/** YouTube-Kanäle über die Web-Oberfläche verwalten (Aufrufe kommen auf dem Haupt-Thread an). */
+interface YtBridge {
+    fun list(): List<YtEntry>
+    fun add(link: String, name: String)
+    fun remove(id: String)
+    /** Gibt die Zahl neu übernommener Kanäle zurück. */
+    fun import(entries: List<YtEntry>): Int
+}
+
 class WebEditServer(
     /** Aktuelle Gruppen (inkl. ausgeblendeter). Wird im Hintergrund gelesen. */
     private val groups: () -> List<EditGroup>,
@@ -37,6 +46,7 @@ class WebEditServer(
     /** Wird auf dem Haupt-Thread aufgerufen. */
     private val onSave: (edits: List<WebGroupEdit>, snapshot: List<EditGroup>) -> Unit,
     private val onStopped: () -> Unit,
+    private val yt: YtBridge? = null,
 ) {
     val code: String = (SecureRandom().nextInt(9000) + 1000).toString()
     var port: Int = 0
@@ -142,6 +152,7 @@ class WebEditServer(
         touch()
         when {
             method == "GET" && path.startsWith("/api/list") -> respond(out, 200, "application/json", listJson())
+            path.startsWith("/api/yt") && yt != null -> handleYt(method, path, readBody(input, length), out)
             method == "POST" && path.startsWith("/api/save") -> {
                 if (length <= 0 || length > 8 * 1024 * 1024) {
                     respond(out, 400, "application/json", """{"error":"Ungültige Daten"}""")
@@ -164,6 +175,86 @@ class WebEditServer(
                 )
             }
             else -> respond(out, 404, "application/json", """{"error":"?"}""")
+        }
+    }
+
+    private fun readBody(input: InputStream, length: Int): String {
+        if (length <= 0 || length > 2 * 1024 * 1024) return ""
+        val body = ByteArray(length)
+        var read = 0
+        while (read < length) {
+            val n = input.read(body, read, length - read)
+            if (n < 0) break
+            read += n
+        }
+        return String(body, 0, read, Charsets.UTF_8)
+    }
+
+    /** Auf dem Haupt-Thread ausführen und auf das Ergebnis warten. */
+    private fun <T> onMain(block: () -> T): T? {
+        var result: T? = null
+        val done = java.util.concurrent.CountDownLatch(1)
+        main.post {
+            try { result = block() } finally { done.countDown() }
+        }
+        done.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        return result
+    }
+
+    private fun ytJson(list: List<YtEntry>): JSONArray {
+        val arr = JSONArray()
+        list.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("channel", it.isChannel).put("ref", it.ref)) }
+        return arr
+    }
+
+    private fun handleYt(method: String, path: String, body: String, out: OutputStream) {
+        val b = yt ?: return
+        try {
+            when {
+                method == "GET" && path.startsWith("/api/yt/export") -> {
+                    val list = onMain { b.list() }.orEmpty()
+                    val json = JSONObject().put("aze_youtube", 1).put("channels", ytJson(list)).toString(2)
+                    respond(out, 200, "application/json; charset=utf-8", json, download = "youtube-kanaele.json")
+                }
+                method == "GET" -> respond(out, 200, "application/json", ytJson(onMain { b.list() }.orEmpty()).toString())
+                method == "POST" && path.startsWith("/api/yt/add") -> {
+                    // Ein oder mehrere Links (je Zeile einer); optional Name nur bei einem Link
+                    val o = JSONObject(body)
+                    val links = o.optString("links").lines().map { it.trim() }.filter { it.isNotEmpty() }
+                    val name = o.optString("name").trim()
+                    onMain { links.forEach { l -> b.add(l, if (links.size == 1) name else "") } }
+                    respond(out, 200, "application/json", JSONObject().put("ok", true).put("count", links.size).toString())
+                }
+                method == "POST" && path.startsWith("/api/yt/remove") -> {
+                    val id = JSONObject(body).optString("id")
+                    onMain { b.remove(id) }
+                    respond(out, 200, "application/json", """{"ok":true}""")
+                }
+                method == "POST" && path.startsWith("/api/yt/import") -> {
+                    val t = body.trim()
+                    val entries = ArrayList<YtEntry>()
+                    val loose = ArrayList<String>()
+                    if (t.startsWith("{") || t.startsWith("[")) {
+                        val arr = if (t.startsWith("[")) JSONArray(t) else JSONObject(t).optJSONArray("channels") ?: JSONArray()
+                        for (i in 0 until arr.length()) {
+                            val e = arr.optJSONObject(i) ?: continue
+                            val ref = e.optString("ref").takeIf { it.isNotBlank() } ?: continue
+                            entries.add(YtEntry(e.optString("id").ifBlank { ref }, e.optString("name").ifBlank { ref }, e.optBoolean("channel", true), ref))
+                        }
+                    } else {
+                        // einfache Liste: ein Link je Zeile
+                        loose.addAll(t.lines().map { it.trim() }.filter { it.isNotEmpty() })
+                    }
+                    val n = onMain {
+                        loose.forEach { b.add(it, "") }
+                        b.import(entries)
+                    } ?: 0
+                    respond(out, 200, "application/json", JSONObject().put("ok", true).put("count", n + loose.size).toString())
+                }
+                else -> respond(out, 404, "application/json", """{"error":"?"}""")
+            }
+        } catch (e: Exception) {
+            respond(out, 400, "application/json", JSONObject().put("error", e.message ?: "Fehler").toString())
         }
     }
 
@@ -290,8 +381,17 @@ main{max-width:820px;margin:0 auto;padding:12px 16px 90px}
   <p id="lerr" class="err"></p>
 </div>
 <div id="app" hidden>
-  <header><h1>Senderliste</h1><button id="reload">Neu laden</button></header>
-  <main>
+  <header><h1>Aze-IPTV</h1><button id="tabList" class="pri">Senderliste</button><button id="tabYt">YouTube</button><button id="reload">Neu laden</button></header>
+  <section id="yt" hidden style="max-width:820px;margin:0 auto;padding:12px 16px 40px">
+    <p class="hint">YouTube-Kanäle hinzufügen: Link vom Kanal (youtube.com/@name) oder Livestream einfügen. Mehrere Links gleichzeitig: je Zeile einer.</p>
+    <textarea id="ytLinks" rows="3" placeholder="https://youtube.com/@trthaber" style="width:100%;box-sizing:border-box;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);padding:10px;font:inherit"></textarea>
+    <input id="ytName" placeholder="Name (optional, nur bei einem Link)" style="margin-top:8px">
+    <p><button class="pri" id="ytAdd">Hinzufügen</button> <span id="ytMsg" class="hint"></span></p>
+    <div id="ytList"></div>
+    <p style="margin-top:18px"><button id="ytExport">Exportieren (Datei)</button> <button id="ytImportBtn">Importieren …</button>
+      <input type="file" id="ytFile" accept=".json,.txt,application/json,text/plain" hidden></p>
+  </section>
+  <main id="listMain">
     <p class="hint">≡ gedrückt halten und ziehen zum Verschieben · ⤒ an den Anfang · 👁 ein-/ausblenden · ✎ umbenennen · Gruppe antippen zeigt ihre Sender. Die Nummern zählen ohne deine Favoriten.</p>
     <div id="groups"></div>
   </main>
@@ -408,6 +508,49 @@ function save(){
 window.addEventListener('beforeunload',function(e){if(dirty){e.preventDefault();e.returnValue=''}});
 try{var qc=new URLSearchParams(location.search).get('c');if(qc){CODE=qc;${'$'}('code').value=qc}}catch(e){}
 if(CODE){load().catch(function(){CODE=''})}
+/* ---- YouTube ---- */
+function tab(yt){${'$'}('yt').hidden=!yt;${'$'}('listMain').hidden=yt;${'$'}('bar').hidden=yt;${'$'}('tabYt').className=yt?'pri':'';${'$'}('tabList').className=yt?'':'pri';if(yt)ytLoad()}
+${'$'}('tabList').onclick=function(){tab(false)};
+${'$'}('tabYt').onclick=function(){tab(true)};
+function ytMsg(t,err){var m=${'$'}('ytMsg');m.textContent=t;m.className=err?'err':'hint'}
+function ytLoad(){
+  return api('/api/yt').then(function(list){
+    var box=${'$'}('ytList');box.innerHTML='';
+    if(!list.length){box.appendChild(el('p','hint','Noch keine YouTube-Kanäle.'));return}
+    list.forEach(function(e){
+      var row=el('div','row');var head=el('div','head');
+      var n=el('span','name',e.name);n.appendChild(el('small',null,e.channel?'Kanal':'Video'));head.appendChild(n);
+      head.appendChild(btn('🗑','Löschen',function(){if(confirm('„'+e.name+'“ löschen?'))api('/api/yt/remove',{id:e.id}).then(ytLoad)}));
+      row.appendChild(head);box.appendChild(row);
+    });
+  }).catch(function(e){ytMsg(e.message,true)});
+}
+${'$'}('ytAdd').onclick=function(){
+  var links=${'$'}('ytLinks').value.trim();if(!links){ytMsg('Bitte einen Link einfügen',true);return}
+  ytMsg('Wird gesucht …');
+  api('/api/yt/add',{links:links,name:${'$'}('ytName').value}).then(function(r){
+    ${'$'}('ytLinks').value='';${'$'}('ytName').value='';
+    ytMsg(r.count+' Link(s) übernommen – der Fernseher sucht die Kanäle, Liste aktualisiert sich gleich');
+    setTimeout(ytLoad,2500);setTimeout(ytLoad,6000);
+  }).catch(function(e){ytMsg(e.message,true)});
+};
+${'$'}('ytExport').onclick=function(){
+  fetch('/api/yt/export',{headers:{'X-Code':CODE}}).then(function(r){if(!r.ok)throw new Error('Fehler '+r.status);return r.blob()}).then(function(b){
+    var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='youtube-kanaele.json';document.body.appendChild(a);a.click();a.remove();
+    ytMsg('Datei gespeichert');
+  }).catch(function(e){ytMsg(e.message,true)});
+};
+${'$'}('ytImportBtn').onclick=function(){${'$'}('ytFile').click()};
+${'$'}('ytFile').onchange=function(){
+  var f=this.files[0];if(!f)return;var rd=new FileReader();
+  rd.onload=function(){
+    fetch('/api/yt/import',{method:'POST',headers:{'X-Code':CODE,'Content-Type':'application/json'},body:rd.result})
+      .then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Fehler');return j})})
+      .then(function(j){ytMsg(j.count+' Kanäle importiert');setTimeout(ytLoad,1500);setTimeout(ytLoad,5000)})
+      .catch(function(e){ytMsg(e.message,true)});
+  };
+  rd.readAsText(f);this.value='';
+};
 </script></body></html>
 """
     }
