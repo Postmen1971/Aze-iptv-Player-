@@ -6,6 +6,8 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -221,7 +223,24 @@ private fun Browse(
         }
     }
 
-    Box(Modifier.fillMaxSize().background(Palette.Ground)) {
+    val ctxTouch = LocalContext.current
+    val touchDevice = remember(ctxTouch) { !de.aze.iptv.player.FrameRate.isTv(ctxTouch) }
+    Column(Modifier.fillMaxSize().background(Palette.Ground)) {
+    // Tablet/Handy: Leiste oben zum Wechseln (auf dem Fernseher über ◀ im Seitenmenü)
+    if (touchDevice) {
+        Row(
+            Modifier.fillMaxWidth().background(Palette.PanelDark).horizontalScroll(rememberScrollState()).padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TvButton("📺 Live-TV", onClick = onExit)
+            TvButton("Filme", selected = !series, onClick = { query = null; onSwitch(false) })
+            TvButton("Serien", selected = series, onClick = { query = null; onSwitch(true) })
+            TvButton("🔍 Suchen", onClick = { askSearch = true })
+            if (multi) TvButton("Playlist: $sourceLabel", onClick = { query = null; onNextSource() })
+            TvButton("⚙ Einstellungen", onClick = onOpenSettings)
+        }
+    }
+    Box(Modifier.fillMaxWidth().weight(1f)) {
         Row(Modifier.fillMaxSize()) {
             // Menü wie beim Fernsehen: schiebt sich links neben die Kategorien
             if (menu) {
@@ -259,6 +278,7 @@ private fun Browse(
                 error?.let { Text(it, color = Palette.Live, fontSize = 13.sp) }
                 if (cats != null && catList.isEmpty() && error == null) {
                     Text("Keine $kind in dieser Playlist.", color = Palette.TextMuted, fontSize = 13.sp)
+                    api.sourceInfo().takeIf { it.isNotBlank() }?.let { Text("Quelle: $it", color = Palette.TextMuted, fontSize = 11.sp) }
                 }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     itemsIndexed(catList) { i, c ->
@@ -360,6 +380,7 @@ private fun Browse(
                 query = it.trim().ifEmpty { null }
             }, onCancel = { askSearch = false })
         }
+    }
     }
 }
 

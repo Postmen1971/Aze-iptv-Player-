@@ -60,6 +60,8 @@ interface VodProvider {
     suspend fun seriesDetails(id: String): SeriesDetails
     fun movieUrl(item: VodItem): String
     fun episodeUrl(e: Episode): String
+    /** Woher die Filme/Serien kommen (für Hinweise, wenn nichts gefunden wird) */
+    fun sourceInfo(): String = ""
 }
 
 /**
@@ -236,6 +238,8 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
         )
     }
 
+    override fun sourceInfo() = "Anbieter-Schnittstelle (Server + Login)"
+
     override fun movieUrl(item: VodItem) = "$base/movie/${src.user.trim()}/${src.pass}/${item.id}.${item.ext}"
     override fun episodeUrl(e: Episode) = "$base/series/${src.user.trim()}/${src.pass}/${e.id}.${e.ext}"
 }
@@ -371,6 +375,11 @@ class M3uVod(private val file: java.io.File) : VodProvider {
         SeriesDetails(empty, seasons)
     }
 
+    override fun sourceInfo(): String {
+        val d = data ?: return "Einträge aus der M3U-Liste"
+        return "Einträge aus der M3U-Liste: ${d.movies.values.sumOf { it.size }} Filme, ${d.seriesById.size} Serien"
+    }
+
     override fun movieUrl(item: VodItem) = load().urls[item.id].orEmpty()
     override fun episodeUrl(e: Episode) = load().urls[e.id].orEmpty()
 }
@@ -389,6 +398,12 @@ class HybridVod(private val file: java.io.File, private val name: String) : VodP
             val derived = withContext(Dispatchers.IO) { detectXtream(file, name) }
             val x = derived?.let { XtreamVod(it) }
             val ok = x != null && runCatching { x.movieCategories().isNotEmpty() || x.seriesCategories().isNotEmpty() }.getOrDefault(false)
+            info = when {
+                !file.exists() -> "M3U-Liste noch nicht geladen"
+                derived == null -> "Kein Anbieter-Login in der M3U erkannt"
+                ok -> "Anbieter-Login aus der M3U erkannt"
+                else -> "Anbieter-Login erkannt, aber Schnittstelle antwortet nicht"
+            }
             (if (ok) x!! else M3uVod(file)).also { chosen = it }
         }
     }
@@ -401,6 +416,9 @@ class HybridVod(private val file: java.io.File, private val name: String) : VodP
     override suspend fun all(series: Boolean) = p().all(series)
     override suspend fun movieDetails(id: String) = p().movieDetails(id)
     override suspend fun seriesDetails(id: String) = p().seriesDetails(id)
+    @Volatile private var info = ""
+    override fun sourceInfo() = info + (chosen?.sourceInfo()?.let { " → $it" } ?: "")
+
     override fun movieUrl(item: VodItem) = chosen?.movieUrl(item).orEmpty()
     override fun episodeUrl(e: Episode) = chosen?.episodeUrl(e).orEmpty()
 

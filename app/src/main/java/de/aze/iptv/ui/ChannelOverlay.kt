@@ -2,6 +2,8 @@ package de.aze.iptv.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -99,7 +101,29 @@ fun ChannelOverlay(
 
     val group = groups[groupIndex.coerceIn(0, groups.lastIndex)]
 
-    Row(modifier = Modifier.fillMaxSize()) {
+    // Tablet/Handy: nach rechts wischen = eine Ebene weiter (Sender → Gruppen → Menü), nach links = zurück
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                var dx = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { dx = 0f },
+                    onHorizontalDrag = { change, amount -> dx += amount; change.consume() },
+                    onDragEnd = {
+                        val limit = 60.dp.toPx()
+                        when {
+                            dx > limit -> if (!showGroups) showGroups = true else if (!showMenu) showMenu = true
+                            dx < -limit -> when {
+                                showMenu -> showMenu = false
+                                showGroups -> showGroups = false
+                                else -> onClose()
+                            }
+                        }
+                    },
+                )
+            },
+    ) {
         if (showMenu) {
             SideMenu(
                 multi = multi,

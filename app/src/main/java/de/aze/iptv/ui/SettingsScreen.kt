@@ -613,13 +613,16 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         }
         Text("Bildwiederholrate", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton("50 Hz (empfohlen)", selected = app.afr50, onClick = { app.updateAfr50(true) })
+            TvButton("Nie umschalten", selected = !app.afr && !app.afr50, onClick = { app.updateAfr(false); app.updateAfr50(false) })
+            TvButton("50 Hz in der App", selected = app.afr50, onClick = { app.updateAfr50(true) })
             TvButton("Je Sender", selected = app.afr, onClick = { app.updateAfr(true) })
-            TvButton("Aus", selected = !app.afr && !app.afr50, onClick = { app.updateAfr(false); app.updateAfr50(false) })
         }
         Text(
-            "50 Hz: Der Bildschirm wird einmal auf 50 Hz gestellt (passt zu deutschen und türkischen Sendern) und bleibt so – " +
-                "Zappen ohne Umschalten. „Je Sender“ stellt bei jedem Sender passend um, dabei wird der Bildschirm jedes Mal kurz schwarz.",
+            "Am ruhigsten ohne jedes Umschalten: „Nie umschalten“ wählen und die Frequenz einmal fest im Gerät einstellen – " +
+                "SHIELD: Einstellungen → Gerät → Display & Ton → Auflösung → z. B. „4K 50 Hz“ bzw. „1080p 50 Hz“; " +
+                "Fire TV: Einstellungen → Display & Töne → Display → Videoauflösung → „… 50 Hz“. " +
+                "„50 Hz in der App“ stellt beim Öffnen der App um (beim Verlassen schaltet das Gerät zurück). " +
+                "„Je Sender“ stellt bei jedem Sender passend um.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
