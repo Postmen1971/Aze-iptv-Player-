@@ -61,7 +61,8 @@ class MainActivity : ComponentActivity() {
                 ),
             ) {
                 // Einstellungen sind mit PIN geschützt (Standard 0000).
-                var screen by remember { mutableStateOf(if (!app.hasAnySource) Screen.PIN else Screen.PLAYER) }
+                // Erster Start ohne Playlist: direkt in die Einstellungen (ohne PIN) – die App schließt sich dabei nie von selbst
+                var screen by remember { mutableStateOf(if (!app.hasAnySource) Screen.SETTINGS else Screen.PLAYER) }
                 var vodSeries by remember { mutableStateOf(false) }
                 when (screen) {
                     Screen.PLAYER -> PlayerScreen(
@@ -81,11 +82,9 @@ class MainActivity : ComponentActivity() {
                             if (ok) screen = Screen.SETTINGS
                             ok
                         },
-                        onCancel = { if (!app.hasAnySource) finish() else screen = Screen.PLAYER },
+                        onCancel = { screen = Screen.PLAYER },
                     )
-                    Screen.SETTINGS -> SettingsScreen(app, onClose = {
-                        if (!app.hasAnySource) finish() else screen = Screen.PLAYER
-                    })
+                    Screen.SETTINGS -> SettingsScreen(app, onClose = { screen = Screen.PLAYER })
                 }
             }
         }

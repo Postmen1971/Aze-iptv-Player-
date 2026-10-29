@@ -123,7 +123,10 @@ fun VlcVideo(
         mp.play()
     }
 
-    LaunchedEffect(aspect) {
+    // Drehen (Hoch-/Querformat): VLC muss die neue Bildfläche kennen, sonst bleibt das Bild verzerrt
+    val orientation = androidx.compose.ui.platform.LocalConfiguration.current.orientation
+    LaunchedEffect(aspect, orientation) {
+        runCatching { mp.updateVideoSurfaces() }
         mp.aspectRatio = if (aspect == AspectMode.CINEMA) "47:20" else null
         mp.videoScale = when (aspect) {
             AspectMode.FIT, AspectMode.CINEMA -> MediaPlayer.ScaleType.SURFACE_BEST_FIT

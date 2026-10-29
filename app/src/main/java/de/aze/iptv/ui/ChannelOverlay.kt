@@ -114,6 +114,7 @@ fun ChannelOverlay(
                 },
                 onRight = { showMenu = false },
                 onFootball = onFootball,
+                onQuit = onExitApp,
             )
         }
         Column(
@@ -358,6 +359,7 @@ internal fun SideMenu(
     onPlaylist: () -> Unit,
     onRight: () -> Unit,
     onFootball: (() -> Unit)? = null,
+    onQuit: (() -> Unit)? = null,
 ) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -372,6 +374,7 @@ internal fun SideMenu(
         if (onFootball != null) add("Fußball heute" to onFootball)
         if (multi) add("Playlist: $playlistLabel" to onPlaylist)
         add("Einstellungen" to onSettings)
+        if (onQuit != null) add("App beenden" to onQuit)
     }
     Column(
         modifier = Modifier

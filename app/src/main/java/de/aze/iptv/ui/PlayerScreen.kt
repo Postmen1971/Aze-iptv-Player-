@@ -5,7 +5,10 @@ import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -226,6 +229,10 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // Fußball-Videotext (SkorText) als Ebene über dem Programm
     var teletext by remember { mutableStateOf(false) }
     var football by remember { mutableStateOf(false) }
+    // Tablet/Handy: Leiste mit großen Knöpfen (Tippen ins Bild zeigt/versteckt sie)
+    val touchDevice = remember(context) { !de.aze.iptv.player.FrameRate.isTv(context) }
+    var touchBar by remember { mutableStateOf(false) }
+    var touchTick by remember { mutableIntStateOf(0) }
     var teletextWeb by remember { mutableStateOf<android.webkit.WebView?>(null) }
     // Zurück beim Fernsehen: erst die Senderliste zeigen (weiter: Gruppen, dann App beenden)
     androidx.activity.compose.BackHandler(enabled = !overlay && !quickMenu && !search && !teletext && !football) { overlay = true }
@@ -572,13 +579,40 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             .focusable()
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { overlay = true },
-                    onDoubleTap = { app.playPrevious() },
-                    onLongPress = { quickMenu = true },
+                    // Nur wenn kein Fenster offen ist – sonst würde ein Tipp daneben ein zweites Fenster öffnen
+                    onTap = {
+                        if (!overlay && !quickMenu && !search && !football && !teletext) {
+                            if (touchDevice) { touchBar = !touchBar; touchTick++ } else overlay = true
+                        }
+                    },
+                    onDoubleTap = { if (!overlay && !quickMenu && !search && !football && !teletext) app.playPrevious() },
+                    onLongPress = { if (!overlay && !search && !football && !teletext) quickMenu = true },
+                )
+            }
+            .pointerInput(Unit) {
+                // Wischen: hoch = nächster Sender, runter = vorheriger, nach rechts = Senderliste
+                var dx = 0f
+                var dy = 0f
+                detectDragGestures(
+                    onDragStart = { dx = 0f; dy = 0f },
+                    onDrag = { change, amount -> dx += amount.x; dy += amount.y; change.consume() },
+                    onDragEnd = {
+                        if (!overlay && !quickMenu && !search && !football && !teletext) {
+                            val limit = 60.dp.toPx()
+                            when {
+                                kotlin.math.abs(dy) > kotlin.math.abs(dx) && dy < -limit -> app.step(+1)
+                                kotlin.math.abs(dy) > kotlin.math.abs(dx) && dy > limit -> app.step(-1)
+                                kotlin.math.abs(dx) > kotlin.math.abs(dy) && dx > limit -> overlay = true
+                            }
+                        }
+                    },
                 )
             },
     ) {
-        val aspect = app.aspectMode
+        // Hochformat (Tablet/Handy in der Hand): immer seitengerecht einpassen, nie strecken oder abschneiden
+        val portrait = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
+            android.content.res.Configuration.ORIENTATION_PORTRAIT
+        val aspect = app.aspectMode.let { if (portrait && (it == AspectMode.STRETCH || it == AspectMode.ZOOM)) AspectMode.FIT else it }
         val videoModifier = if (aspect.ratio != null) {
             Modifier.align(Alignment.Center).aspectRatio(aspect.ratio)
         } else {
@@ -640,12 +674,22 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         )
 
         if (app.lineup.all.isEmpty()) {
-            Text(
-                text = if (app.loading) "Senderliste wird geladen …" else "Noch keine Sender. Links/Rechts öffnet die Senderliste mit dem Knopf „Einstellungen“.",
-                color = Palette.TextMuted,
-                fontSize = 20.sp,
-                modifier = Modifier.align(Alignment.Center).padding(32.dp),
-            )
+            if (app.loading) {
+                Text("Senderliste wird geladen …", color = Palette.TextMuted, fontSize = 20.sp, modifier = Modifier.align(Alignment.Center).padding(32.dp))
+            } else {
+                // Noch keine Playlist: klare Knöpfe statt Sackgasse
+                val btn = remember { FocusRequester() }
+                LaunchedEffect(Unit) { withFrameNanos { }; runCatching { btn.requestFocus() } }
+                Column(
+                    Modifier.align(Alignment.Center).padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Text("Noch keine Sender. Bitte in den Einstellungen eine Playlist hinzufügen.", color = Palette.TextSoft, fontSize = 18.sp)
+                    TvButton("Einstellungen öffnen", modifier = Modifier.focusRequester(btn), onClick = onOpenSettings)
+                    TvButton("App beenden", onClick = { activity?.finish() })
+                }
+            }
         }
 
         // Kleine Anzeige oben rechts: getippte Ziffern, sonst Nummer + Name nur bei schwarzem Bild.
@@ -701,6 +745,36 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
 
         if (search) {
             SearchOverlay(app = app, onClose = { search = false })
+        }
+
+        // Tablet/Handy: Knopfleiste (oben) und große Zapp-Knöpfe (rechts); verschwindet nach 6 s
+        if (touchDevice && touchBar && !overlay && !quickMenu && !search && !football && !teletext) {
+            LaunchedEffect(touchTick) {
+                delay(6_000)
+                touchBar = false
+            }
+            Column(
+                Modifier.align(Alignment.TopEnd).padding(12.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp)).padding(8.dp),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TvButton("☰ Sender", onClick = { touchBar = false; overlay = true })
+                    TvButton("⚽ Heute", onClick = { touchBar = false; football = true })
+                    TvButton("⋯ Menü", onClick = { touchBar = false; quickMenu = true })
+                    TvButton("⚙ Einstellungen", onClick = { touchBar = false; onOpenSettings() })
+                    TvButton("✕ Beenden", danger = true, onClick = { activity?.finish() })
+                }
+                Text("Wischen ▲▼ = Sender wechseln · nach rechts = Senderliste · doppelt tippen = letzter Sender", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+            }
+            Column(
+                Modifier.align(Alignment.CenterEnd).padding(end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
+                TvButton("  ▲  ", onClick = { touchTick++; app.step(+1) })
+                TvButton("  ▼  ", onClick = { touchTick++; app.step(-1) })
+            }
         }
 
         if (football) {
