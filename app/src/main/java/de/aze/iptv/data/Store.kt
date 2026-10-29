@@ -24,6 +24,11 @@ class Store(context: Context) {
         if (!prefs.getBoolean("tunnelReset1", false)) {
             prefs.edit().putBoolean("tunneling", false).putBoolean("tunnelReset1", true).apply()
         }
+        // Einmalig: fest 50 Hz statt Umschalten je Sender (ständiges Umschalten beim Zappen ließ das Bild stehen)
+        if (!prefs.getBoolean("tuned2", false)) {
+            prefs.edit().putBoolean("afr", false).putBoolean("afr50", true).putInt("afrDelay", 6)
+                .putBoolean("tuned1", true).putBoolean("afrReset1", true).putBoolean("tuned2", true).apply()
+        }
         // Einmalig: die bei Aziz auf der SHIELD bewährten Werte übernehmen
         // (Bildwiederholrate an Sender anpassen, 6 s Wartezeit, immer beste Stufe, keine Fehlersuche-Anzeige)
         if (!prefs.getBoolean("tuned1", false)) {
@@ -145,12 +150,12 @@ class Store(context: Context) {
 
     /** Bildwiederholrate des Bildschirms an den Sender anpassen (25/50 Hz). */
     var afr: Boolean
-        get() = prefs.getBoolean("afr", true)
+        get() = prefs.getBoolean("afr", false)
         set(v) = prefs.edit().putBoolean("afr", v).apply()
 
     /** Bildschirm fest auf 50 Hz (einmal beim Start umschalten statt bei jedem Sender). */
     var afr50: Boolean
-        get() = prefs.getBoolean("afr50", false)
+        get() = prefs.getBoolean("afr50", true)
         set(v) = prefs.edit().putBoolean("afr50", v).apply()
 
     /** Wartezeit nach dem Umschalten der Frequenz (Sekunden), wie bei TiviMate einstellbar. */

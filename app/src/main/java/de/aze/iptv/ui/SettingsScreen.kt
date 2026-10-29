@@ -613,14 +613,18 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         }
         Text("Bildwiederholrate", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton("An Sender anpassen", selected = app.afr || app.afr50, onClick = { app.updateAfr(true) })
+            TvButton("50 Hz (empfohlen)", selected = app.afr50, onClick = { app.updateAfr50(true) })
+            TvButton("Je Sender", selected = app.afr, onClick = { app.updateAfr(true) })
             TvButton("Aus", selected = !app.afr && !app.afr50, onClick = { app.updateAfr(false); app.updateAfr50(false) })
         }
         Text(
-            "Stellt den Bildschirm passend zum Sender um (50 Hz bei deutschen/türkischen Sendern, 24 Hz bei Filmen) – das Bild läuft ruhiger. " +
-                "Beim Umschalten wird der Bildschirm kurz schwarz.",
+            "50 Hz: Der Bildschirm wird einmal auf 50 Hz gestellt (passt zu deutschen und türkischen Sendern) und bleibt so – " +
+                "Zappen ohne Umschalten. „Je Sender“ stellt bei jedem Sender passend um, dabei wird der Bildschirm jedes Mal kurz schwarz.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton(if (app.showDiag) "Fehlersuche-Anzeige: an" else "Fehlersuche-Anzeige: aus", selected = app.showDiag, onClick = { app.updateShowDiag(!app.showDiag) })
+        }
         Text("Untertitel", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Aus", selected = !app.subtitlesOn, onClick = { app.updateSubtitles(false) })
