@@ -106,7 +106,9 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
                 true,
             )
-            .setHandleAudioBecomingNoisy(true)
+            // Nur auf Handys/Tablets bei abgezogenem Kopfhörer pausieren. Auf dem Fernseher meldet Android das auch,
+            // wenn HDMI beim Umschalten der Bildwiederholrate kurz den Ton trennt – dann blieb das Bild stehen.
+            .setHandleAudioBecomingNoisy(!de.aze.iptv.player.FrameRate.isTv(context))
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .setLoadControl(PlaybackConfig.loadControl(context, level))
             // Leitung von Anfang an gut einschätzen: schneller Start, aber gleich mit hoher Qualitätsstufe
@@ -180,6 +182,10 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             delay(1_000)
             val f = probe.frames
             val pos = player.currentPosition
+            // Pausiert, obwohl Live-TV laufen soll (z. B. nach HDMI-Umschaltung)? Sofort weiter.
+            if (!switching && player.playbackState != Player.STATE_IDLE && !player.playWhenReady) {
+                player.playWhenReady = true
+            }
             val ready = player.playbackState == Player.STATE_READY && player.playWhenReady
             val active = !switching && ready && player.videoFormat != null
             val stuck = f == lastFrames || pos == lastPos
@@ -395,6 +401,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             builder.setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(it).build())
         }
         player.setMediaItem(builder.build())
+        // Live-TV läuft immer – auch falls der Player zuvor (z. B. vom System) pausiert wurde
+        player.playWhenReady = true
         player.prepare()
     }
 

@@ -26,6 +26,13 @@ import kotlin.math.roundToInt
  */
 object FrameRate {
 
+    /** Fernseher/TV-Box (Android TV, Fire TV, SHIELD) – dort gibt es keine Kopfhörer, die man abzieht. */
+    fun isTv(context: Context): Boolean {
+        val pm = context.packageManager
+        return pm.hasSystemFeature("android.software.leanback") || pm.hasSystemFeature("android.hardware.type.television") ||
+            pm.hasSystemFeature("amazon.hardware.fire_tv")
+    }
+
     fun findActivity(context: Context): Activity? {
         var c = context
         while (c is ContextWrapper) {

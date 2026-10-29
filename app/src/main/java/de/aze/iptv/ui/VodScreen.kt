@@ -629,7 +629,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                 androidx.media3.common.AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
                 true,
             )
-            .setHandleAudioBecomingNoisy(true)
+            .setHandleAudioBecomingNoisy(!de.aze.iptv.player.FrameRate.isTv(context))
             .build()
             .apply { videoChangeFrameRateStrategy = C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF }
     }
