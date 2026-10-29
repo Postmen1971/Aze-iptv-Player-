@@ -75,7 +75,7 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
         value = withContext(Dispatchers.IO) {
             val matches = runCatching { Football.today() }
             val list = matches.getOrDefault(emptyList())
-            val plan = runCatching { de.aze.iptv.data.TvListings.today() }.getOrDefault(emptyList())
+            val plan = emptyList<de.aze.iptv.data.TvListings.Broadcast>()
             // Erste Quelle für Sender: liveonsat.com (wie das Enigma2-Plugin FootOnSat)
             val los = runCatching { de.aze.iptv.data.LiveOnSat.today() }.getOrDefault(emptyList())
             val names = Football.nameIndex(lineup)
@@ -84,7 +84,9 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
             }.timeInMillis
             val idx = Football.index(epg, lineup, dayStart, dayStart + 30 * 3_600_000L)
             val listed = list.associate { m ->
-                val fromLos = de.aze.iptv.data.LiveOnSat.forMatch(m, los).map { de.aze.iptv.data.TvListings.Broadcast("", it, "") }
+                // Nur europäische Sender, deutsche/türkische zuerst
+                val fromLos = de.aze.iptv.data.LiveOnSat.europeanSorted(de.aze.iptv.data.LiveOnSat.forMatch(m, los))
+                    .map { de.aze.iptv.data.TvListings.Broadcast("", it, "") }
                 m.id to (fromLos + de.aze.iptv.data.TvListings.forMatch(m, plan)).distinctBy { it.channel.lowercase() }
             }
             GuideData(
@@ -102,7 +104,7 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
                 similar = list.associate { m ->
                     m.id to de.aze.iptv.data.LiveOnSat.similar(m, los).map { "${it.home} v ${it.away} (${it.channels.size} Sender)" }
                 },
-                diag = "Quellen – liveonsat: ${de.aze.iptv.data.LiveOnSat.lastStatus} · TV-Plan: ${plan.size} Einträge · " +
+                diag = "Quellen – liveonsat: ${de.aze.iptv.data.LiveOnSat.lastStatus} · " +
                     "Programmzeitschrift: ${idx.items.size} deiner Sender mit Programm",
             )
         }
@@ -256,8 +258,8 @@ private fun MatchPopup(
                 if (listed.isEmpty() && similar.isNotEmpty()) {
                     Text("Bei liveonsat gefunden (Name passt nicht genau): " + similar.joinToString(" · "), color = Palette.TextMuted, fontSize = 12.sp)
                 }
-                listed.take(12).forEach { b ->
-                    Text("• ${b.channel}" + (if (b.country.isNotBlank()) "  (${b.country})" else ""), color = Palette.Text, fontSize = 14.sp)
+                if (listed.isNotEmpty()) {
+                    Text(listed.take(40).joinToString(", ") { it.channel }, color = Palette.Text, fontSize = 13.sp)
                 }
                 TvButton("Schließen", modifier = Modifier.focusRequester(first), onClick = onClose)
             } else {
@@ -284,7 +286,7 @@ private fun MatchPopup(
                                 }
                                 val prog = mc.programme
                                 Text(
-                                    if (prog != null) time.format(Date(prog.start)) + "  " + prog.title else "laut TV-Plan: ${mc.listed}",
+                                    if (prog != null) time.format(Date(prog.start)) + "  " + prog.title else "laut liveonsat: ${mc.listed}",
                                     color = if (focused) fg else Palette.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 )
                             }
@@ -296,7 +298,7 @@ private fun MatchPopup(
                     if (others.isNotEmpty()) {
                         item {
                             Text(
-                                "Laut TV-Plan außerdem: " + others.take(10).joinToString(", ") { it.channel + (if (it.country.isNotBlank()) " (${it.country})" else "") },
+                                "Laut liveonsat außerdem: " + others.take(40).joinToString(", ") { it.channel },
                                 color = Palette.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp),
                             )
                         }

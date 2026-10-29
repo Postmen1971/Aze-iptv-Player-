@@ -85,11 +85,40 @@ object LiveOnSat {
     private val timeLine = Regex("(?i)^(st|ko|kick[- ]?off)?\\s*:?\\s*\\d{1,2}[:.]\\d{2}.*$")
     private val headerWords = Regex("(?i)\\b(week|round|matchday|spieltag|group|stage|qualif|play-?off|final|semi|quarter)\\b")
 
-    private fun decode(s: String) = s.replace("&amp;", "&").replace("&nbsp;", " ").replace("&#39;", "'")
-        .replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">")
+    private val entity = Regex("&(#\\d+|[a-zA-Z]+);")
+    private fun decode(s: String) = s.replace(entity) { m ->
+        when (val e = m.groupValues[1]) {
+            "amp" -> "&"; "nbsp" -> " "; "quot" -> "\""; "lt" -> "<"; "gt" -> ">"; "deg" -> "°"; "apos" -> "'"
+            else -> if (e.startsWith("#")) e.drop(1).toIntOrNull()?.toChar()?.toString() ?: " " else " "
+        }
+    }
+
+    // Versteckte Satelliten-Infos je Sender (Tooltip: Satellit, Position, Frequenz, Verschlüsselung) – keine Sender
+    private val handlerAttrs = Regex("(?is)\\s(on\\w+|title|data-[\\w-]+)\\s*=\\s*(\"[^\"]*\"|'[^']*')")
+    private val satNames = Regex(
+        "(?i)^(thor|astra|hot ?bird|eutelsat|t[uü]rksat|badr|nilesat|arabsat|hispasat|amos|express|yamal|yahsat|eshail|es'hail|" +
+            "intelsat|hellas ?sat|abs|galaxy|ses|telstar|apstar|asiasat|measat|thaicom|nss|bulgariasat|azerspace|belintersat|kazsat|" +
+            "sirius|sky ?brasil|chinasat|optus|ch(i)?nasat|\\* ?iptv)\\b",
+    )
+    private val encryption = setOf(
+        "conax", "irdeto", "nagravision", "nagra", "viaccess", "videoguard", "hd videoguard", "powervu", "biss", "biss-1", "biss-2",
+        "free", "fta", "mediaguard", "cryptoworks", "verimatrix", "tandberg", "dre-crypt", "drecrypt", "betacrypt", "seca", "hd",
+        "satellite", "pos", "freq", "symbol", "encryption", "sat", "frequency", "dvb-s", "dvb-s2", "live", "ku", "c-band",
+    )
+    private val satPos = Regex("^\\d{1,3}([.,]\\d)?\\s*°?\\s*[ewEW]\\b")
+    private val techLine = Regex("^\\d[\\d\\s.,/:-]*([HVLRhvlr]\\b.*)?$")
+
+    private fun isChannel(l: String): Boolean {
+        val low = l.lowercase()
+        if (low in encryption) return false
+        if (l.contains('°') || satPos.containsMatchIn(l) || techLine.matches(l) || satNames.containsMatchIn(l)) return false
+        if (Regex("\\d{4,5}\\s*[HV]\\b").containsMatchIn(l)) return false
+        if (!l.any { it.isLetter() }) return false
+        return true
+    }
 
     fun parse(html: String): List<Fixture> {
-        val text = html.replace(scripts, " ").replace(blockTags, "\n").replace(anyTag, " ")
+        val text = html.replace(scripts, " ").replace(handlerAttrs, " ").replace(blockTags, "\n").replace(anyTag, " ")
         val lines = decode(text).lines().map { it.replace(Regex("\\s+"), " ").trim() }.filter { it.isNotEmpty() }
         val out = ArrayList<Fixture>()
         var home: String? = null
@@ -110,14 +139,32 @@ object LiveOnSat {
             }
             if (home == null) continue
             if (timeLine.matches(l) || l.length > 50 || l.length < 2 || headerWords.containsMatchIn(l)) continue
-            // Sat-Angaben (Frequenzen, Positionen) überspringen, nur Sendernamen behalten
-            if (Regex("\\d{4,5}\\s*[HV]\\b").containsMatchIn(l) || Regex("\\d+(\\.\\d)?°").containsMatchIn(l)) continue
-            chans.add(l)
-            if (chans.size > 60) flush()
+            if (!isChannel(l)) continue
+            if (chans.size < 400) chans.add(l)
         }
         flush()
         return out
     }
+
+    // Sender außerhalb Europas (an Land/Region im Namen erkennbar) – werden nicht angezeigt
+    private val nonEurope = Regex(
+        "(?i)\\b(usa|us|canada|mena|arabia|arab|africa|asia|japan|india|malaysia|indonesia|thailand|vietnam|philippines|china|korea|" +
+            "brasil|brazil|argentina|mexico|latam|latin|caribbean|persiana|iran|astro|azam|supersport|kenya|nigeria|ghana|australia|" +
+            "new zealand|nz|singapore|hong kong|taiwan|peacock|fubo|espn\\+|paramount\\+|sling|kayo|optus|stan sport|bangladesh|pakistan|" +
+            "israel|iraq|kurdistan|afghanistan|ethiopia|tanzania|uganda|zambia|mongolia|cambodia|myanmar|nepal|sri lanka|" +
+            "chile|colombia|peru|ecuador|venezuela|uruguay|paraguay|bolivia|costa rica|honduras|guatemala|panama|el salvador)\\b",
+    )
+
+    fun isEuropean(channel: String): Boolean = !nonEurope.containsMatchIn(channel)
+
+    private val priority = listOf("deutsch", "germany", "german", "türkiye", "turkiye", "turkey", "turkish", "austria", "österreich", "schweiz", "swiss")
+
+    /** Europäische Sender, deutsch/türkisch zuerst. */
+    fun europeanSorted(list: List<String>): List<String> =
+        list.filter { isEuropean(it) }.sortedBy { c ->
+            val low = c.lowercase()
+            if (priority.any { low.contains(it) }) 0 else 1
+        }
 
     /** Sender für ein Spiel des Tages (Zuordnung über die Mannschaftsnamen). */
     fun forMatch(m: TodayMatch, all: List<Fixture>): List<String> {

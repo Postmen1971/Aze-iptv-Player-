@@ -156,7 +156,14 @@ object Football {
 
     // ---- Sendernamen aus dem TV-Plan den eigenen Sendern zuordnen ----
 
-    private val nameNoise = setOf("hd", "fhd", "uhd", "4k", "sd", "tv", "tr", "de", "at", "ch", "live", "turkiye", "turkey", "germany", "deutschland")
+    // Wörter, die beim Vergleich der Sendernamen nicht zählen (Qualität, Länder, liveonsat-Zusätze wie "($/geo/R)")
+    private val nameNoise = setOf(
+        "hd", "fhd", "uhd", "4k", "sd", "tv", "tr", "de", "at", "ch", "live", "geo", "r", "online", "bar", "streaming",
+        "turkiye", "turkey", "germany", "deutschland", "deutsch", "austria", "osterreich", "schweiz", "swiss",
+        "italia", "espana", "france", "belgium", "hungary", "slovenija", "bih", "srbija", "hrvatska", "romania", "ro", "polska",
+        "baltic", "bulgaria", "suomi", "portugal", "nederland", "netherlands", "greece", "hellas", "cyprus", "uk", "ireland",
+        "danmark", "denmark", "sverige", "norge", "czech", "cz", "slovakia", "sk", "albania", "kosovo", "macedonia", "mk",
+    )
 
     private fun nameTokens(s: String): List<String> =
         norm(s).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in nameNoise }
