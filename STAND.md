@@ -126,3 +126,10 @@
 - Alle url-tvg/x-tvg-url-Adressen der M3U werden genutzt; beliebig viele weitere EPG-Quellen (Einstellungen → Programm (EPG)), Vorschläge epgshare01 DE1/TR1.
 - Schnellmenü (OK lang) → „Programm (EPG)“: Sender von Hand einem EPG-Sender zuordnen (Liste aus epg_channels.txt, Vorschläge nach Namensähnlichkeit, Suche).
 - Lippensynchron: allgemein in Einstellungen → Wiedergabe, zusätzlich je Sender im Schnellmenü. Media3 über verschobene Ton-Uhr (player/AudioSync.kt), VLC über setAudioDelay. Filme/Serien nutzen den allgemeinen Wert.
+
+## v1.0.73 – Stabilität
+- YouTube: eine WebView für alle YouTube-Sender (nur Adresse wechselt, 250 ms Wartezeit beim Durchschalten), Qualität nur in den ersten Sekunden setzen (ständiges Setzen verursachte Neu-Puffern), Hänger-Erkennung (15 s Standbild → neu laden, max. 3×), Absturz der Web-Anzeige (onRenderProcessGone) beendet die App nicht mehr.
+- AppController: eigener SupervisorJob + CoroutineExceptionHandler – Fehler in Hintergrundaufgaben werden als Meldung gezeigt statt die App zu beenden.
+- XXL-Filter beim Aufbau der Senderliste im Hintergrund statt auf dem Haupt-Thread.
+- Absturz-Protokoll (filesDir/letzter_absturz.txt), Ursache wird beim nächsten Start angezeigt.
+- Senderliste: Rechts schließt die Liste (Spultasten wechseln die Gruppe). EPG-Zuordnung lädt höchstens einmal nach.
