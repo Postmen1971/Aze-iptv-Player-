@@ -16,8 +16,14 @@ object LiveOnSat {
 
     private val urls = listOf("https://liveonsat.com/2day.php", "https://www.liveonsat.com/2day.php")
 
-    /** Zuletzt geladene Seite und Ergebnis – zur Fehlersuche (abrufbar über die Web-Bearbeitung: /liveonsat). */
-    @Volatile var lastHtml: String? = null
+    /**
+     * Zuletzt geladene Seite – zur Fehlersuche (abrufbar über die Web-Bearbeitung: /liveonsat).
+     * Liegt als Datei im Zwischenspeicher, NICHT im Arbeitsspeicher (die Seite ist mehrere MB groß).
+     */
+    @Volatile var debugFile: java.io.File? = null
+
+    val lastHtml: String?
+        get() = debugFile?.takeIf { it.exists() }?.let { runCatching { it.readText() }.getOrNull() }
     @Volatile var lastStatus: String = "noch nicht geladen"
 
     /**
@@ -45,7 +51,7 @@ object LiveOnSat {
             }
             pages++
             bytes += html.length
-            if (lastHtml == null || u.contains("start_dd")) lastHtml = html
+            if (pages == 1 || u.contains("start_dd")) debugFile?.let { f -> runCatching { f.writeText(html) } }
             parse(html).forEach { f -> all.putIfAbsent(Football.norm(f.home) + "|" + Football.norm(f.away), f) }
         }
         lastStatus = if (pages == 0) "nicht erreichbar (" + errors.joinToString(", ") + ")"
@@ -72,7 +78,19 @@ object LiveOnSat {
             c.setRequestProperty("Accept", "text/html,application/xhtml+xml")
             c.setRequestProperty("Accept-Language", "de-DE,de;q=0.9,en;q=0.8")
             if (c.responseCode !in 200..299) throw java.io.IOException("HTTP ${c.responseCode}")
-            return c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+            // Höchstens 12 MB lesen (Schutz, falls die Seite einmal ungewöhnlich groß ist)
+            val max = 12 * 1024 * 1024
+            val buf = java.io.ByteArrayOutputStream(1024 * 1024)
+            c.inputStream.use { inp ->
+                val b = ByteArray(64 * 1024)
+                while (true) {
+                    val n = inp.read(b)
+                    if (n < 0) break
+                    if (buf.size() + n > max) break
+                    buf.write(b, 0, n)
+                }
+            }
+            return buf.toString("UTF-8")
         } finally {
             c.disconnect()
         }

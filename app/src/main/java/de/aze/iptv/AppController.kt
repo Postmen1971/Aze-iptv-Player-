@@ -50,7 +50,9 @@ class AppController(context: Context, outerScope: CoroutineScope) {
             },
     )
 
-    private val store = Store(context)
+    private val store = Store(context).also {
+        de.aze.iptv.data.LiveOnSat.debugFile = java.io.File(context.cacheDir, "liveonsat.html")
+    }
     private val repo = Repository(context)
     private val epgRepo = EpgRepository(context)
 
