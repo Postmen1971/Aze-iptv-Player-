@@ -744,13 +744,8 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         }
     }
     if (part != 1) Section("Wiedergabe") {
-      if (!app.expertMode) {
-        Text(
-            "Puffer, Player, Bildqualität und Bildwiederholrate sind auf bewährte Werte eingestellt " +
-                "(Puffer Mittel, Media3, Automatisch, Nie umschalten). Ändern: links unten „Erweitert“ einschalten.",
-            color = Palette.TextMuted, fontSize = 13.sp,
-        )
-      } else {
+      // Puffer, Player, Bildqualität und Bildwiederholrate immer sichtbar (auf Wunsch von Aziz)
+      run {
         Text("Puffer", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             BufferLevel.entries.forEach { lvl ->
