@@ -36,6 +36,9 @@ class MainActivity : ComponentActivity() {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         if (previous !is CrashLogger) Thread.setDefaultUncaughtExceptionHandler(CrashLogger(crashFile, previous))
 
+        // Zwischenspeicher automatisch aufräumen (wie „Cache leeren“, aber ohne Logos/Playlists zu verlieren)
+        if (savedInstanceState == null) de.aze.iptv.data.CacheCleaner.onStart(applicationContext)
+
         app = AppController(applicationContext, lifecycleScope)
         app.start()
         if (crashFile.exists()) {
@@ -97,6 +100,14 @@ class MainActivity : ComponentActivity() {
                     Screen.SETTINGS -> SettingsScreen(app, onClose = { screen = Screen.PLAYER })
                 }
             }
+        }
+    }
+
+    /** Android meldet knappen Speicher: Bilder im Arbeitsspeicher sofort freigeben. */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            runCatching { coil.Coil.imageLoader(this).memoryCache?.clear() }
         }
     }
 

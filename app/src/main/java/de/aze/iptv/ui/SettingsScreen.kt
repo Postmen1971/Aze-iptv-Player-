@@ -196,7 +196,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 }
                 "Autostart" -> AutostartSection(app)
                 "App-Update" -> UpdateSection()
-                else -> AboutSection()
+                else -> AboutSection(app)
             }
         }
     }
@@ -934,7 +934,26 @@ private fun UpdateSection() {
 }
 
 @Composable
-private fun AboutSection() {
+private fun AboutSection(app: AppController) {
+    val context = LocalContext.current
+    var size by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(Unit) { size = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.CacheCleaner.sizeMb(context) } }
+    Section("Zwischenspeicher") {
+        Text(
+            "Wird bei jedem Start automatisch aufgeräumt (Reste von YouTube, Videotext, Updates). " +
+                "Senderlogos und Filmplakate bleiben gespeichert (höchstens 250 MB), damit die Listen schnell aufgehen. " +
+                "Playlists, Favoriten, Einstellungen und EPG werden nie gelöscht.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Belegt: ${size?.let { "$it MB" } ?: "…"}", color = Palette.TextSoft, fontSize = 13.sp)
+            TvButton("Alles leeren (auch Logos)", onClick = {
+                de.aze.iptv.data.CacheCleaner.clearAll(context)
+                size = 0
+                app.message = "Zwischenspeicher geleert – Logos werden beim Anzeigen neu geladen."
+            })
+        }
+    }
     Section("Über") {
         Text(
             "Aze-IPTV-Player ist ein Player und liefert selbst keine Sender oder Inhalte. " +
