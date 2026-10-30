@@ -110,8 +110,22 @@ class AppController(context: Context, outerScope: CoroutineScope) {
 
     private var epgAgain = false
 
+    var epgEnabled by mutableStateOf(store.epgEnabled)
+        private set
+
+    fun updateEpgEnabled(on: Boolean) {
+        epgEnabled = on
+        store.epgEnabled = on
+        if (on) {
+            scope.launch { epg = runCatching { epgRepo.load() }.getOrDefault(Epg.EMPTY).withManual(epgMap); refreshEpg(quiet = true) }
+        } else {
+            epg = Epg.EMPTY
+        }
+    }
+
     fun refreshEpg(quiet: Boolean = false) {
         // Läuft schon: danach noch einmal laden (z. B. nach geänderter Zeitverschiebung)
+        if (!epgEnabled) return
         if (epgLoading) { epgAgain = true; return }
         val urls = (epgFromSources() + epgExtra).distinct()
         if (urls.isEmpty()) {
@@ -469,7 +483,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
             } finally {
                 loading = false
             }
-            epg = runCatching { epgRepo.load() }.getOrDefault(Epg.EMPTY).withManual(epgMap)
+            if (epgEnabled) epg = runCatching { epgRepo.load() }.getOrDefault(Epg.EMPTY).withManual(epgMap)
             if (needsRefresh() || refreshPending) {
                 refreshPending = false
                 refreshNow()

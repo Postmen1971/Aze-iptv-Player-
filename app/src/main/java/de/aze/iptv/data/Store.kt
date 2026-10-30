@@ -214,6 +214,11 @@ class Store(context: Context) {
         prefs.edit().putString("epgMap", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
     }
 
+    /** Programmzeitschrift laden (aus = kein EPG, spart Rechenzeit) */
+    var epgEnabled: Boolean
+        get() = prefs.getBoolean("epgEnabled", true)
+        set(v) = prefs.edit().putBoolean("epgEnabled", v).apply()
+
     /** Zeitverschiebung je EPG-Quelle (Adresse → Stunden) */
     fun epgShifts(): Map<String, Int> = jsonMap(Secure.decrypt(prefs.getString("epgShifts", "")) ?: "") { o, k -> o.getInt(k) }
 

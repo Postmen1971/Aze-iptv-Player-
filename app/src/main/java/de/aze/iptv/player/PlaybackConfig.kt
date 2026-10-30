@@ -26,7 +26,7 @@ enum class BufferLevel(
     // Start-Puffer klein halten: Live-Sender (TS) kommen vom Server nur in Echtzeit – 2 s Start-Puffer hieß
     // 2 s stehendes erstes Bild bei jedem Umschalten. Den großen Vorrat baut der Player danach im Laufen auf.
     SMALL("Klein", "Schnelles Umschalten, für gute Verbindungen", 10_000, 30_000, 500, 2_000, null),
-    MEDIUM("Mittel", "Ausgewogen (empfohlen)", 20_000, 50_000, 800, 3_000, null),
+    MEDIUM("Mittel", "Ausgewogen (empfohlen)", 20_000, 50_000, 1_200, 3_000, null),
     LARGE("Groß", "Sehr stabil, dafür etwas später als live", 40_000, 90_000, 2_500, 6_000, 30_000L);
 
     companion object {

@@ -99,14 +99,18 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
 
     // Bei geänderter Puffer-Stufe wird der Player neu aufgebaut.
     val tunnel = app.tunneling
-    val player = remember(level, tunnel) {
+    // Ton-Bild-Versatz nur einbauen, wenn er auch genutzt wird (sonst exakt der Standard-Player)
+    val syncUsed = app.audioDelay != 0 || app.audioDelays.isNotEmpty()
+    val player = remember(level, tunnel, syncUsed) {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(Http.USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(20_000)
         ExoPlayer.Builder(context)
-            .setRenderersFactory(de.aze.iptv.player.SyncRenderersFactory(context).setEnableDecoderFallback(true))
+            .setRenderersFactory(
+                (if (syncUsed) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context)).setEnableDecoderFallback(true),
+            )
             // Audio-Fokus: bei Anrufen/anderen Apps leiser bzw. Pause, wie es Android erwartet
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),

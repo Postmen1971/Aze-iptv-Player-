@@ -432,6 +432,10 @@ private val epgPresets = listOf(
 private fun EpgSection(app: AppController) {
     var adding by remember { mutableStateOf(false) }
     Section("Programmzeitschrift (EPG)") {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("EPG an", selected = app.epgEnabled, onClick = { app.updateEpgEnabled(true) })
+            TvButton("EPG aus", selected = !app.epgEnabled, onClick = { app.updateEpgEnabled(false) })
+        }
         Text(
             "Das Programm wird automatisch zugeordnet: zuerst über tvg-id aus der Senderliste, dann über tvg-name und den Sendernamen " +
                 "(„DE: Das Erste HD“ passt auch zu „Das Erste“). Fehlt ein Programm, im Bild OK lang → „Programm (EPG)“ den Sender von Hand zuordnen.",
