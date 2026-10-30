@@ -437,6 +437,15 @@ private fun EpgSection(app: AppController) {
             TvButton("EPG aus", selected = !app.epgEnabled, onClick = { app.updateEpgEnabled(false) })
         }
         Text(
+            if (app.epgEnabled)
+                "EPG an: Unter den Sendern steht, was gerade läuft. Dafür lädt die App alle paar Stunden die Programmdaten " +
+                    "(oft über 100 MB) und rechnet sie im Hintergrund um – auf schwächeren Geräten kann das kurz bremsen."
+            else
+                "EPG aus: Keine Programmdaten – die App lädt und rechnet nichts im Hintergrund, startet schneller und läuft am flüssigsten. " +
+                    "Empfohlen, wenn du das laufende Programm nicht brauchst.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Text(
             "Das Programm wird automatisch zugeordnet: zuerst über tvg-id aus der Senderliste, dann über tvg-name und den Sendernamen " +
                 "(„DE: Das Erste HD“ passt auch zu „Das Erste“). Fehlt ein Programm, im Bild OK lang → „Programm (EPG)“ den Sender von Hand zuordnen.",
             color = Palette.TextMuted, fontSize = 13.sp,
