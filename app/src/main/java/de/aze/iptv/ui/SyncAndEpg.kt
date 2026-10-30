@@ -100,13 +100,11 @@ private fun words(s: String): List<String> =
     Epg.normName(s).let { listOf(it) } +
         s.lowercase().split(Regex("[^a-z0-9äöüßçğış]+")).filter { it.length >= 2 && it !in setOf("hd", "fhd", "uhd", "sd", "tr", "de", "tv") }
 
-private fun score(ch: String, e: EpgChannel): Int {
-    val a = Epg.normName(ch)
+private fun score(a: String, wa: List<String>, e: EpgChannel): Int {
     val b = Epg.normName(e.name)
     if (a.isNotEmpty() && a == b) return 100
     var s = 0
-    if (a.isNotEmpty() && (b.startsWith(a) || a.startsWith(b))) s += 40
-    val wa = words(ch).drop(1)
+    if (a.isNotEmpty() && b.isNotEmpty() && (b.startsWith(a) || a.startsWith(b))) s += 40
     val wb = (words(e.name).drop(1) + e.id.lowercase().split('.', '_', '-', ' ')).toSet()
     s += wa.count { it in wb } * 15
     return s
@@ -123,24 +121,34 @@ fun EpgMapDialog(app: AppController, channel: Channel, onClose: () -> Unit) {
     BackHandler(enabled = search == null, onBack = onClose)
 
     val loading = app.epgLoading
+    // Nur EINMAL nachladen – sonst lädt die App bei fehlender Liste immer wieder neu (Bild flackert)
+    var triedRefresh by remember { mutableStateOf(false) }
     LaunchedEffect(loading) {
         if (!loading) {
             val c = app.epgCatalog()
             catalog = c
-            // Noch keine Liste (z. B. direkt nach dem Update): einmal laden
-            if (c.isEmpty()) app.refreshEpg()
+            if (c.isEmpty() && !triedRefresh) {
+                triedRefresh = true
+                app.refreshEpg(quiet = true)
+            }
         }
     }
     val current = app.epgMap[channel.key]
     val autoId = remember(app.epg) { app.epg.idFor(channel) }
-    val shown = remember(catalog, filter) {
+    // Vergleich mit zehntausenden EPG-Sendern im Hintergrund rechnen, nicht beim Zeichnen
+    var shown by remember { mutableStateOf<List<EpgChannel>>(emptyList()) }
+    LaunchedEffect(catalog, filter) {
         val all = catalog.orEmpty()
-        if (filter.isNotBlank()) {
-            val f = filter.lowercase()
-            all.filter { it.name.lowercase().contains(f) || it.id.lowercase().contains(f) }.take(300)
-        } else {
-            all.asSequence().map { it to score(channel.name, it) }.filter { it.second > 0 }
-                .sortedByDescending { it.second }.map { it.first }.take(150).toList()
+        shown = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            if (filter.isNotBlank()) {
+                val f = filter.lowercase()
+                all.filter { it.name.lowercase().contains(f) || it.id.lowercase().contains(f) }.take(300)
+            } else {
+                val a = Epg.normName(channel.name)
+                val wa = words(channel.name).drop(1)
+                all.asSequence().map { it to score(a, wa, it) }.filter { it.second > 0 }
+                    .sortedByDescending { it.second }.map { it.first }.take(150).toList()
+            }
         }
     }
 
@@ -187,7 +195,7 @@ fun EpgMapDialog(app: AppController, channel: Channel, onClose: () -> Unit) {
                     Text("Keine EPG-Quelle geladen. Unter Einstellungen → Programm (EPG) eine Quelle hinzufügen.", color = Palette.TextMuted, fontSize = 14.sp)
                 shown.isEmpty() ->
                     Text(if (filter.isBlank()) "Kein ähnlicher Name gefunden – über „Suchen …“ den Sender suchen." else "Nichts gefunden.", color = Palette.TextMuted, fontSize = 14.sp)
-                else -> LazyColumn(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                else -> LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     items(shown, key = { it.id }) { e ->
                         Focusable(onClick = {
                             app.setEpgMapping(channel, e.id)

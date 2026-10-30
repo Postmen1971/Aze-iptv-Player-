@@ -80,12 +80,12 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         store.saveEpgMap(epgMap)
         epg = epg.withManual(epgMap)
         // Programm für den neu zugeordneten Sender holen
-        if (epgId != null && epg.programmes(ch) == null) refreshEpg()
+        if (epgId != null && epg.programmes(ch) == null) refreshEpg(quiet = true)
     }
 
     suspend fun epgCatalog(): List<EpgChannel> = epgRepo.catalog()
 
-    fun refreshEpg() {
+    fun refreshEpg(quiet: Boolean = false) {
         if (epgLoading) return
         val urls = (epgFromSources() + epgExtra).distinct()
         if (urls.isEmpty()) {
@@ -99,9 +99,9 @@ class AppController(context: Context, private val scope: CoroutineScope) {
             epgReport = epgRepo.lastReport
             result.onSuccess {
                 epg = it
-                message = "Programmzeitschrift geladen: ${it.channelCount} Sender mit Programm (${epgRepo.lastReport})."
+                if (!quiet) message = "Programmzeitschrift geladen: ${it.channelCount} Sender mit Programm (${epgRepo.lastReport})."
             }.onFailure {
-                message = "Programmzeitschrift konnte nicht geladen werden."
+                if (!quiet) message = "Programmzeitschrift konnte nicht geladen werden."
             }
         }
     }

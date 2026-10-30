@@ -53,7 +53,7 @@ import de.aze.iptv.AppController
 /**
  * Schmale Senderliste am linken Rand – das Bild bleibt groß sichtbar.
  *  Oben: Gruppenname mit ◀ ▶, darunter die Sender der Gruppe.
- *  Hoch/Runter: Sender, Links/Rechts: Gruppe wechseln, OK: umschalten, OK lang: Favorit.
+ *  Hoch/Runter: Sender, Links: Gruppen, Rechts: Liste schließen (Programm läuft weiter), Spulen: Gruppe wechseln, OK: umschalten, OK lang: Favorit.
  *  Links in der Gruppenübersicht: Menü mit TV, Filme, Serien, Suchen, Einstellungen.
  */
 @Composable
@@ -267,7 +267,9 @@ fun ChannelOverlay(
                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (e.key) {
                                 Key.DirectionLeft -> { showGroups = true; true }
-                                Key.DirectionRight, Key.MediaFastForward -> { switchGroup(+1); true }
+                                // Rechts in der Senderliste: Liste schließen, das laufende Programm läuft weiter
+                                Key.DirectionRight -> { onClose(); true }
+                                Key.MediaFastForward -> { switchGroup(+1); true }
                                 Key.MediaRewind -> { switchGroup(-1); true }
                                 else -> false
                             }
