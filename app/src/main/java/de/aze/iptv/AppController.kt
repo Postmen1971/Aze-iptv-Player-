@@ -36,7 +36,19 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 /** Zentraler Zustand der App: Quellen, Senderliste, Favoriten, aktueller Sender. */
-class AppController(context: Context, private val scope: CoroutineScope) {
+class AppController(context: Context, outerScope: CoroutineScope) {
+
+    /**
+     * Eigener Bereich für Hintergrundarbeiten: ein Fehler in EINER Aufgabe (Laden, EPG, Portal …)
+     * wird gemeldet, beendet aber weder die anderen Aufgaben noch die App.
+     */
+    private val scope: CoroutineScope = CoroutineScope(
+        outerScope.coroutineContext + kotlinx.coroutines.SupervisorJob(outerScope.coroutineContext[kotlinx.coroutines.Job]) +
+            kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+                android.util.Log.e("AzeIPTV", "Hintergrundfehler", e)
+                message = "Fehler: ${e.message ?: e.javaClass.simpleName}"
+            },
+    )
 
     private val store = Store(context)
     private val repo = Repository(context)
@@ -649,15 +661,16 @@ class AppController(context: Context, private val scope: CoroutineScope) {
      */
     private fun rebuild(restoreKey: String?): Job {
         // YouTube-Gruppe kommt direkt nach den Favoriten (in "Senderliste bearbeiten" verschiebbar).
-        val all = (youtube.map { it.toChannel() } + channels).let { list ->
-            if (adultFilter) list.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.group) || de.aze.iptv.data.AdultFilter.isAdult(it.name) } else list
-        }
+        val raw = youtube.map { it.toChannel() } + channels
+        val filterAdult = adultFilter
         val named = sources + PlaylistSource(YouTube.SOURCE, "YouTube", SourceType.M3U, "")
         val favs = favorites
         val lay = layout
         rebuildJob?.cancel()
         return scope.launch {
             val (lu, eg) = withContext(Dispatchers.Default) {
+                // Filter läuft im Hintergrund (bei zehntausenden Sendern sonst spürbares Stocken)
+                val all = if (filterAdult) raw.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.group) || de.aze.iptv.data.AdultFilter.isAdult(it.name) } else raw
                 Numbering.build(all, favs, named, lay) to Numbering.arrange(all, named, lay)
             }
             lineup = lu

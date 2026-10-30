@@ -31,8 +31,18 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
+        // Absturz-Protokoll: Ursache beim nächsten Start anzeigen (hilft beim Finden von Fehlern)
+        val crashFile = filesDir.resolve("letzter_absturz.txt")
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        if (previous !is CrashLogger) Thread.setDefaultUncaughtExceptionHandler(CrashLogger(crashFile, previous))
+
         app = AppController(applicationContext, lifecycleScope)
         app.start()
+        if (crashFile.exists()) {
+            val first = runCatching { crashFile.readLines().take(2).joinToString(" · ") }.getOrDefault("")
+            crashFile.delete()
+            if (first.isNotBlank()) app.message = "Beim letzten Mal ist die App abgestürzt: ${first.take(200)}"
+        }
 
         // Bilder (Poster, Logos): großer Speicher-Zwischenspeicher und dauerhafter Zwischenspeicher auf dem Gerät,
         // auch wenn der Server "nicht speichern" meldet – so sind Poster beim zweiten Mal sofort da.
@@ -101,5 +111,21 @@ class MainActivity : ComponentActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+}
+
+
+/** Schreibt die Absturz-Ursache in eine Datei und gibt dann an Android weiter. */
+private class CrashLogger(private val file: java.io.File, private val next: Thread.UncaughtExceptionHandler?) : Thread.UncaughtExceptionHandler {
+    override fun uncaughtException(t: Thread, e: Throwable) {
+        runCatching {
+            val root = generateSequence(e) { it.cause }.last()
+            file.writeText(
+                "${root.javaClass.simpleName}: ${root.message.orEmpty()}\n" +
+                    (root.stackTrace.firstOrNull { it.className.startsWith("de.aze") }?.toString() ?: "") + "\n\n" +
+                    e.stackTraceToString().take(8_000),
+            )
+        }
+        next?.uncaughtException(t, e)
     }
 }

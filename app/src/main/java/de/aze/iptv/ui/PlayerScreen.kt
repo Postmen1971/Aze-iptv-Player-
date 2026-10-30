@@ -662,8 +662,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         val ytUrl = app.current?.channel?.url?.takeIf { YouTube.isYouTube(it) }
         if (ytUrl != null) {
             // Im Hintergrund wird der YouTube-Player entfernt, damit kein Ton weiterläuft.
-            if (!inBackground && !app.youtubeExternal)
-            key(ytUrl) {
+            // Gleiche WebView für alle YouTube-Sender (kein key) – das Umschalten geht so deutlich schneller
+            if (!inBackground && !app.youtubeExternal) {
                 YouTubeView(
                     url = ytUrl,
                     modifier = Modifier.fillMaxSize(),
