@@ -46,7 +46,7 @@ class VlcHandle {
 /** Netzwerk-Puffer für VLC je Puffer-Stufe (Millisekunden). */
 fun BufferLevel.vlcCachingMs(): Int = when (this) {
     BufferLevel.SMALL -> 1_000
-    BufferLevel.MEDIUM -> 2_500
+    BufferLevel.MEDIUM -> 1_500
     BufferLevel.LARGE -> 6_000
 }
 
