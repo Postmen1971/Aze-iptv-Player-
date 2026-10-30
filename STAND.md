@@ -120,3 +120,9 @@
 - Sicherheit: kein Klartext-Fallback in Secure (encfail:), HTTPS→HTTP-Umleitungen blockiert, Antworten max. 64 MB, Updater nur Repo-APK mit .part, Größen- und SHA-256-Prüfung.
 - Automatische Tests (app/src/test/LogicTest.kt) laufen bei jedem Build: M3U, Nummerierung, XXL-Filter, Tastenbelegung, liveonsat, Fußball-Zuordnung.
 - Offen: Release-Signatur nutzt weiter den Test-Schlüssel, bis KEYSTORE_BASE64/KEYSTORE_PASSWORD als GitHub-Secrets gesetzt sind.
+
+## v1.0.70 – EPG-Zuordnung und Lippensynchron
+- EPG-Zuordnung: eigene Zuordnung → tvg-id (Groß/klein egal) → tvg-name → Sendername ohne Länder-Vorsatz/HD. tvg-name wird aus der M3U gelesen.
+- Alle url-tvg/x-tvg-url-Adressen der M3U werden genutzt; beliebig viele weitere EPG-Quellen (Einstellungen → Programm (EPG)), Vorschläge epgshare01 DE1/TR1.
+- Schnellmenü (OK lang) → „Programm (EPG)“: Sender von Hand einem EPG-Sender zuordnen (Liste aus epg_channels.txt, Vorschläge nach Namensähnlichkeit, Suche).
+- Lippensynchron: allgemein in Einstellungen → Wiedergabe, zusätzlich je Sender im Schnellmenü. Media3 über verschobene Ton-Uhr (player/AudioSync.kt), VLC über setAudioDelay. Filme/Serien nutzen den allgemeinen Wert.
