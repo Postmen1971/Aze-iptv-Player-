@@ -188,7 +188,6 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         var lastFrames = -1L
         var lastPos = -1L
         var still = 0
-        var bufferingFor = 0
         while (true) {
             delay(1_000)
             val f = probe.frames
@@ -199,16 +198,11 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             }
             val ready = player.playbackState == Player.STATE_READY && player.playWhenReady
             val active = !switching && ready && player.videoFormat != null
-            val stuck = f == lastFrames || pos == lastPos
+            // Nur wenn der Player „läuft“, aber weder Bilder noch Zeit weitergehen
+            val stuck = f == lastFrames && pos == lastPos
             if (active && stuck) still++ else still = 0
-            // Bild steht, weil der Player endlos „puffert“ (Anbieter liefert nicht weiter): nach 8 s neu verbinden
-            val buffering = !switching && player.playWhenReady && player.playbackState == Player.STATE_BUFFERING
-            if (buffering) bufferingFor++ else bufferingFor = 0
-            if (bufferingFor >= 8 && watchdogRestarts < 6) {
-                bufferingFor = 0
-                watchdogRestarts++
-                restartTick++
-            }
+            // Kein Neustart beim Puffern: Puffern heißt „Daten kommen noch“. Ein Neustart verwirft den Vorrat,
+            // zeigt schwarzes Bild und fängt mitten im Bild an (bunte Klötzchen) – das machte es nur schlimmer.
             if (app.showDiag) {
                 @Suppress("DEPRECATION")
                 val hz = activity?.windowManager?.defaultDisplay?.refreshRate ?: 0f
@@ -226,7 +220,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             }
             lastFrames = f
             lastPos = pos
-            if (still >= 4 && watchdogRestarts < 4) {
+            if (still >= 10 && watchdogRestarts < 2) {
                 still = 0
                 watchdogRestarts++
                 restartTick++
@@ -346,7 +340,9 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                         player.seekToDefaultPosition()
                     } else {
                         // Neu verbinden: erst schnell (0,7 · 1 · 1,5 · 2 · 3 s), dann seltener bis 15 s.
-                        val steps = longArrayOf(700, 1_000, 1_500, 2_000, 3_000, 3_000, 5_000, 8_000, 15_000)
+                        // Abgelehnte Verbindung: etwas schneller; sonst ruhiger, damit der Anbieter nicht überrannt wird
+                        val steps = if (http != null) longArrayOf(1_500, 2_500, 4_000, 8_000, 15_000)
+                        else longArrayOf(2_000, 4_000, 8_000, 15_000)
                         delay(steps[minOf(retries, steps.size - 1)])
                         retries++
                     }

@@ -114,7 +114,7 @@ fun VlcVideo(
     LaunchedEffect(url, cachingMs, restart) {
         if (restart > 0) {
             // Neu verbinden: erst schnell (Anbieter mit nur 1 Verbindung geben die alte verzögert frei), dann seltener
-            val steps = longArrayOf(700, 1_000, 1_500, 2_000, 3_000, 5_000, 8_000, 15_000)
+            val steps = longArrayOf(2_000, 4_000, 8_000, 15_000)
             delay(steps[minOf(failures, steps.size - 1)])
             failures++
         }
