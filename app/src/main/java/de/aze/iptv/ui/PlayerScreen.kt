@@ -184,6 +184,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         var lastFrames = -1L
         var lastPos = -1L
         var still = 0
+        var bufferingFor = 0
         while (true) {
             delay(1_000)
             val f = probe.frames
@@ -196,6 +197,14 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             val active = !switching && ready && player.videoFormat != null
             val stuck = f == lastFrames || pos == lastPos
             if (active && stuck) still++ else still = 0
+            // Bild steht, weil der Player endlos „puffert“ (Anbieter liefert nicht weiter): nach 8 s neu verbinden
+            val buffering = !switching && player.playWhenReady && player.playbackState == Player.STATE_BUFFERING
+            if (buffering) bufferingFor++ else bufferingFor = 0
+            if (bufferingFor >= 8 && watchdogRestarts < 6) {
+                bufferingFor = 0
+                watchdogRestarts++
+                restartTick++
+            }
             if (app.showDiag) {
                 @Suppress("DEPRECATION")
                 val hz = activity?.windowManager?.defaultDisplay?.refreshRate ?: 0f

@@ -3,6 +3,7 @@ package de.aze.iptv.data
 import android.content.Context
 import android.util.Xml
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
 import java.io.BufferedInputStream
@@ -122,6 +123,10 @@ class EpgChannel(val id: String, val name: String)
 /** Lädt XMLTV-Daten speicherschonend (Zeile für Zeile) und hält eine kompakte Kopie auf dem Gerät. */
 class EpgRepository(context: Context) {
 
+    private val lowPriority = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "epg-laden").apply { priority = Thread.MIN_PRIORITY; isDaemon = true }
+    }.asCoroutineDispatcher()
+
     // neue Datei: Namens-Zuordnung jetzt mit Land (alte Daten werden einmal neu geladen)
     private val file = File(context.filesDir, "epg3.bin")
 
@@ -173,7 +178,10 @@ class EpgRepository(context: Context) {
      * im Zeitfenster von 2 Stunden zurück bis 24 Stunden voraus.
      * [manual] = eigene Zuordnungen (Sender-Schlüssel → EPG-Kennung).
      */
-    suspend fun refresh(urls: List<String>, channels: List<Channel>, manual: Map<String, String> = emptyMap()): Result<Epg> = withContext(Dispatchers.IO) {
+    suspend fun refresh(urls: List<String>, channels: List<Channel>, manual: Map<String, String> = emptyMap()): Result<Epg> = withContext(lowPriority) {
+        // Große EPG-Dateien (über 100 MB) brauchen lange Rechenzeit. Mit niedriger Priorität bekommt der
+        // Player immer zuerst die Rechenzeit – sonst kann das Bild beim Zappen stehen bleiben.
+        runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_LOWEST) }
         runCatching {
             val wantedIds = (channels.mapNotNull { it.tvgId } + manual.values).map { it.lowercase(Locale.ROOT) }.toHashSet()
             // Namen aller Sender – auch mit tvg-id, denn fremde EPG-Quellen nutzen oft andere Kennungen
