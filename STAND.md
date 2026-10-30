@@ -133,3 +133,9 @@
 - XXL-Filter beim Aufbau der Senderliste im Hintergrund statt auf dem Haupt-Thread.
 - Absturz-Protokoll (filesDir/letzter_absturz.txt), Ursache wird beim nächsten Start angezeigt.
 - Senderliste: Rechts schließt die Liste (Spultasten wechseln die Gruppe). EPG-Zuordnung lädt höchstens einmal nach.
+
+## v1.0.74–1.0.81 – Zappen und Hänger (von Aziz bestätigt: läuft wunderbar)
+- Ursache der Hänger (per Video gefunden): Neustart-Schleife durch zu eifrigen Wächter (Neustart beim Puffern) + sehr schnelle Wiederholungen → schwarzes Bild, bunte Klötzchen, erst nach Aufgeben des Wächters lief es.
+- Jetzt: kein Neustart beim Puffern; Wächter nur bei „läuft“ + 10 s weder Bild noch Zeit, max. 2×. Wiederholung bei HTTP-Ablehnung 1,5/2,5/4/8/15 s, sonst 2/4/8/15 s. Start-Puffer Mittel 1,5 s (Rebuffer 4 s), VLC Mittel 1,5 s.
+- Lehre: Wächter dürfen nie bei Puffern neu starten; Änderungen am Abspielverhalten immer einzeln ausliefern.
+- Weitere: EPG an/aus, Zeitzonen-Fix (+0300 ohne Leerzeichen), Zeitverschiebung je Quelle, EPG-Zuordnung nach Land, EPG-Laden mit niedriger Priorität, Sendung in dezentem Gelb, Wiedergabe-Optionen (Puffer/Player/Bildqualität/Bildwiederholrate) wieder immer sichtbar, Player ohne Ton-Uhr-Verschiebung solange kein Versatz eingestellt.
