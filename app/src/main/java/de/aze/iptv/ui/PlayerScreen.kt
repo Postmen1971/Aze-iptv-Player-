@@ -92,7 +92,16 @@ import kotlinx.coroutines.launch
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (series: Boolean) -> Unit = {}) {
+fun PlayerScreen(
+    app: AppController,
+    onOpenSettings: () -> Unit,
+    onOpenVod: (series: Boolean) -> Unit = {},
+    /**
+     * false = Einstellungen/PIN liegen darüber. Das Programm läuft weiter (beim Zurückkommen ist das Bild sofort da),
+     * aber der Player holt sich dann weder Fokus noch Zurück-Taste.
+     */
+    active: Boolean = true,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val level = app.bufferLevel
@@ -270,7 +279,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
     }
     // Zurück beim Fernsehen: erst die Senderliste zeigen (weiter: Gruppen, dann App beenden)
-    androidx.activity.compose.BackHandler(enabled = !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) { overlay = true }
+    androidx.activity.compose.BackHandler(enabled = active && !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) { overlay = true }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
@@ -492,8 +501,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
     }
 
-    LaunchedEffect(overlay, quickMenu, search, teletext, football, matchZap, tool) {
-        if (!overlay && !quickMenu && !search && !football && matchZap == null && tool == 0) {
+    LaunchedEffect(active, overlay, quickMenu, search, teletext, football, matchZap, tool) {
+        if (active && !overlay && !quickMenu && !search && !football && matchZap == null && tool == 0) {
             withFrameNanos { }
             runCatching { focus.requestFocus() }
         }
@@ -741,7 +750,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             } else {
                 // Noch keine Playlist: klare Knöpfe statt Sackgasse
                 val btn = remember { FocusRequester() }
-                LaunchedEffect(Unit) { withFrameNanos { }; runCatching { btn.requestFocus() } }
+                LaunchedEffect(active) { if (active) { withFrameNanos { }; runCatching { btn.requestFocus() } } }
                 Column(
                     Modifier.align(Alignment.Center).padding(32.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,

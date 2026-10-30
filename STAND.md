@@ -147,6 +147,13 @@
 - EPG an/aus mit Beschreibung (aus = am flüssigsten). Keine EPG-Rasteransicht gewünscht (Aziz: macht die App langsamer).
 - CacheCleaner: beim Start Zwischenspeicher aufräumen (außer Logos „bilder“), WebView-Cache, alte Update-APKs, .tmp; onTrimMemory leert Bild-RAM; Knopf „Alles leeren“ unter Einstellungen → Über.
 
+## v1.0.87 – Stabilität & flüssiger (ohne Änderung am Abspielverhalten)
+- Manifest: weitere configChanges (density, uiMode, fontScale, locale …) – Auflösungs-/HDMI-Wechsel startet die App nicht mehr komplett neu.
+- VLC: alte Player werden über EINE Warteschlange freigegeben (VlcEngine.release) statt je Sender ein eigener Thread – schnelles Zappen bei VLC-Sendern kann nicht mehr mehrere Freigaben gleichzeitig auslösen.
+- EPG: Zuordnung Sender → EPG-Kennung wird je Epg-Objekt zwischengespeichert (Senderliste scrollt flüssiger).
+- Live-TV bleibt unter PIN/Einstellungen bestehen (PlayerScreen `active`-Parameter, CoverLayer fängt Berührungen ab) – beim Zurückkommen ist das Bild sofort da. Filme & Serien ersetzen den Player weiterhin.
+- Nächste Schritte (einzeln ausliefern, weil Abspielverhalten): TS-Extractor-Flags (FLAG_ALLOW_NON_IDR_KEYFRAMES, FLAG_DETECT_ACCESS_UNITS) für schnelleres erstes Bild; danach FFmpeg-Ton-Decoder (AC3/E-AC3/MP2/DTS).
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).

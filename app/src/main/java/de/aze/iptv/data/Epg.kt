@@ -39,8 +39,24 @@ class Epg(
     private fun known(id: String?): String? =
         if (id.isNullOrBlank()) null else if (byId.containsKey(id)) id else byLower[id.lowercase(Locale.ROOT)]
 
+    /**
+     * Ergebnis der Zuordnung je Sender merken: die Suche über Namen braucht mehrere Textvergleiche und lief
+     * sonst bei jeder Zeile der Senderliste und jeder Fokus-Bewegung neu (spürbares Ruckeln beim Scrollen).
+     * "" = kein Programm gefunden. Ein neues Epg-Objekt (neu geladen / neue Zuordnung) startet mit leerem Speicher.
+     */
+    private val idCache = java.util.concurrent.ConcurrentHashMap<Channel, String>()
+
     /** Welche EPG-Kennung ein Sender bekommt (null = kein Programm gefunden). */
-    fun idFor(ch: Channel): String? =
+    fun idFor(ch: Channel): String? {
+        if (byId.isEmpty()) return null
+        val hit = idCache[ch]
+        if (hit != null) return hit.ifEmpty { null }
+        val id = findId(ch)
+        idCache[ch] = id ?: ""
+        return id
+    }
+
+    private fun findId(ch: Channel): String? =
         known(manual[ch.key])
             ?: known(ch.tvgId)
             ?: countryOf(ch).let { c -> ch.tvgName?.let { byName(it, c) } ?: byName(ch.name, c) }

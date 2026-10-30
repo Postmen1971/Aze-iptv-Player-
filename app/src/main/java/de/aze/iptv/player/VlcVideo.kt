@@ -101,13 +101,10 @@ fun VlcVideo(
                 mp.setEventListener(null)
                 mp.detachViews()
             }
-            // Anhalten/Freigeben kann bei Netz-Streams Sekunden dauern → nicht auf dem Haupt-Thread (sonst hängt die App)
-            Thread({
-                runCatching {
-                    mp.stop()
-                    mp.release()
-                }
-            }, "vlc-release").start()
+            // Anhalten/Freigeben kann bei Netz-Streams Sekunden dauern → nicht auf dem Haupt-Thread (sonst hängt die App).
+            // Eine Warteschlange statt eines neuen Threads je Sender: beim schnellen Zappen laufen sonst mehrere
+            // Freigaben gleichzeitig in VLC – das kann die App im nativen Teil abstürzen lassen.
+            VlcEngine.release(mp)
         }
     }
 
@@ -151,6 +148,18 @@ fun VlcVideo(
 /** Gemeinsame LibVLC-Instanz (wird beim ersten VLC-Sender angelegt und bleibt bestehen). */
 object VlcEngine {
     @Volatile private var instance: LibVLC? = null
+
+    /** Ein einziger Hintergrund-Thread, der alte Player nacheinander anhält und freigibt. */
+    private val releaser = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread(r, "vlc-release").apply { isDaemon = true }
+    }
+
+    fun release(mp: MediaPlayer) {
+        releaser.execute {
+            runCatching { mp.stop() }
+            runCatching { mp.release() }
+        }
+    }
 
     fun get(context: android.content.Context): LibVLC = instance ?: synchronized(this) {
         instance ?: LibVLC(context.applicationContext, arrayListOf("--http-reconnect", "--no-stats", "--audio-time-stretch"))

@@ -10,6 +10,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -77,27 +80,38 @@ class MainActivity : ComponentActivity() {
                 // Erster Start ohne Playlist: direkt in die Einstellungen (ohne PIN) – die App schließt sich dabei nie von selbst
                 var screen by remember { mutableStateOf(if (!app.hasAnySource) Screen.SETTINGS else Screen.PLAYER) }
                 var vodSeries by remember { mutableStateOf(false) }
-                when (screen) {
-                    Screen.PLAYER -> PlayerScreen(
-                        app,
-                        onOpenSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS },
-                        onOpenVod = { series ->
-                            vodSeries = series
-                            screen = Screen.VOD
-                        },
-                    )
-                    Screen.VOD -> VodScreen(app, startWithSeries = vodSeries, onExit = { screen = Screen.PLAYER }, onOpenSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS })
-                    Screen.PIN -> PinScreen(
-                        title = "PIN für die Einstellungen",
-                        hint = if (app.pinIsDefault) "Standard-PIN: 0000 – bitte in den Einstellungen ändern" else null,
-                        onEntered = { pin ->
-                            val ok = app.checkPin(pin)
-                            if (ok) screen = Screen.SETTINGS
-                            ok
-                        },
-                        onCancel = { screen = Screen.PLAYER },
-                    )
-                    Screen.SETTINGS -> SettingsScreen(app, onClose = { screen = Screen.PLAYER })
+                val openSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS }
+                androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
+                    // Live-TV bleibt unter PIN und Einstellungen bestehen: kein Abbau/Neuaufbau des Players,
+                    // beim Zurückkommen ist das Bild sofort da. Nur Filme & Serien (eigener Player) ersetzen ihn.
+                    if (screen != Screen.VOD) {
+                        PlayerScreen(
+                            app,
+                            onOpenSettings = openSettings,
+                            onOpenVod = { series ->
+                                vodSeries = series
+                                screen = Screen.VOD
+                            },
+                            active = screen == Screen.PLAYER,
+                        )
+                    }
+                    when (screen) {
+                        Screen.PLAYER -> Unit
+                        Screen.VOD -> VodScreen(app, startWithSeries = vodSeries, onExit = { screen = Screen.PLAYER }, onOpenSettings = openSettings)
+                        Screen.PIN -> CoverLayer {
+                            PinScreen(
+                                title = "PIN für die Einstellungen",
+                                hint = if (app.pinIsDefault) "Standard-PIN: 0000 – bitte in den Einstellungen ändern" else null,
+                                onEntered = { pin ->
+                                    val ok = app.checkPin(pin)
+                                    if (ok) screen = Screen.SETTINGS
+                                    ok
+                                },
+                                onCancel = { screen = Screen.PLAYER },
+                            )
+                        }
+                        Screen.SETTINGS -> CoverLayer { SettingsScreen(app, onClose = { screen = Screen.PLAYER }) }
+                    }
                 }
             }
         }
@@ -125,6 +139,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+
+/** Ebene über dem Live-TV: fängt alle Berührungen ab, damit kein Tippen zum Player darunter durchgeht. */
+@androidx.compose.runtime.Composable
+private fun CoverLayer(content: @androidx.compose.runtime.Composable () -> Unit) {
+    androidx.compose.foundation.layout.Box(
+        Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
+    ) { content() }
+}
 
 /** Schreibt die Absturz-Ursache in eine Datei und gibt dann an Android weiter. */
 private class CrashLogger(private val file: java.io.File, private val next: Thread.UncaughtExceptionHandler?) : Thread.UncaughtExceptionHandler {
