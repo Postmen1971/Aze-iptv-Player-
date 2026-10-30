@@ -190,28 +190,44 @@ fun PlayerScreen(
         switching = false
         restartTick++
     }
-    // Wächter: Sender „läuft“, aber 4 s lang keine neuen Bilder oder die Zeit steht → neu starten (höchstens 4×).
+    // Wächter gegen stehendes Bild. Greift in drei Fällen ein (höchstens 3× hintereinander, nach 60 s flüssigem
+    // Bild wieder voll verfügbar):
+    //  1. „läuft“, aber 6 s kein neues Bild – auch wenn der Ton weiterläuft (Bild hängt, Ton nicht)
+    //  2. „puffert“ mitten im Programm und 8 s kommen GAR KEINE Daten mehr (Verbindung tot) → sofort neu verbinden,
+    //     statt bis zur Zeitüberschreitung der Verbindung (20 s) zu warten
+    //  3. Puffern, solange noch Daten kommen, wird NIE unterbrochen (das verursachte früher die Neustart-Schleife).
+    // Fall 1 und 2 nur, wenn seit dem Start schon Bilder kamen – der Senderstart selbst wird nicht gestört.
     var watchdogRestarts by remember { mutableIntStateOf(0) }
     var diagText by remember { mutableStateOf("") }
     LaunchedEffect(player) {
         var lastFrames = -1L
         var lastPos = -1L
-        var still = 0
+        var lastBuffered = -1L
+        var frozen = 0
+        var starved = 0
+        var healthy = 0
         while (true) {
             delay(1_000)
             val f = probe.frames
             val pos = player.currentPosition
+            val buffered = player.bufferedPosition
             // Pausiert, obwohl Live-TV laufen soll (z. B. nach HDMI-Umschaltung)? Sofort weiter.
             if (!switching && player.playbackState != Player.STATE_IDLE && !player.playWhenReady) {
                 player.playWhenReady = true
             }
+            val framesMoved = lastFrames >= 0 && f != lastFrames
+            val started = f > probe.framesAtStart
+            val hasVideo = player.videoFormat != null
             val ready = player.playbackState == Player.STATE_READY && player.playWhenReady
-            val active = !switching && ready && player.videoFormat != null
-            // Nur wenn der Player „läuft“, aber weder Bilder noch Zeit weitergehen
-            val stuck = f == lastFrames && pos == lastPos
-            if (active && stuck) still++ else still = 0
-            // Kein Neustart beim Puffern: Puffern heißt „Daten kommen noch“. Ein Neustart verwirft den Vorrat,
-            // zeigt schwarzes Bild und fängt mitten im Bild an (bunte Klötzchen) – das machte es nur schlimmer.
+            val buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady
+            // Bei Tunneling meldet das Gerät keine einzelnen Bilder – dann nur „Bild und Zeit stehen“ werten
+            val noNewPicture = if (app.tunneling) !framesMoved && pos == lastPos else !framesMoved
+
+            frozen = if (!switching && ready && hasVideo && started && noNewPicture) frozen + 1 else 0
+            starved = if (!switching && buffering && started && buffered == lastBuffered) starved + 1 else 0
+            if (framesMoved && !buffering) healthy++ else if (!framesMoved) healthy = 0
+            if (healthy >= 60) { healthy = 0; watchdogRestarts = 0 }
+
             if (app.showDiag) {
                 @Suppress("DEPRECATION")
                 val hz = activity?.windowManager?.defaultDisplay?.refreshRate ?: 0f
@@ -221,16 +237,20 @@ fun PlayerScreen(
                     Player.STATE_IDLE -> "angehalten"
                     else -> "Ende"
                 }
-                diagText = "%.2f Hz · Bilder +%d/s · Zeit %s · %s · Ton %s%s".format(
+                diagText = "%.2f Hz · Bilder +%d/s · Zeit %s · %s · Vorrat %.1f s · Ton %s%s".format(
                     hz, if (lastFrames < 0) 0 else (f - lastFrames), if (pos != lastPos) "läuft" else "steht", state,
+                    (buffered - pos).coerceAtLeast(0) / 1000f,
                     if (player.audioFormat != null) "ja" else "–",
                     if (switching) " · Umschalten …" else if (watchdogRestarts > 0) " · Neustarts $watchdogRestarts" else "",
                 )
             }
             lastFrames = f
             lastPos = pos
-            if (still >= 10 && watchdogRestarts < 2) {
-                still = 0
+            lastBuffered = buffered
+            if ((frozen >= 6 || starved >= 8) && watchdogRestarts < 3) {
+                frozen = 0
+                starved = 0
+                healthy = 0
                 watchdogRestarts++
                 restartTick++
             }

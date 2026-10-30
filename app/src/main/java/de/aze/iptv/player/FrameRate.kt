@@ -117,10 +117,15 @@ class FpsProbe(private val onFps: (Float) -> Unit) : VideoFrameMetadataListener 
     @Volatile var frames = 0L
         private set
 
-    /** Neue Messung (bei jedem Senderwechsel aufrufen). */
+    /** Bildzähler beim letzten (Neu-)Start – für den Wächter: „sind seit dem Start schon Bilder gekommen?“ */
+    @Volatile var framesAtStart = 0L
+        private set
+
+    /** Neue Messung (bei jedem Senderwechsel und Neustart aufrufen). */
     fun restart() {
         count = 0
         done = false
+        framesAtStart = frames
     }
 
     override fun onVideoFrameAboutToBeRendered(
