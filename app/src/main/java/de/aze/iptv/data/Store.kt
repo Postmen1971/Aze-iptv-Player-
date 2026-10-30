@@ -214,6 +214,13 @@ class Store(context: Context) {
         prefs.edit().putString("epgMap", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
     }
 
+    /** Zeitverschiebung je EPG-Quelle (Adresse → Stunden) */
+    fun epgShifts(): Map<String, Int> = jsonMap(Secure.decrypt(prefs.getString("epgShifts", "")) ?: "") { o, k -> o.getInt(k) }
+
+    fun saveEpgShifts(m: Map<String, Int>) {
+        prefs.edit().putString("epgShifts", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
+    }
+
     /** Ton-Versatz für alle Sender in Millisekunden (positiv = Ton später) */
     var audioDelay: Int
         get() = prefs.getInt("audioDelay", 0)

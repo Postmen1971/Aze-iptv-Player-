@@ -178,7 +178,13 @@ class EpgRepository(context: Context) {
      * im Zeitfenster von 2 Stunden zurück bis 24 Stunden voraus.
      * [manual] = eigene Zuordnungen (Sender-Schlüssel → EPG-Kennung).
      */
-    suspend fun refresh(urls: List<String>, channels: List<Channel>, manual: Map<String, String> = emptyMap()): Result<Epg> = withContext(lowPriority) {
+    suspend fun refresh(
+        urls: List<String>,
+        channels: List<Channel>,
+        manual: Map<String, String> = emptyMap(),
+        /** Zeitverschiebung je Quelle in Stunden (falls eine Quelle falsche Zeiten liefert) */
+        shifts: Map<String, Int> = emptyMap(),
+    ): Result<Epg> = withContext(lowPriority) {
         // Große EPG-Dateien (über 100 MB) brauchen lange Rechenzeit. Mit niedriger Priorität bekommt der
         // Player immer zuerst die Rechenzeit – sonst kann das Bild beim Zappen stehen bleiben.
         runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_LOWEST) }
@@ -201,7 +207,7 @@ class EpgRepository(context: Context) {
                 val good = runCatching {
                     val conn = Http.open(url)
                     try {
-                        parse(conn.inputStream, wantedIds, wantedNames, from, to, byId, idByName, catalog, Epg.urlCountry(url))
+                        parse(conn.inputStream, wantedIds, wantedNames, from, to, byId, idByName, catalog, Epg.urlCountry(url), (shifts[url] ?: 0) * 3_600_000L)
                     } finally {
                         conn.disconnect()
                     }
@@ -231,6 +237,7 @@ class EpgRepository(context: Context) {
         idByName: HashMap<String, String>,
         catalog: HashMap<String, String>,
         sourceCountry: String?,
+        shiftMs: Long = 0L,
     ) {
         val buffered = BufferedInputStream(raw, 64 * 1024)
         // gzip erkennen (viele EPG-Dateien sind .xml.gz)
@@ -264,8 +271,8 @@ class EpgRepository(context: Context) {
                         val ch = p.getAttributeValue(null, "channel")
                         val keep = ch != null && (ch in nameIds || ch.lowercase(Locale.ROOT) in wantedIds)
                         if (keep) {
-                            progStart = parseTime(fmt, p.getAttributeValue(null, "start"))
-                            progStop = parseTime(fmt, p.getAttributeValue(null, "stop"))
+                            progStart = parseTime(fmt, p.getAttributeValue(null, "start")) + shiftMs
+                            progStop = parseTime(fmt, p.getAttributeValue(null, "stop")) + shiftMs
                             progChannel = if (progStop > from && progStart < to) ch else null
                         } else {
                             progChannel = null
@@ -306,12 +313,19 @@ class EpgRepository(context: Context) {
         }
     }
 
-    private fun parseTime(fmt: SimpleDateFormat, s: String?): Long {
+    // „20261030190000 +0300“, „20261030190000+0300“, „20261030190000 +03:00“ oder ohne Angabe (= UTC)
+    private val timeRx = Regex("""^(\d{14})\s*(?:([+-])(\d{2}):?(\d{2})?)?""")
+    private val utc = java.util.TimeZone.getTimeZone("UTC")
+
+    private fun parseTime(@Suppress("UNUSED_PARAMETER") fmt: SimpleDateFormat, s: String?): Long {
         if (s.isNullOrBlank()) return 0L
-        val v = s.trim()
+        val m = timeRx.find(s.trim()) ?: return 0L
         return runCatching {
-            if (v.length >= 14 && v.contains(' ')) fmt.parse(v)?.time ?: 0L
-            else SimpleDateFormat("yyyyMMddHHmmss", Locale.ROOT).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }.parse(v.take(14))?.time ?: 0L
+            val base = SimpleDateFormat("yyyyMMddHHmmss", Locale.ROOT).apply { timeZone = utc }.parse(m.groupValues[1])?.time ?: return 0L
+            val sign = m.groupValues[2]
+            if (sign.isEmpty()) return base
+            val off = (m.groupValues[3].toInt() * 60 + (m.groupValues[4].ifEmpty { "0" }).toInt()) * 60_000L
+            if (sign == "+") base - off else base + off
         }.getOrDefault(0L)
     }
 

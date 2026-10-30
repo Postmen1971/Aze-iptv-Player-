@@ -80,6 +80,17 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         store.epgUrl = epgExtra.joinToString("\n")
     }
 
+    /** Zeitverschiebung je EPG-Quelle in Stunden */
+    var epgShifts by mutableStateOf(store.epgShifts())
+        private set
+
+    fun shiftEpg(url: String, hours: Int) {
+        val h = hours.coerceIn(-12, 12)
+        epgShifts = if (h == 0) epgShifts - url else epgShifts + (url to h)
+        store.saveEpgShifts(epgShifts)
+        refreshEpg(quiet = true)
+    }
+
     var epgReport by mutableStateOf("")
         private set
 
@@ -97,8 +108,11 @@ class AppController(context: Context, outerScope: CoroutineScope) {
 
     suspend fun epgCatalog(): List<EpgChannel> = epgRepo.catalog()
 
+    private var epgAgain = false
+
     fun refreshEpg(quiet: Boolean = false) {
-        if (epgLoading) return
+        // Läuft schon: danach noch einmal laden (z. B. nach geänderter Zeitverschiebung)
+        if (epgLoading) { epgAgain = true; return }
         val urls = (epgFromSources() + epgExtra).distinct()
         if (urls.isEmpty()) {
             message = "Keine EPG-Quelle gefunden. Bei M3U-Listen ohne Programmdaten unter Einstellungen → Programm (EPG) eine Quelle hinzufügen."
@@ -106,9 +120,10 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         }
         scope.launch {
             epgLoading = true
-            val result = epgRepo.refresh(urls, channels, epgMap)
+            val result = epgRepo.refresh(urls, channels, epgMap, epgShifts)
             epgLoading = false
             epgReport = epgRepo.lastReport
+            if (epgAgain) { epgAgain = false; refreshEpg(quiet = true) }
             result.onSuccess {
                 epg = it
                 if (!quiet) message = "Programmzeitschrift geladen: ${it.channelCount} Sender mit Programm (${epgRepo.lastReport})."

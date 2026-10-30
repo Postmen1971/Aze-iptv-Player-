@@ -440,7 +440,7 @@ private fun EpgSection(app: AppController) {
         val own = remember(app.sources) { app.epgFromSources() }
         Text("Vom Anbieter / aus der Playlist", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         if (own.isEmpty()) Text("Keine – die Playlist enthält keine EPG-Adresse (url-tvg).", color = Palette.TextMuted, fontSize = 13.sp)
-        own.forEach { Text("• " + shortUrl(it), color = Palette.Text, fontSize = 13.sp, maxLines = 1) }
+        own.forEach { EpgSourceRow(app, it, removable = false) }
     }
     Section("Weitere EPG-Quellen") {
         Text(
@@ -448,12 +448,12 @@ private fun EpgSection(app: AppController) {
                 "Alle Quellen werden zusammengeführt.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
-        app.epgExtra.forEach { u ->
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(shortUrl(u), color = Palette.Text, fontSize = 14.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                TvButton("Entfernen", danger = true, onClick = { app.removeEpgUrl(u) })
-            }
-        }
+        app.epgExtra.forEach { u -> EpgSourceRow(app, u, removable = true) }
+        Text(
+            "Zeiten falsch (z. B. türkisches Programm 1–2 Stunden versetzt)? Bei der Quelle mit „− 1 h“ / „+ 1 h“ korrigieren. " +
+                "Zeitangaben mit Zeitzone in der Datei rechnet die App automatisch in deine Uhrzeit um.",
+            color = Palette.TextMuted, fontSize = 12.sp,
+        )
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("+ Eigene Adresse", onClick = { adding = true })
             epgPresets.filter { it.second !in app.epgExtra }.forEach { (label, url) ->
@@ -483,6 +483,21 @@ private fun EpgSection(app: AppController) {
             },
             onCancel = { adding = false },
         )
+    }
+}
+
+@Composable
+private fun EpgSourceRow(app: AppController, url: String, removable: Boolean) {
+    val h = app.epgShifts[url] ?: 0
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(shortUrl(url), color = Palette.Text, fontSize = 13.sp, maxLines = 1, modifier = Modifier.widthIn(max = 420.dp))
+        Text(if (h == 0) "Zeit ±0 h" else "Zeit ${if (h > 0) "+" else ""}$h h", color = if (h == 0) Palette.TextMuted else Palette.Highlight, fontSize = 13.sp)
+        TvButton("− 1 h", onClick = { app.shiftEpg(url, h - 1) })
+        TvButton("+ 1 h", onClick = { app.shiftEpg(url, h + 1) })
+        if (removable) TvButton("Entfernen", danger = true, onClick = { app.removeEpgUrl(url) })
     }
 }
 

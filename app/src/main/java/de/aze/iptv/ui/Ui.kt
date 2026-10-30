@@ -115,6 +115,8 @@ object Palette {
     val Line get() = scheme.line
     /** Eigene Schriftfarbe (Einstellungen → Darstellung) */
     var textOverride by mutableStateOf<Color?>(null)
+    /** Laufende Sendung (EPG): dezentes Gelb, hebt sich vom Sendernamen ab */
+    val EpgText = Color(0xFFDCC27A)
     val Text get() = textOverride ?: scheme.text
     val TextSoft get() = scheme.textSoft
     val TextMuted get() = scheme.textMuted

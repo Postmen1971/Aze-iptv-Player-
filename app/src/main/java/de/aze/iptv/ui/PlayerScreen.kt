@@ -762,7 +762,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                         }
                         if (app.nameDisplay == 1) {
                             app.epg.now(cur.channel)?.let { p ->
-                                Text(p.title, color = Palette.TextSoft, fontSize = 15.sp, maxLines = 1)
+                                Text(p.title, color = Palette.EpgText, fontSize = 15.sp, maxLines = 1)
                             }
                         }
                     }

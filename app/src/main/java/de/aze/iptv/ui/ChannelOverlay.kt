@@ -316,8 +316,8 @@ fun ChannelOverlay(
                                         if (prog != null) {
                                             Text(
                                                 prog.title,
-                                                color = if (focused) Palette.OnAccent else Palette.TextMuted,
-                                                fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                                color = if (focused) Palette.OnAccent else Palette.EpgText,
+                                                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                             )
                                             Box(Modifier.fillMaxWidth().height(2.dp).background(if (focused) Palette.OnAccent.copy(alpha = 0.25f) else Palette.Line)) {
                                                 Box(
