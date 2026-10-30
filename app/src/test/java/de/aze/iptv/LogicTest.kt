@@ -163,7 +163,10 @@ class LogicTest {
         val prog = listOf(Programme(0, Long.MAX_VALUE / 2, "Tagesschau"))
         val epg = Epg(
             byId = mapOf("DasErste.de" to prog, "showtv.tr" to prog, "kanal7.tr" to prog),
-            idByName = mapOf(Epg.normName("Show TV") to "showtv.tr", Epg.normName("Kanal 7") to "kanal7.tr"),
+            idByName = mapOf(
+                Epg.nameKey("Show TV", "tr") to "showtv.tr", Epg.nameKey("Kanal 7", "tr") to "kanal7.tr",
+                Epg.nameKey("ATV", "at") to "atv.at", "atv|*" to "atv.at",
+            ),
         )
         // tvg-id mit anderer Groß-/Kleinschreibung
         assertEquals("DasErste.de", epg.idFor(Channel("ARD", "DE", null, "u1", tvgId = "daserste.de")))
@@ -176,6 +179,11 @@ class LogicTest {
         val manual = epg.withManual(mapOf("u2" to "kanal7.tr"))
         assertEquals("kanal7.tr", manual.idFor(Channel("TR: SHOW TV HD", "TR", null, "u2")))
         assertTrue(manual.isManual(Channel("x", "", null, "u2")))
+        // türkischer Sender bekommt NICHT das österreichische/deutsche Programm mit gleichem Namen
+        assertEquals(null, epg.idFor(Channel("TR: ATV HD", "TR ULUSAL", null, "u6")))
+        assertEquals("atv.at", epg.idFor(Channel("ATV", "Österreich", null, "u7")))
+        assertEquals("tr", Epg.countryOf(Channel("Haber", "TÜRKIYE | Haber", null, "u8")))
+        assertEquals("tr", Epg.urlCountry("https://epgshare01.online/epgshare01/epg_ripper_TR1.xml.gz"))
         // unbekannt
         assertEquals(null, epg.idFor(Channel("Irgendwas", "", null, "u5")))
     }

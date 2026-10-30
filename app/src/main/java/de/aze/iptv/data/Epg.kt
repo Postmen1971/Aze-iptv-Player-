@@ -42,8 +42,18 @@ class Epg(
     fun idFor(ch: Channel): String? =
         known(manual[ch.key])
             ?: known(ch.tvgId)
-            ?: ch.tvgName?.let { idByName[normName(it)] }
-            ?: idByName[normName(ch.name)]
+            ?: countryOf(ch).let { c -> ch.tvgName?.let { byName(it, c) } ?: byName(ch.name, c) }
+
+    /**
+     * Zuordnung über den Namen, aber nur im passenden Land: „TR: ATV“ bekommt das türkische ATV,
+     * nicht das österreichische aus einer deutschen EPG-Liste.
+     */
+    private fun byName(name: String, country: String?): String? {
+        val k = normName(name)
+        if (k.isEmpty()) return null
+        return if (country != null) idByName["$k|$country"] ?: idByName["$k|"]
+        else idByName["$k|"] ?: idByName["$k|*"]
+    }
 
     fun isManual(ch: Channel): Boolean = manual.containsKey(ch.key)
 
@@ -67,6 +77,38 @@ class Epg(
         private val qualityRx = Regex("""\b(hd|fhd|uhd|4k|sd|hevc|h265|50fps|\+1)\b""")
         private val otherRx = Regex("[^a-z0-9äöüßçğışİ]")
 
+        // Länderkürzel → einheitlicher Code
+        private val countryCodes = mapOf(
+            "tr" to "tr", "tur" to "tr", "turk" to "tr", "türk" to "tr", "turkey" to "tr", "turkiye" to "tr", "türkiye" to "tr", "türkei" to "tr", "turkei" to "tr",
+            "de" to "de", "ger" to "de", "deu" to "de", "germany" to "de", "deutsch" to "de", "deutschland" to "de",
+            "at" to "at", "aut" to "at", "österreich" to "at", "austria" to "at",
+            "ch" to "ch", "sui" to "ch", "schweiz" to "ch", "swiss" to "ch",
+            "uk" to "uk", "gb" to "uk", "en" to "uk", "nl" to "nl", "fr" to "fr", "it" to "it", "es" to "es", "pl" to "pl",
+            "ru" to "ru", "ar" to "ar", "arab" to "ar", "ku" to "ku", "kurd" to "ku", "az" to "az", "aze" to "az",
+        )
+        private val namePrefix = Regex("""^\s*\|?\s*([A-Za-zÜüÖöİ]{2,7})\s*[:|]""")
+        private val groupWords = Regex("""[A-Za-zÜüÖöİıçÇşŞğĞ]+""")
+        private val idSuffix = Regex("""\.([a-z]{2})$""")
+
+        /** Land eines Senders aus Vorsatz („TR:“), Gruppe („TR | Haber“, „Türkei“) oder tvg-id („showtv.tr“); null = unbekannt. */
+        fun countryOf(ch: Channel): String? {
+            namePrefix.find(ch.name)?.groupValues?.get(1)?.lowercase(Locale.ROOT)?.let { countryCodes[it] }?.let { return it }
+            groupWords.findAll(ch.group).firstNotNullOfOrNull { countryCodes[it.value.lowercase(Locale.ROOT)] }?.let { return it }
+            ch.tvgId?.lowercase(Locale.ROOT)?.let { idSuffix.find(it)?.groupValues?.get(1) }?.let { countryCodes[it] }?.let { return it }
+            return null
+        }
+
+        /** Land eines EPG-Senders aus seiner Kennung („ATV.tr“) oder der Quelle („…_TR1.xml.gz“). */
+        fun epgCountry(id: String, sourceCountry: String?): String? =
+            idSuffix.find(id.lowercase(Locale.ROOT))?.groupValues?.get(1)?.let { countryCodes[it] ?: it } ?: sourceCountry
+
+        private val urlCountry = Regex("""(?i)[_/-]([a-z]{2})\d*\.xml""")
+        fun urlCountry(url: String): String? =
+            urlCountry.find(url.substringBefore('?'))?.groupValues?.get(1)?.lowercase(Locale.ROOT)?.let { countryCodes[it] }
+
+        /** Schlüssel für die Namenssuche */
+        fun nameKey(name: String, country: String?): String = "${normName(name)}|${country.orEmpty()}"
+
         fun normName(s: String): String = s.lowercase(Locale.ROOT)
             .replace(prefixRx, "")
             .replace(qualityRx, "")
@@ -80,7 +122,12 @@ class EpgChannel(val id: String, val name: String)
 /** Lädt XMLTV-Daten speicherschonend (Zeile für Zeile) und hält eine kompakte Kopie auf dem Gerät. */
 class EpgRepository(context: Context) {
 
-    private val file = File(context.filesDir, "epg.bin")
+    // neue Datei: Namens-Zuordnung jetzt mit Land (alte Daten werden einmal neu geladen)
+    private val file = File(context.filesDir, "epg3.bin")
+
+    init {
+        runCatching { File(context.filesDir, "epg.bin").delete() }
+    }
 
     /** Gespeichertes EPG ist älter als [hours] Stunden (oder fehlt). */
     fun isStale(hours: Int): Boolean =
@@ -146,7 +193,7 @@ class EpgRepository(context: Context) {
                 val good = runCatching {
                     val conn = Http.open(url)
                     try {
-                        parse(conn.inputStream, wantedIds, wantedNames, from, to, byId, idByName, catalog)
+                        parse(conn.inputStream, wantedIds, wantedNames, from, to, byId, idByName, catalog, Epg.urlCountry(url))
                     } finally {
                         conn.disconnect()
                     }
@@ -175,6 +222,7 @@ class EpgRepository(context: Context) {
         byId: HashMap<String, MutableList<Programme>>,
         idByName: HashMap<String, String>,
         catalog: HashMap<String, String>,
+        sourceCountry: String?,
     ) {
         val buffered = BufferedInputStream(raw, 64 * 1024)
         // gzip erkennen (viele EPG-Dateien sind .xml.gz)
@@ -224,9 +272,10 @@ class EpgRepository(context: Context) {
                         val text = p.text?.trim().orEmpty()
                         if (id != null && text.isNotEmpty() && catalog.size < 40_000 && !catalog.containsKey(id)) catalog[id] = text
                         val norm = Epg.normName(text)
-                        if (id != null && norm.isNotEmpty() && norm in wantedNames && !idByName.containsKey(norm)) {
-                            idByName[norm] = id
-                            nameIds.add(id)
+                        if (id != null && norm.isNotEmpty() && norm in wantedNames) {
+                            val cc = Epg.epgCountry(id, sourceCountry).orEmpty()
+                            if (!idByName.containsKey("$norm|$cc")) { idByName["$norm|$cc"] = id; nameIds.add(id) }
+                            if (!idByName.containsKey("$norm|*")) { idByName["$norm|*"] = id; nameIds.add(id) }
                         }
                     }
                     if (inTitle) title = p.text?.trim()
