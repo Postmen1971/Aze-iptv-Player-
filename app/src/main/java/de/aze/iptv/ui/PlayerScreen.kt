@@ -253,9 +253,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // Versteckter Videotext rechnet nicht weiter im Hintergrund
     LaunchedEffect(teletext) {
         teletextWeb?.let { if (teletext) it.onResume() else it.onPause() }
-        // 10 Minuten nicht benutzt: Videotext-Anzeige ganz freigeben (eine WebView braucht viel Speicher)
+        // Videotext geschlossen: Anzeige sofort ganz freigeben (eine WebView braucht viel Speicher)
         if (!teletext && teletextWeb != null) {
-            delay(10 * 60_000L)
             val w = teletextWeb
             teletextWeb = null
             runCatching { w?.loadUrl("about:blank"); w?.destroy() }
