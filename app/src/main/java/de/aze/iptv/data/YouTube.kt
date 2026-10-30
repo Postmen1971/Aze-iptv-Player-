@@ -53,6 +53,13 @@ object YouTube {
         "beIN Haber" to "https://www.youtube.com/live/i7UpPgxfZZ8",
         "Kanal D" to "https://www.youtube.com/live/b94j0fwsPGQ",
         "Kanal 7" to "https://www.youtube.com/live/2exv1i3jgIY",
+        "TRT Spor" to "https://www.youtube.com/live/2ZT8u2dwwNE",
+        "A Spor" to "https://www.youtube.com/live/nol9os2B8zE",
+        "CNN Türk" to "https://www.youtube.com/live/XBt21-w85WA",
+        "TVNET" to "https://www.youtube.com/live/Z5bqy4gwEmc",
+        "KRT" to "https://www.youtube.com/live/yRBufi6xue8",
+        "Kardeş Payı" to "https://www.youtube.com/live/eYeu4VUkhYc",
+        "Yeşilçam" to "https://www.youtube.com/live/dXb2dcygmpk",
     )
 
     /** Normale YouTube-Adresse (zum Öffnen in der YouTube-App). */
