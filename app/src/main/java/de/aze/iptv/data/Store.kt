@@ -24,6 +24,13 @@ class Store(context: Context) {
         if (!prefs.getBoolean("tunnelReset1", false)) {
             prefs.edit().putBoolean("tunneling", false).putBoolean("tunnelReset1", true).apply()
         }
+        // Einmalig: neue Standardwerte (Puffer mittel, immer Media3, Bildqualität automatisch, nie umschalten)
+        if (!prefs.getBoolean("tuned4", false)) {
+            prefs.edit().putString("buffer", "MEDIUM").putString("engine", "MEDIA3").putBoolean("forceHighest", false)
+                .putBoolean("afr50", false).putBoolean("afr", false)
+                .putBoolean("tuned1", true).putBoolean("tuned2", true).putBoolean("tuned3", true).putBoolean("afrReset1", true)
+                .putBoolean("tuned4", true).apply()
+        }
         // Einmalig: von Aziz festgelegte Standardwerte (Puffer groß, immer Media3, Bildqualität automatisch, 50 Hz in der App)
         if (!prefs.getBoolean("tuned3", false)) {
             prefs.edit().putString("buffer", "LARGE").putString("engine", "MEDIA3").putBoolean("forceHighest", false)
@@ -167,7 +174,7 @@ class Store(context: Context) {
 
     /** Bildschirm fest auf 50 Hz (einmal beim Start umschalten statt bei jedem Sender). */
     var afr50: Boolean
-        get() = prefs.getBoolean("afr50", true)
+        get() = prefs.getBoolean("afr50", false)
         set(v) = prefs.edit().putBoolean("afr50", v).apply()
 
     /** Wartezeit nach dem Umschalten der Frequenz (Sekunden), wie bei TiviMate einstellbar. */
@@ -199,6 +206,26 @@ class Store(context: Context) {
     var adultFilter: Boolean
         get() = prefs.getBoolean("adultFilter", true)
         set(v) = prefs.edit().putBoolean("adultFilter", v).apply()
+
+    /** Belegung der Fernbedienungstasten (JSON) */
+    var keyMap: String
+        get() = prefs.getString("keyMap", "{}") ?: "{}"
+        set(v) = prefs.edit().putString("keyMap", v).apply()
+
+    /** Hoch/Runter nur innerhalb der aktuellen Gruppe */
+    var zapInGroup: Boolean
+        get() = prefs.getBoolean("zapInGroup", false)
+        set(v) = prefs.edit().putBoolean("zapInGroup", v).apply()
+
+    /** Sendername beim Umschalten: 0 = nur bei schwarzem Bild, 1 = 3 Sekunden mit Sendung, 2 = aus */
+    var nameDisplay: Int
+        get() = prefs.getInt("nameDisplay", 0)
+        set(v) = prefs.edit().putInt("nameDisplay", v).apply()
+
+    /** Erweiterte Einstellungen anzeigen */
+    var expertMode: Boolean
+        get() = prefs.getBoolean("expertMode", false)
+        set(v) = prefs.edit().putBoolean("expertMode", v).apply()
 
     var autostart: Boolean
         get() = prefs.getBoolean("autostart", false)

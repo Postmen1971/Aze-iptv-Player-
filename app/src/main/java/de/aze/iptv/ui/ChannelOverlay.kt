@@ -65,10 +65,11 @@ fun ChannelOverlay(
     onVod: (series: Boolean) -> Unit = {},
     onExitApp: () -> Unit = onClose,
     onFootball: (() -> Unit)? = null,
+    startInGroups: Boolean = false,
 ) {
     // Links in der Senderliste → Gruppen, nochmal Links → Menü (TV, Filme, Serien, Suchen, Einstellungen).
     // Zurück: Senderliste → Gruppen → App beenden.
-    var showGroups by remember { mutableStateOf(false) }
+    var showGroups by remember { mutableStateOf(startInGroups) }
     var showMenu by remember { mutableStateOf(false) }
     BackHandler {
         when {

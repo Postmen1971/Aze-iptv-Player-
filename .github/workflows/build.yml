@@ -59,7 +59,11 @@ jobs:
         run: |
           set -o pipefail
           # Compiler-Fehler zusätzlich als Hinweise am Lauf anzeigen (Logs sind nicht immer abrufbar)
-          gradle :app:assembleRelease --stacktrace 2>&1 | tee build.log || {
+          gradle :app:testReleaseUnitTest :app:assembleRelease --stacktrace 2>&1 | tee build.log || {
+            # fehlgeschlagene Tests als Hinweise anzeigen
+            for f in app/build/test-results/testReleaseUnitTest/*.xml; do
+              [ -f "$f" ] && grep -o 'testcase name="[^"]*"[^>]*>\s*<failure message="[^"]*"' "$f" | head -20 | while IFS= read -r l; do echo "::error::Test: $l"; done
+            done
             grep -E "^e: |What went wrong" -A2 build.log | head -60 | while IFS= read -r l; do echo "::error::$l"; done
             exit 1
           }

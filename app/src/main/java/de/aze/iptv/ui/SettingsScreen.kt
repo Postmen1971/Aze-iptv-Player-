@@ -2,6 +2,8 @@ package de.aze.iptv.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -104,9 +106,10 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
     var cat by remember { mutableStateOf(0) }
-    val cats = listOf(
-        "Playlists", "YouTube Live", "Senderliste", "Wiedergabe", "Programm (EPG)",
-        "Netzwerk", "Sicherheit", "Autostart", "App-Update", "Über",
+    // Standard: das Wichtigste. „Erweitert“ blendet Technik (Netzwerk, Puffer, Player …) zusätzlich ein.
+    val cats = listOfNotNull(
+        "Playlists", "YouTube Live", "Senderliste", "Bedienung", "Wiedergabe", "Programm (EPG)",
+        if (app.expertMode) "Netzwerk" else null, "Sicherheit", "Autostart", "App-Update", "Über",
     )
 
     // Kompakt: links die Bereiche, rechts nur der gewählte Bereich.
@@ -124,6 +127,12 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             cats.forEachIndexed { i, name ->
                 CategoryItem(name, selected = i == cat, onFocus = { cat = i }, onClick = { cat = i })
             }
+            Spacer(Modifier.weight(1f))
+            CategoryItem(
+                if (app.expertMode) "Erweitert: an" else "Erweitert: aus",
+                selected = app.expertMode, onFocus = {},
+                onClick = { app.updateExpertMode(!app.expertMode); cat = 0 },
+            )
         }
         Column(
             modifier = Modifier
@@ -136,22 +145,23 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             app.message?.let {
                 Text(it, color = Palette.TextSoft, fontSize = 13.sp)
             }
-            when (cat) {
-                0 -> {
+            when (cats.getOrNull(cat)) {
+                "Playlists" -> {
                     PhoneInputSection(app)
                     PlaylistSection(app)
                     FreeListSection(app)
                 }
-                1 -> YouTubeSection(app)
-                2 -> {
+                "YouTube Live" -> YouTubeSection(app)
+                "Senderliste" -> {
                     RefreshSection(app)
                     PlaybackSection(app, onEditList = { editingList = true }, part = 1)
                     FavoritesSection(app)
                 }
-                3 -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
-                4 -> EpgSection(app)
-                5 -> NetworkSection(app)
-                6 -> Section("Sicherheit") {
+                "Bedienung" -> ControlsSection(app)
+                "Wiedergabe" -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
+                "Programm (EPG)" -> EpgSection(app)
+                "Netzwerk" -> NetworkSection(app)
+                "Sicherheit" -> Section("Sicherheit") {
                     Text(
                         if (app.pinIsDefault) "Die PIN ist noch 0000. Bitte eine eigene PIN festlegen."
                         else "Die Einstellungen sind mit deiner PIN geschützt.",
@@ -184,8 +194,8 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     )
                     TvButton("PIN ändern", onClick = { pinStep = 1 })
                 }
-                7 -> AutostartSection(app)
-                8 -> UpdateSection()
+                "Autostart" -> AutostartSection(app)
+                "App-Update" -> UpdateSection()
                 else -> AboutSection()
             }
         }
@@ -216,16 +226,68 @@ private fun CategoryItem(
 }
 
 @Composable
-private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
+private fun Section(title: String, startOpen: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+    // Einklappbar: Überschrift antippen bzw. OK
+    var open by remember(title) { mutableStateOf(startOpen) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Palette.Panel, RoundedCornerShape(12.dp))
+            .background(Palette.PanelBrush, RoundedCornerShape(14.dp))
+            .border(1.dp, Palette.Line.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(title, color = Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold)
-        content()
+        Focusable(modifier = Modifier.fillMaxWidth(), onClick = { open = !open }) { focused ->
+            Row(
+                Modifier.fillMaxWidth()
+                    .then(if (focused) Modifier.background(Palette.FocusBrush, RoundedCornerShape(8.dp)) else Modifier)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(title, color = if (focused) Palette.OnAccent else Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(if (open) "▾" else "▸", color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 18.sp)
+            }
+        }
+        if (open) content()
+    }
+}
+
+/** Bedienung: Zappen, Sendernamen, Tastenbelegung. */
+@Composable
+private fun ControlsSection(app: AppController) {
+    Section("Zappen") {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Alle Sender", selected = !app.zapInGroup, onClick = { app.updateZapInGroup(false) })
+            TvButton("Nur in der Gruppe", selected = app.zapInGroup, onClick = { app.updateZapInGroup(true) })
+        }
+        Text(
+            "„Nur in der Gruppe“: Hoch/Runter bleibt in der Gruppe des laufenden Senders (am Ende geht es von vorn los).",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+    }
+    Section("Sendername beim Umschalten") {
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Nur bei schwarzem Bild", selected = app.nameDisplay == 0, onClick = { app.updateNameDisplay(0) })
+            TvButton("3 Sekunden mit Sendung", selected = app.nameDisplay == 1, onClick = { app.updateNameDisplay(1) })
+            TvButton("Aus", selected = app.nameDisplay == 2, onClick = { app.updateNameDisplay(2) })
+        }
+    }
+    Section("Tastenbelegung der Fernbedienung") {
+        Text(
+            "OK auf einer Taste wählt die nächste Aktion. Zifferntasten und Zurück bleiben fest.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        de.aze.iptv.data.RemoteKey.entries.forEach { k ->
+            val a = app.keyAction(k)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(k.label, color = Palette.TextSoft, fontSize = 14.sp, modifier = Modifier.width(150.dp))
+                TvButton(a.label + if (a == k.default) "" else "  ✎", onClick = {
+                    val all = de.aze.iptv.data.KeyAction.entries
+                    app.setKeyAction(k, all[(a.ordinal + 1) % all.size])
+                })
+            }
+        }
+        TvButton("Alle Tasten zurücksetzen", onClick = { app.resetKeyMap() })
     }
 }
 
@@ -594,6 +656,13 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         InputRow("OMDb-Schlüssel", app.omdbKey, placeholder = "z. B. a1b2c3d4") { app.updateOmdbKey(it) }
     }
     if (part != 1) Section("Wiedergabe") {
+      if (!app.expertMode) {
+        Text(
+            "Puffer, Player, Bildqualität und Bildwiederholrate sind auf bewährte Werte eingestellt " +
+                "(Puffer Mittel, Media3, Automatisch, Nie umschalten). Ändern: links unten „Erweitert“ einschalten.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+      } else {
         Text("Puffer", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             BufferLevel.entries.forEach { lvl ->
@@ -634,6 +703,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton(if (app.showDiag) "Fehlersuche-Anzeige: an" else "Fehlersuche-Anzeige: aus", selected = app.showDiag, onClick = { app.updateShowDiag(!app.showDiag) })
         }
+      }
         Text("Untertitel", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Aus", selected = !app.subtitlesOn, onClick = { app.updateSubtitles(false) })

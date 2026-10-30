@@ -2,14 +2,16 @@ package de.aze.iptv.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,10 +22,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,94 +39,107 @@ import androidx.compose.ui.unit.sp
 import de.aze.iptv.AppController
 
 /**
- * Senderliste bearbeiten (wie die Bouquet-Bearbeitung bei Enigma2):
- *  Gruppen: verschieben, umbenennen, ein-/ausblenden, Sender öffnen
- *  Sender: innerhalb der Gruppe verschieben, ein-/ausblenden
+ * Senderlisten-Verwaltung im Stil von IBO Player:
+ *  links die Kategorien, rechts die Sender der gewählten Kategorie.
+ *  OK = ein-/ausblenden (Häkchen) · OK lang = Verschieben (dann ▲▼, OK legt ab) · Menü-Taste = umbenennen.
+ *  Auf dem Tablet: tippen = ein-/ausblenden, lange drücken = verschieben (▲▼ erscheinen), „›“ zeigt die Sender.
  */
 @Composable
 fun ListEditor(app: AppController, onClose: () -> Unit) {
-    var openGroup by remember { mutableStateOf<String?>(null) }
+    var selectedKey by remember { mutableStateOf(app.editGroups.firstOrNull()?.key) }
+    var movingGroup by remember { mutableStateOf<String?>(null) }
+    var movingChannel by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<String?>(null) }
-    BackHandler { if (openGroup != null) openGroup = null else onClose() }
+    BackHandler {
+        when {
+            movingGroup != null -> movingGroup = null
+            movingChannel != null -> movingChannel = null
+            else -> onClose()
+        }
+    }
+    val firstGroup = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { firstGroup.requestFocus() }
+    }
 
-    val back = remember { FocusRequester() }
-    LaunchedEffect(openGroup) { runCatching { back.requestFocus() } }
+    val groups = app.editGroups
+    val selected = groups.firstOrNull { it.key == selectedKey } ?: groups.firstOrNull()
+    val hidden = app.hiddenChannels
 
-    Box(modifier = Modifier.fillMaxSize().background(Palette.ScreenBrush), contentAlignment = Alignment.TopCenter) {
-        Column(
-            modifier = Modifier.widthIn(max = 980.dp).fillMaxWidth().padding(horizontal = 24.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            val group = openGroup?.let { k -> app.editGroups.firstOrNull { it.key == k } }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        if (group == null) "Senderliste bearbeiten" else group.name,
-                        color = Palette.Text, fontSize = 28.sp, fontWeight = FontWeight.Bold,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(
-                        if (group == null) "Gruppen verschieben, umbenennen oder ausblenden. „Sender“ öffnet die Gruppe."
-                        else "Sender verschieben oder ausblenden. Ausgeblendete Sender bekommen keine Nummer.",
-                        color = Palette.TextMuted, fontSize = 15.sp,
-                    )
-                }
-                TvButton(
-                    if (group == null) "Fertig" else "Zurück zu den Gruppen",
-                    modifier = Modifier.focusRequester(back),
-                    onClick = { if (group == null) onClose() else openGroup = null },
+    Column(Modifier.fillMaxSize().background(Palette.ScreenBrush).padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("Senderliste verwalten", color = Palette.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "OK = ein-/ausblenden · OK lang = verschieben (▲▼, OK legt ab) · Menü = umbenennen · ◀ ▶ wechselt zwischen Kategorien und Sendern",
+                    color = Palette.TextMuted, fontSize = 12.sp,
                 )
             }
-
-            if (group == null) {
-                val groups = app.editGroups
-                if (groups.isEmpty()) {
-                    Text("Noch keine Sender geladen.", color = Palette.TextMuted, fontSize = 16.sp)
-                }
-                val multi = app.sources.size > 1
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            selected?.let { g ->
+                TvButton("Umbenennen", onClick = { renaming = g.key })
+                TvButton("Zurücksetzen", onClick = { app.resetGroup(g.key) })
+            }
+            TvButton("Fertig", onClick = onClose)
+        }
+        if (groups.isEmpty()) {
+            Text("Noch keine Sender geladen.", color = Palette.TextMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 20.dp))
+            return@Column
+        }
+        Row(Modifier.fillMaxSize().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            // ---- Kategorien ----
+            Column(Modifier.width(380.dp).fillMaxHeight().background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp)) {
+                Text("Kategorien (${groups.count { !it.hidden }}/${groups.size} sichtbar)", color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp))
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     itemsIndexed(groups, key = { _, g -> g.key }) { i, g ->
-                        EditRow(
+                        ManageRow(
                             title = g.name,
-                            subtitle = buildString {
-                                append("${g.channels.size} Sender")
-                                if (g.name != g.originalName) append(" · früher „${g.originalName}“")
-                                if (multi && g.sourceName != null) append(" · ${g.sourceName}")
-                            },
-                            hidden = g.hidden,
-                        ) {
-                            TvButton("▲", onClick = { app.moveGroup(g.key, -1) })
-                            TvButton("▼", onClick = { app.moveGroup(g.key, +1) })
-                            TvButton(if (g.hidden) "Einblenden" else "Ausblenden", danger = !g.hidden, onClick = { app.toggleGroupHidden(g.key) })
-                            TvButton("Umbenennen", onClick = { renaming = g.key })
-                            TvButton("Sender ›", onClick = { openGroup = g.key })
-                        }
-                        if (i == groups.lastIndex) Box(Modifier.padding(bottom = 24.dp))
+                            subtitle = "${g.channels.size} Sender" + (g.sourceName?.let { " · $it" } ?: ""),
+                            visible = !g.hidden,
+                            moving = movingGroup == g.key,
+                            active = selected?.key == g.key,
+                            modifier = if (i == 0) Modifier.focusRequester(firstGroup) else Modifier,
+                            onFocus = { if (movingGroup == null) selectedKey = g.key },
+                            onToggle = { app.toggleGroupHidden(g.key) },
+                            onMoveStart = { movingGroup = g.key },
+                            onMove = { d -> app.moveGroup(g.key, d) },
+                            onMoveEnd = { movingGroup = null },
+                            onOpen = { selectedKey = g.key },
+                            onRename = { renaming = g.key },
+                        )
                     }
                 }
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TvButton(if (group.hidden) "Gruppe einblenden" else "Ganze Gruppe ausblenden", onClick = { app.toggleGroupHidden(group.key) })
-                    TvButton("Gruppe zurücksetzen", onClick = { app.resetGroup(group.key) })
-                }
-                val hidden = app.hiddenChannels
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    itemsIndexed(group.channels, key = { _, c -> c.key }) { _, ch ->
-                        val isHidden = ch.key in hidden
-                        val nr = app.lineup.byKey[ch.key]?.number
-                        EditRow(
-                            title = ch.name,
-                            subtitle = when {
-                                isHidden -> "ausgeblendet"
-                                nr != null && app.isFavorite(ch) -> "Nr. $nr · Favorit"
-                                nr != null -> "Nr. $nr"
-                                else -> ""
-                            },
-                            hidden = isHidden,
-                        ) {
-                            TvButton("▲", onClick = { app.moveChannel(group.key, ch.key, -1) })
-                            TvButton("▼", onClick = { app.moveChannel(group.key, ch.key, +1) })
-                            TvButton(if (isHidden) "Einblenden" else "Ausblenden", danger = !isHidden, onClick = { app.toggleChannelHidden(ch.key) })
+            }
+            // ---- Sender der gewählten Kategorie ----
+            Column(Modifier.weight(1f).fillMaxHeight().background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp)) {
+                val g = selected
+                if (g != null) {
+                    Text(
+                        "${g.name} – ${g.channels.count { it.key !in hidden }}/${g.channels.size} Sender sichtbar" + if (g.hidden) " (Kategorie ausgeblendet)" else "",
+                        color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp),
+                    )
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        itemsIndexed(g.channels, key = { _, c -> c.key }) { _, ch ->
+                            val nr = app.lineup.byKey[ch.key]?.number
+                            ManageRow(
+                                title = ch.name,
+                                subtitle = when {
+                                    ch.key in hidden -> "ausgeblendet"
+                                    nr != null && app.isFavorite(ch) -> "Nr. $nr · Favorit"
+                                    nr != null -> "Nr. $nr"
+                                    else -> ""
+                                },
+                                visible = ch.key !in hidden,
+                                moving = movingChannel == ch.key,
+                                active = false,
+                                onFocus = {},
+                                onToggle = { app.toggleChannelHidden(ch.key) },
+                                onMoveStart = { movingChannel = ch.key },
+                                onMove = { d -> app.moveChannel(g.key, ch.key, d) },
+                                onMoveEnd = { movingChannel = null },
+                                onOpen = null,
+                                onRename = null,
+                            )
                         }
                     }
                 }
@@ -144,34 +165,81 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     }
 }
 
+/** Eine Zeile mit Häkchen; im Verschiebe-Modus bewegen ▲▼ den Eintrag. */
 @Composable
-private fun EditRow(
+private fun ManageRow(
     title: String,
     subtitle: String,
-    hidden: Boolean,
-    actions: @Composable () -> Unit,
+    visible: Boolean,
+    moving: Boolean,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    onFocus: () -> Unit,
+    onToggle: () -> Unit,
+    onMoveStart: () -> Unit,
+    onMove: (Int) -> Unit,
+    onMoveEnd: () -> Unit,
+    onOpen: (() -> Unit)?,
+    onRename: (() -> Unit)?,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Palette.Panel, RoundedCornerShape(12.dp))
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                title,
-                color = if (hidden) Palette.TextMuted else Palette.Text,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (subtitle.isNotEmpty()) {
-                Text(subtitle, color = if (hidden) Palette.Live else Palette.TextMuted, fontSize = 13.sp, maxLines = 1)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Focusable(
+            modifier = Modifier
+                .weight(1f)
+                .then(modifier)
+                .onPreviewKeyEvent { e ->
+                    if (e.type != KeyEventType.KeyDown) {
+                        // OK-Loslassen im Verschiebe-Modus nicht als „Ein-/Ausblenden“ werten
+                        return@onPreviewKeyEvent moving && isOkKey(e.key)
+                    }
+                    if (!moving && e.key == Key.Menu && onRename != null) { onRename(); return@onPreviewKeyEvent true }
+                    if (!moving) return@onPreviewKeyEvent false
+                    when {
+                        e.key == Key.DirectionUp -> { onMove(-1); true }
+                        e.key == Key.DirectionDown -> { onMove(+1); true }
+                        isOkKey(e.key) || e.key == Key.Back -> { onMoveEnd(); true }
+                        else -> true
+                    }
+                },
+            onClick = { if (moving) onMoveEnd() else onToggle() },
+            onLongClick = { if (!moving) onMoveStart() },
+            onFocus = onFocus,
+        ) { focused ->
+            val shape = RoundedCornerShape(10.dp)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .then(
+                        when {
+                            moving -> Modifier.background(Palette.Highlight.copy(alpha = 0.35f), shape).border(2.dp, Palette.Highlight, shape)
+                            focused -> Modifier.background(Palette.FocusBrush, shape)
+                            active -> Modifier.background(Palette.Raised, shape)
+                            else -> Modifier
+                        },
+                    )
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                val fg = if (focused && !moving) Palette.OnAccent else if (visible) Palette.Text else Palette.TextMuted
+                Text(
+                    if (moving) "⇅" else if (visible) "☑" else "☐",
+                    color = if (focused && !moving) Palette.OnAccent else if (visible) Palette.Highlight else Palette.TextMuted,
+                    fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                )
+                Column(Modifier.weight(1f)) {
+                    Text(title, color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (subtitle.isNotEmpty()) Text(subtitle, color = if (focused && !moving) Palette.OnAccent else Palette.TextMuted, fontSize = 11.sp, maxLines = 1)
+                }
             }
         }
-        actions()
+        // Tablet: im Verschiebe-Modus Pfeile zum Antippen, sonst „›“ für die Sender der Kategorie
+        if (moving) {
+            TvButton("▲", onClick = { onMove(-1) })
+            TvButton("▼", onClick = { onMove(+1) })
+            TvButton("✓", onClick = onMoveEnd)
+        } else if (onOpen != null) {
+            TvButton("›", onClick = onOpen)
+        }
     }
 }

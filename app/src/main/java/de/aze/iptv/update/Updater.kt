@@ -14,7 +14,16 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
-data class Release(val versionCode: Int, val versionName: String, val apkUrl: String, val notes: String)
+data class Release(
+    val versionCode: Int,
+    val versionName: String,
+    val apkUrl: String,
+    val notes: String,
+    /** erwartete Größe in Bytes (0 = unbekannt) */
+    val size: Long = 0,
+    /** SHA-256 laut GitHub (leer = unbekannt) */
+    val sha256: String = "",
+)
 
 /**
  * Manuelles App-Update: fragt das neueste Release im GitHub-Repository ab,
@@ -31,20 +40,25 @@ object Updater {
         val code = tag.substringAfterLast('.').toIntOrNull() ?: return@withContext null
         val assets = json.optJSONArray("assets")
         // Passende APK für dieses Gerät wählen: erst nach Prozessor-Typ, sonst "universal", sonst irgendeine.
-        val apks = ArrayList<Pair<String, String>>()
+        val apks = ArrayList<JSONObject>()
         if (assets != null) {
             for (i in 0 until assets.length()) {
                 val a = assets.getJSONObject(i)
-                val n = a.optString("name")
-                if (n.endsWith(".apk")) apks.add(n to a.optString("browser_download_url"))
+                val url = a.optString("browser_download_url")
+                // Nur APKs aus diesem GitHub-Repository
+                if (a.optString("name").endsWith(".apk") && url.startsWith("https://github.com/${BuildConfig.UPDATE_REPO}/")) apks.add(a)
             }
         }
         val abis = if (Build.VERSION.SDK_INT >= 21) Build.SUPPORTED_ABIS.toList() else emptyList()
-        val apk = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { it.first.endsWith("-$abi.apk") }?.second }
-            ?: apks.firstOrNull { it.first.contains("universal") }?.second
-            ?: apks.firstOrNull()?.second
+        // Passende APK: nach Prozessor-Typ, sonst „universal“ – nie eine beliebige andere
+        val apk = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { it.optString("name").endsWith("-$abi.apk") } }
+            ?: apks.firstOrNull { it.optString("name").contains("universal") }
         if (apk == null || code <= BuildConfig.VERSION_CODE) null
-        else Release(code, tag.removePrefix("v"), apk, json.optString("body"))
+        else Release(
+            code, tag.removePrefix("v"), apk.optString("browser_download_url"), json.optString("body"),
+            size = apk.optLong("size"),
+            sha256 = apk.optString("digest").removePrefix("sha256:").lowercase(),
+        )
     }
 
     private fun apkFile(context: Context): File =
@@ -58,7 +72,34 @@ object Updater {
     suspend fun download(context: Context, release: Release, onProgress: (Int) -> Unit): File =
         withContext(Dispatchers.IO) {
             val f = apkFile(context)
-            Http.download(release.apkUrl, f, onProgress)
+            f.parentFile?.mkdirs()
+            // Erst in eine Teil-Datei laden, prüfen, dann umbenennen – nie eine halbe oder fremde APK installieren
+            val part = File(f.parentFile, f.name + ".part")
+            part.delete()
+            try {
+                Http.download(release.apkUrl, part, onProgress)
+                if (release.size > 0 && part.length() != release.size) {
+                    throw java.io.IOException("Download unvollständig (${part.length()} von ${release.size} Bytes)")
+                }
+                if (release.sha256.length == 64) {
+                    val md = java.security.MessageDigest.getInstance("SHA-256")
+                    part.inputStream().use { input ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            md.update(buf, 0, n)
+                        }
+                    }
+                    val got = md.digest().joinToString("") { "%02x".format(it) }
+                    if (got != release.sha256) throw java.io.IOException("Prüfsumme stimmt nicht – Update verworfen")
+                }
+                f.delete()
+                if (!part.renameTo(f)) throw java.io.IOException("Update konnte nicht gespeichert werden")
+            } catch (e: Exception) {
+                part.delete()
+                throw e
+            }
             f
         }
 

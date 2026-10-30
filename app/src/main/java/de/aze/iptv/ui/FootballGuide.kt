@@ -40,6 +40,7 @@ import de.aze.iptv.data.MatchChannel
 import de.aze.iptv.data.TodayMatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -63,7 +64,12 @@ private class GuideData(
  * die das Spiel laut Programmzeitschrift zeigen. OK auf einem Sender schaltet hin, Zurück schließt das Fenster.
  */
 @Composable
-fun FootballGuide(app: AppController, onClose: () -> Unit) {
+fun FootballGuide(
+    app: AppController,
+    onClose: () -> Unit,
+    /** Nach der Senderwahl: Spiel und alle gefundenen Sender (für die Liste rechts) */
+    onWatch: ((String, List<de.aze.iptv.data.NumberedChannel>) -> Unit)? = null,
+) {
     val epg = app.epg
     val lineup = app.lineup
     var popup by remember { mutableStateOf<TodayMatch?>(null) }
@@ -210,6 +216,7 @@ fun FootballGuide(app: AppController, onClose: () -> Unit) {
                 current = app.current?.channel?.key,
                 onPlay = { nc ->
                     app.play(nc)
+                    onWatch?.invoke("${p.home} – ${p.away}", data?.channels?.get(p.id).orEmpty().map { it.channel })
                     popup = null
                     onClose()
                 },
@@ -302,6 +309,74 @@ private fun MatchPopup(
                                 color = Palette.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp),
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+/**
+ * Senderliste zum Spiel rechts am Rand: ▲▼ wählt, der Sender wird nach kurzem Verweilen gezeigt (OK sofort).
+ * Bleibt offen, bis man Zurück drückt – so kann man vergleichen, wo das Spiel am besten läuft.
+ */
+@Composable
+fun MatchZapPanel(
+    app: AppController,
+    title: String,
+    channels: List<de.aze.iptv.data.NumberedChannel>,
+    modifier: Modifier,
+    onClose: () -> Unit,
+) {
+    BackHandler(onBack = onClose)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val startIndex = channels.indexOfFirst { it.channel.key == app.current?.channel?.key }.coerceAtLeast(0)
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { first.requestFocus() }
+    }
+    Column(
+        modifier
+            .fillMaxHeight()
+            .width(300.dp)
+            .background(Palette.overlayBrush(0.93f))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(title, color = Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text("▲▼ Sender wechseln · Zurück schließt", color = Palette.TextMuted, fontSize = 11.sp)
+        LazyColumn(
+            state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (startIndex - 3).coerceAtLeast(0)),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            itemsIndexed(channels, key = { _, nc -> nc.channel.key }) { i, nc ->
+                val playing = app.current?.channel?.key == nc.channel.key
+                Focusable(
+                    modifier = Modifier.fillMaxWidth().then(if (i == startIndex) Modifier.focusRequester(first) else Modifier),
+                    onClick = { job?.cancel(); app.play(nc) },
+                    onFocus = {
+                        // kurz verweilen, dann umschalten (schnelles Durchblättern lädt nicht jeden Sender)
+                        job?.cancel()
+                        if (!playing) job = scope.launch { kotlinx.coroutines.delay(700); app.play(nc) }
+                    },
+                ) { focused ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (focused) Modifier.background(Palette.FocusBrush, RoundedCornerShape(9.dp))
+                                else if (playing) Modifier.background(Palette.Raised, RoundedCornerShape(9.dp))
+                                else Modifier,
+                            )
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("${nc.number}", color = if (focused) Palette.OnAccent else Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(48.dp))
+                        Text(nc.channel.name, color = if (focused) Palette.OnAccent else Palette.Text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        if (playing) Text("▶", color = if (focused) Palette.OnAccent else Palette.Highlight, fontSize = 13.sp)
                     }
                 }
             }

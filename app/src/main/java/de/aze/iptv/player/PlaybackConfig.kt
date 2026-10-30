@@ -28,7 +28,7 @@ enum class BufferLevel(
     LARGE("Groß", "Sehr stabil, dafür etwas später als live", 40_000, 90_000, 4_000, 8_000, 30_000L);
 
     companion object {
-        fun of(name: String?): BufferLevel = entries.firstOrNull { it.name == name } ?: LARGE
+        fun of(name: String?): BufferLevel = entries.firstOrNull { it.name == name } ?: MEDIUM
     }
 }
 

@@ -488,6 +488,46 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         rebuild(restoreKey = current?.channel?.key)
     }
 
+    // ---- Bedienung ----
+    var keyMap by mutableStateOf(de.aze.iptv.data.KeyMap.parse(store.keyMap))
+        private set
+
+    fun keyAction(k: de.aze.iptv.data.RemoteKey): de.aze.iptv.data.KeyAction = keyMap[k] ?: k.default
+
+    fun setKeyAction(k: de.aze.iptv.data.RemoteKey, a: de.aze.iptv.data.KeyAction) {
+        keyMap = keyMap + (k to a)
+        store.keyMap = de.aze.iptv.data.KeyMap.toJson(keyMap)
+    }
+
+    fun resetKeyMap() {
+        keyMap = de.aze.iptv.data.KeyMap.parse("{}")
+        store.keyMap = "{}"
+    }
+
+    var zapInGroup by mutableStateOf(store.zapInGroup)
+        private set
+
+    fun updateZapInGroup(on: Boolean) {
+        zapInGroup = on
+        store.zapInGroup = on
+    }
+
+    var nameDisplay by mutableStateOf(store.nameDisplay)
+        private set
+
+    fun updateNameDisplay(v: Int) {
+        nameDisplay = v
+        store.nameDisplay = v
+    }
+
+    var expertMode by mutableStateOf(store.expertMode)
+        private set
+
+    fun updateExpertMode(on: Boolean) {
+        expertMode = on
+        store.expertMode = on
+    }
+
     var pinEnabled by mutableStateOf(store.pinEnabled)
         private set
 
@@ -615,6 +655,19 @@ class AppController(context: Context, private val scope: CoroutineScope) {
     }
 
     fun step(delta: Int) {
+        // Auf Wunsch nur innerhalb der Gruppe des laufenden Senders zappen
+        if (zapInGroup) {
+            val cur = current
+            val group = cur?.let { c ->
+                lineup.groups.firstOrNull { g -> !g.isFavorites && g.channels.any { it.channel.key == c.channel.key } }
+                    ?: lineup.groups.firstOrNull { g -> g.channels.any { it.channel.key == c.channel.key } }
+            }
+            if (group != null && group.channels.isNotEmpty()) {
+                val i = group.channels.indexOfFirst { it.channel.key == cur.channel.key }
+                play(group.channels[Math.floorMod(i + delta, group.channels.size)])
+                return
+            }
+        }
         val all = lineup.all
         if (all.isEmpty()) return
         val idx = current?.let { c -> all.indexOfFirst { it.channel.key == c.channel.key } } ?: -1

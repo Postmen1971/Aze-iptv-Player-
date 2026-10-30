@@ -59,6 +59,9 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import de.aze.iptv.AppController
 import de.aze.iptv.data.Http
+import de.aze.iptv.data.KeyAction
+import de.aze.iptv.data.NumberedChannel
+import de.aze.iptv.data.RemoteKey
 import de.aze.iptv.data.StalkerClient
 import de.aze.iptv.data.YouTube
 import androidx.compose.runtime.key
@@ -229,6 +232,10 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // Fußball-Videotext (SkorText) als Ebene über dem Programm
     var teletext by remember { mutableStateOf(false) }
     var football by remember { mutableStateOf(false) }
+    // „Fußball heute“: Liste der gefundenen Sender rechts, bleibt beim Durchschalten offen
+    var matchZap by remember { mutableStateOf<Pair<String, List<NumberedChannel>>?>(null) }
+    // Senderliste direkt in der Gruppenübersicht öffnen (Taste mit Aktion „Gruppen“)
+    var overlayGroups by remember { mutableStateOf(false) }
     // Tablet/Handy: Leiste mit großen Knöpfen (Tippen ins Bild zeigt/versteckt sie)
     val touchDevice = remember(context) { !de.aze.iptv.player.FrameRate.isTv(context) }
     var touchBar by remember { mutableStateOf(false) }
@@ -246,7 +253,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
     }
     // Zurück beim Fernsehen: erst die Senderliste zeigen (weiter: Gruppen, dann App beenden)
-    androidx.activity.compose.BackHandler(enabled = !overlay && !quickMenu && !search && !teletext && !football) { overlay = true }
+    androidx.activity.compose.BackHandler(enabled = !overlay && !quickMenu && !search && !teletext && !football && matchZap == null) { overlay = true }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
@@ -359,6 +366,15 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // YouTube-App: nur beim Wählen des Senders öffnen, nicht erneut beim Zurückkommen in die App
     var startedYt by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(currentKey) { watchdogRestarts = 0 }
+    // Sendername beim Umschalten (Einstellung „3 Sekunden mit Sendung“)
+    var zapInfo by remember { mutableStateOf(false) }
+    LaunchedEffect(currentKey) {
+        if (app.nameDisplay == 1 && currentKey != null) {
+            zapInfo = true
+            delay(3_000)
+            zapInfo = false
+        }
+    }
     LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick, restartTick) {
         val ch = app.current?.channel ?: return@LaunchedEffect
         retryJob?.cancel()
@@ -446,8 +462,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
     }
 
-    LaunchedEffect(overlay, quickMenu, search, teletext, football) {
-        if (!overlay && !quickMenu && !search && !football) {
+    LaunchedEffect(overlay, quickMenu, search, teletext, football, matchZap) {
+        if (!overlay && !quickMenu && !search && !football && matchZap == null) {
             withFrameNanos { }
             runCatching { focus.requestFocus() }
         }
@@ -467,6 +483,25 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 w.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
                 w.setFormat(android.graphics.PixelFormat.OPAQUE)
             }
+        }
+    }
+
+    /** Aktion einer (frei belegbaren) Taste ausführen. */
+    fun perform(a: KeyAction) {
+        when (a) {
+            KeyAction.NONE -> Unit
+            KeyAction.PREVIOUS -> app.playPrevious()
+            KeyAction.LIST -> { overlayGroups = false; overlay = true }
+            KeyAction.GROUPS -> { overlayGroups = true; overlay = true }
+            KeyAction.QUICK -> quickMenu = true
+            KeyAction.NEXT_CH -> app.step(+1)
+            KeyAction.PREV_CH -> app.step(-1)
+            KeyAction.SEARCH -> search = true
+            KeyAction.FOOTBALL -> football = true
+            KeyAction.SKORTEXT -> teletext = true
+            KeyAction.MOVIES -> onOpenVod(false)
+            KeyAction.SERIES -> onOpenVod(true)
+            KeyAction.SETTINGS -> onOpenSettings()
         }
     }
 
@@ -496,7 +531,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     return@onKeyEvent true
                 }
                 // Offene Fenster (Senderliste, Schnellmenü, Suche, Fußball heute) bekommen die Tasten selbst
-                if (overlay || quickMenu || search || football) return@onKeyEvent false
+                if (overlay || quickMenu || search || football || matchZap != null) return@onKeyEvent false
                 val isOk = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
                     code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
 
@@ -507,7 +542,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                                 okLong = false
                             } else if (!okLong && digits.isEmpty()) {
                                 okLong = true
-                                quickMenu = true
+                                perform(app.keyAction(RemoteKey.OK_LONG))
                             }
                         }
                         KeyEventType.KeyUp -> {
@@ -525,7 +560,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                                         }.isSuccess
                                         if (!ok) ytError = "YouTube-App ist nicht installiert"
                                     }
-                                    else -> app.playPrevious()
+                                    else -> perform(app.keyAction(RemoteKey.OK_SHORT))
                                 }
                             }
                             okLong = false
@@ -542,39 +577,24 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     in AndroidKeyEvent.KEYCODE_NUMPAD_0..AndroidKeyEvent.KEYCODE_NUMPAD_9 -> {
                         typeDigit(code - AndroidKeyEvent.KEYCODE_NUMPAD_0); true
                     }
-                    AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_CHANNEL_UP -> {
-                        app.step(+1); true
-                    }
-                    AndroidKeyEvent.KEYCODE_DPAD_DOWN, AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> {
-                        app.step(-1); true
-                    }
-                    AndroidKeyEvent.KEYCODE_DPAD_LEFT, AndroidKeyEvent.KEYCODE_DPAD_RIGHT,
-                    AndroidKeyEvent.KEYCODE_GUIDE -> {
-                        overlay = true; true
-                    }
-                    AndroidKeyEvent.KEYCODE_LAST_CHANNEL, AndroidKeyEvent.KEYCODE_MEDIA_REWIND -> {
-                        app.playPrevious(); true
-                    }
-                    AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD, AndroidKeyEvent.KEYCODE_TV_INPUT -> {
-                        overlay = true; true
-                    }
-                    // Farbtasten (falls vorhanden): Rot Senderliste, Grün Schnellmenü, Gelb Suche, Blau Einstellungen
-                    AndroidKeyEvent.KEYCODE_PROG_RED -> {
-                        overlay = true; true
-                    }
-                    AndroidKeyEvent.KEYCODE_PROG_GREEN -> {
-                        quickMenu = true; true
-                    }
-                    AndroidKeyEvent.KEYCODE_PROG_YELLOW -> {
-                        search = true; true
-                    }
-                    AndroidKeyEvent.KEYCODE_PROG_BLUE -> {
-                        onOpenSettings(); true
-                    }
-                    AndroidKeyEvent.KEYCODE_MENU, AndroidKeyEvent.KEYCODE_INFO,
-                    AndroidKeyEvent.KEYCODE_CAPTIONS -> {
-                        quickMenu = true; true
-                    }
+                    // Frei belegbare Tasten (Einstellungen → Bedienung)
+                    AndroidKeyEvent.KEYCODE_DPAD_UP -> { perform(app.keyAction(RemoteKey.UP)); true }
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> { perform(app.keyAction(RemoteKey.DOWN)); true }
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> { perform(app.keyAction(RemoteKey.LEFT)); true }
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> { perform(app.keyAction(RemoteKey.RIGHT)); true }
+                    AndroidKeyEvent.KEYCODE_MENU, AndroidKeyEvent.KEYCODE_INFO -> { perform(app.keyAction(RemoteKey.MENU)); true }
+                    AndroidKeyEvent.KEYCODE_PROG_RED -> { perform(app.keyAction(RemoteKey.RED)); true }
+                    AndroidKeyEvent.KEYCODE_PROG_GREEN -> { perform(app.keyAction(RemoteKey.GREEN)); true }
+                    AndroidKeyEvent.KEYCODE_PROG_YELLOW -> { perform(app.keyAction(RemoteKey.YELLOW)); true }
+                    AndroidKeyEvent.KEYCODE_PROG_BLUE -> { perform(app.keyAction(RemoteKey.BLUE)); true }
+                    AndroidKeyEvent.KEYCODE_MEDIA_REWIND -> { perform(app.keyAction(RemoteKey.REWIND)); true }
+                    AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { perform(app.keyAction(RemoteKey.FORWARD)); true }
+                    // Feste Tasten
+                    AndroidKeyEvent.KEYCODE_CHANNEL_UP -> { app.step(+1); true }
+                    AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> { app.step(-1); true }
+                    AndroidKeyEvent.KEYCODE_GUIDE, AndroidKeyEvent.KEYCODE_TV_INPUT -> { overlayGroups = false; overlay = true; true }
+                    AndroidKeyEvent.KEYCODE_LAST_CHANNEL -> { app.playPrevious(); true }
+                    AndroidKeyEvent.KEYCODE_CAPTIONS -> { quickMenu = true; true }
                     AndroidKeyEvent.KEYCODE_TV_TELETEXT -> {
                         teletext = true; true
                     }
@@ -592,12 +612,12 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 detectTapGestures(
                     // Nur wenn kein Fenster offen ist – sonst würde ein Tipp daneben ein zweites Fenster öffnen
                     onTap = {
-                        if (!overlay && !quickMenu && !search && !football && !teletext) {
+                        if (!overlay && !quickMenu && !search && !football && !teletext && matchZap == null) {
                             if (touchDevice) { touchBar = !touchBar; touchTick++ } else overlay = true
                         }
                     },
-                    onDoubleTap = { if (!overlay && !quickMenu && !search && !football && !teletext) app.playPrevious() },
-                    onLongPress = { if (!overlay && !search && !football && !teletext) quickMenu = true },
+                    onDoubleTap = { if (!overlay && !quickMenu && !search && !football && !teletext && matchZap == null) app.playPrevious() },
+                    onLongPress = { if (!overlay && !search && !football && !teletext && matchZap == null) quickMenu = true },
                 )
             }
             .pointerInput(Unit) {
@@ -608,7 +628,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     onDragStart = { dx = 0f; dy = 0f },
                     onDrag = { change, amount -> dx += amount.x; dy += amount.y; change.consume() },
                     onDragEnd = {
-                        if (!overlay && !quickMenu && !search && !football && !teletext) {
+                        if (!overlay && !quickMenu && !search && !football && !teletext && matchZap == null) {
                             val limit = 60.dp.toPx()
                             when {
                                 kotlin.math.abs(dy) > kotlin.math.abs(dx) && dy < -limit -> app.step(+1)
@@ -709,11 +729,19 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             digits.isNotEmpty() -> { { Text(digits, color = Palette.Highlight, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             notFound != null -> { { Text(notFound ?: "", color = Palette.Live, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             ytError != null && !overlay && !search -> { { Text(ytError ?: "", color = Palette.Live, fontSize = 22.sp, fontWeight = FontWeight.Bold) } }
-            noPicture && cur != null && !overlay && !search && !teletext -> {
+            cur != null && !overlay && !search && !teletext && matchZap == null &&
+                when (app.nameDisplay) { 0 -> noPicture; 1 -> zapInfo || noPicture; else -> false } -> {
                 {
-                    Row {
-                        Text("${cur.number}", color = Palette.Highlight, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        Text("  ${cur.channel.name}", color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+                    Column {
+                        Row {
+                            Text("${cur.number}", color = Palette.Highlight, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                            Text("  ${cur.channel.name}", color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        if (app.nameDisplay == 1) {
+                            app.epg.now(cur.channel)?.let { p ->
+                                Text(p.title, color = Palette.TextSoft, fontSize = 15.sp, maxLines = 1)
+                            }
+                        }
                     }
                 }
             }
@@ -751,6 +779,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 onVod = { overlay = false; onOpenVod(it) },
                 onExitApp = { activity?.finish() },
                 onFootball = { overlay = false; football = true },
+                startInGroups = overlayGroups,
             )
         }
 
@@ -759,7 +788,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
 
         // Tablet/Handy: Knopfleiste (oben) und große Zapp-Knöpfe (rechts); verschwindet nach 6 s
-        if (touchDevice && touchBar && !overlay && !quickMenu && !search && !football && !teletext) {
+        if (touchDevice && touchBar && !overlay && !quickMenu && !search && !football && !teletext && matchZap == null) {
             LaunchedEffect(touchTick) {
                 delay(6_000)
                 touchBar = false
@@ -789,7 +818,19 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
 
         if (football) {
-            FootballGuide(app = app, onClose = { football = false })
+            FootballGuide(
+                app = app, onClose = { football = false },
+                onWatch = { title, list -> matchZap = title to list },
+            )
+        }
+
+        // Fußball heute: gefundene Sender rechts – bleibt beim Durchschalten offen, Zurück schließt
+        matchZap?.let { (title, list) ->
+            MatchZapPanel(
+                app = app, title = title, channels = list,
+                modifier = Modifier.align(Alignment.CenterEnd),
+                onClose = { matchZap = null },
+            )
         }
 
         if (teletext) {

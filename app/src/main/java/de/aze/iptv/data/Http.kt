@@ -24,7 +24,17 @@ object Http {
             val code = conn.responseCode
             if (code in 300..399) {
                 val location = conn.getHeaderField("Location") ?: throw IOException("Weiterleitung ohne Ziel")
-                current = URL(URL(current), location).toString()
+                val next = URL(URL(current), location).toString()
+                // Keine Herabstufung von verschlüsselt (HTTPS) auf unverschlüsselt (HTTP)
+                if (current.startsWith("https://", true) && next.startsWith("http://", true)) {
+                    conn.disconnect()
+                    throw IOException("Unsichere Weiterleitung (HTTPS → HTTP) blockiert")
+                }
+                if (!next.startsWith("http://", true) && !next.startsWith("https://", true)) {
+                    conn.disconnect()
+                    throw IOException("Ungültige Weiterleitung")
+                }
+                current = next
                 conn.disconnect()
             } else if (code !in 200..299) {
                 conn.disconnect()
@@ -36,10 +46,25 @@ object Http {
         throw IOException("Zu viele Weiterleitungen")
     }
 
+    private const val MAX_TEXT = 64L * 1024 * 1024
+
     fun text(url: String, accept: String? = null): String {
         val conn = open(url, accept)
         try {
-            return conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
+            // Höchstens 64 MB als Text lesen (schützt vor Speicherüberlauf bei kaputten/feindlichen Antworten)
+            return conn.inputStream.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(64 * 1024)
+                var total = 0L
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    total += n
+                    if (total > MAX_TEXT) throw IOException("Antwort zu groß")
+                    out.write(buf, 0, n)
+                }
+                out.toString("UTF-8")
+            }
         } finally {
             conn.disconnect()
         }

@@ -63,6 +63,10 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     lint {
         checkReleaseBuilds = false
         abortOnError = false
@@ -99,4 +103,8 @@ dependencies {
 
     // VLC als Ausweich-Player (LGPL 2.1, unverändert eingebunden)
     implementation("org.videolan.android:libvlc-all:3.6.0")
+
+    // Automatische Tests der App-Logik
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

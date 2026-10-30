@@ -73,18 +73,23 @@ object Secure {
         }
     }
 
+    /** Platzhalter, wenn Verschlüsseln fehlschlägt: lieber nichts speichern als Klartext. */
+    private const val FAILED = "encfail:"
+
     fun encrypt(plain: String): String {
-        val k = dataKey() ?: return encryptKeystore(plain) ?: plain
+        // Ohne Schlüsselspeicher (Android 5.x) bleibt es beim privaten App-Speicher; sonst nie Klartext
+        if (Build.VERSION.SDK_INT < 23) return plain
+        val k = dataKey() ?: return encryptKeystore(plain) ?: FAILED
         return runCatching {
             val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
             val c = Cipher.getInstance("AES/GCM/NoPadding")
             c.init(Cipher.ENCRYPT_MODE, k, GCMParameterSpec(128, iv))
             PREFIX2 + Base64.encodeToString(iv + c.doFinal(plain.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
-        }.getOrDefault(plain)
+        }.getOrDefault(FAILED)
     }
 
     fun decrypt(stored: String?): String? {
-        if (stored == null) return null
+        if (stored == null || stored == FAILED) return null
         if (stored.startsWith(PREFIX2)) {
             val k = dataKey() ?: return null
             return runCatching {
