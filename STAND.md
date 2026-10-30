@@ -139,3 +139,18 @@
 - Jetzt: kein Neustart beim Puffern; Wächter nur bei „läuft“ + 10 s weder Bild noch Zeit, max. 2×. Wiederholung bei HTTP-Ablehnung 1,5/2,5/4/8/15 s, sonst 2/4/8/15 s. Start-Puffer Mittel 1,5 s (Rebuffer 4 s), VLC Mittel 1,5 s.
 - Lehre: Wächter dürfen nie bei Puffern neu starten; Änderungen am Abspielverhalten immer einzeln ausliefern.
 - Weitere: EPG an/aus, Zeitzonen-Fix (+0300 ohne Leerzeichen), Zeitverschiebung je Quelle, EPG-Zuordnung nach Land, EPG-Laden mit niedriger Priorität, Sendung in dezentem Gelb, Wiedergabe-Optionen (Puffer/Player/Bildqualität/Bildwiederholrate) wieder immer sichtbar, Player ohne Ton-Uhr-Verschiebung solange kein Versatz eingestellt.
+
+## v1.0.82–1.0.86 – Speicher
+- liveonsat-Seite nur noch als Datei (cacheDir/liveonsat.html), Download max. 12 MB.
+- Xtream get_live_streams per JsonReader (stückweise), VOD-Anbieter nur einer je Playlist (alte verworfen), Coil-RAM-Cache 15 %.
+- Videotext-WebView sofort nach dem Schließen freigegeben.
+- EPG an/aus mit Beschreibung (aus = am flüssigsten). Keine EPG-Rasteransicht gewünscht (Aziz: macht die App langsamer).
+- CacheCleaner: beim Start Zwischenspeicher aufräumen (außer Logos „bilder“), WebView-Cache, alte Update-APKs, .tmp; onTrimMemory leert Bild-RAM; Knopf „Alles leeren“ unter Einstellungen → Über.
+
+## Für einen neuen Chat
+- Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
+- Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).
+- Build-Fehler: Logs sind gesperrt → Fehler stehen als ::error::-Annotationen am Check-Run (gh api …/check-runs/<job>/annotations).
+- Testgerät: NVIDIA SHIELD (Bruder: Fire TV). Aziz testet selbst und schickt Fotos/Videos.
+- Arbeitsweise mit Aziz: Antworten auf Deutsch, einfach erklärt; viele Wünsche gern in einem Build; Änderungen am Abspielverhalten (Puffer, Wächter, Wiederholungen) aber einzeln ausliefern. Ruhiges, dezentes Design, keine TiviMate-Namen. Sicherheitsregel: Passwörter/Secrets trägt Aziz selbst ein.
+- Offen: eigener Signatur-Schlüssel (GitHub-Secrets KEYSTORE_BASE64, KEYSTORE_PASSWORD durch Aziz), A2-YouTube-Link fehlt, .xz-EPG (Rytec) nicht unterstützt, Option „Zeitzone der Quelle“ statt ±1 h angeboten (noch nicht gewünscht), Update-Hinweis beim Start und automatische Logos angeboten.
