@@ -113,8 +113,9 @@ fun VlcVideo(
 
     LaunchedEffect(url, cachingMs, restart) {
         if (restart > 0) {
-            // Neu verbinden: 2, 4, 8, 15 … Sekunden
-            delay(minOf(2_000L shl minOf(failures, 3), 15_000L))
+            // Neu verbinden: erst schnell (Anbieter mit nur 1 Verbindung geben die alte verzögert frei), dann seltener
+            val steps = longArrayOf(700, 1_000, 1_500, 2_000, 3_000, 5_000, 8_000, 15_000)
+            delay(steps[minOf(failures, steps.size - 1)])
             failures++
         }
         val media = Media(libVlc, Uri.parse(url))

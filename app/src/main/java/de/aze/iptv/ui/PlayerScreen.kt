@@ -279,6 +279,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 noPicture = false
+                if (ytError?.startsWith("Anbieter antwortet") == true) ytError = null
                 retries = 0
             }
 
@@ -304,7 +305,9 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 // Automatisch: Format-/Decoder-Fehler oder wiederholte Abbrüche → diesen Sender mit VLC abspielen.
                 val key = app.current?.channel?.key
                 val group = error.errorCode / 1000
-                if (app.playerEngine == PlayerEngine.AUTO && key != null && (group == 3 || group == 4 || retries >= 2)) {
+                val http = generateSequence<Throwable>(error) { it.cause }
+                    .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()
+                if (app.playerEngine == PlayerEngine.AUTO && key != null && (group == 3 || group == 4 || (retries >= 2 && http == null))) {
                     player.stop()
                     app.markVlc(key)
                     return
@@ -320,13 +323,18 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     }
                     return
                 }
+                // Viele Anbieter erlauben nur 1 Verbindung gleichzeitig und geben die alte erst nach ein paar
+                // Sekunden frei. Beim schnellen Vorwärts-Zappen lehnt der Server den neuen Sender dann ab (403/429/509 …),
+                // obwohl er eigentlich geht. Darum gleich nach dem Umschalten schnell und mehrfach neu versuchen.
+                if (http != null && retries < 12) ytError = "Anbieter antwortet mit Fehler ${http.responseCode} – neuer Versuch …"
                 retryJob = scope.launch {
                     if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
                         // Zu weit hinter "live" gefallen: direkt an den Live-Punkt springen.
                         player.seekToDefaultPosition()
                     } else {
-                        // Neu verbinden mit steigender Wartezeit: 2, 4, 8, 15, 15 … Sekunden.
-                        delay(minOf(2_000L shl minOf(retries, 3), 15_000L))
+                        // Neu verbinden: erst schnell (0,7 · 1 · 1,5 · 2 · 3 s), dann seltener bis 15 s.
+                        val steps = longArrayOf(700, 1_000, 1_500, 2_000, 3_000, 3_000, 5_000, 8_000, 15_000)
+                        delay(steps[minOf(retries, steps.size - 1)])
                         retries++
                     }
                     player.prepare()
