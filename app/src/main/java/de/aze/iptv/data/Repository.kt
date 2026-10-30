@@ -163,21 +163,23 @@ class Repository(context: Context) {
      * EPG-Adressen der Playlists: bei Server + Login die xmltv.php des Anbieters,
      * bei M3U die Angabe url-tvg / x-tvg-url aus der ersten Zeile der Liste.
      */
-    fun epgUrls(sources: List<PlaylistSource>): List<String> = sources.mapNotNull { src ->
+    fun epgUrls(sources: List<PlaylistSource>): List<String> = sources.flatMap { src ->
         if (src.type == SourceType.XTREAM) {
             val raw = src.url.trim().trimEnd('/')
             val base = if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "http://$raw"
-            "$base/xmltv.php?username=${java.net.URLEncoder.encode(src.user.trim(), "UTF-8")}&password=${java.net.URLEncoder.encode(src.pass, "UTF-8")}"
+            listOf("$base/xmltv.php?username=${java.net.URLEncoder.encode(src.user.trim(), "UTF-8")}&password=${java.net.URLEncoder.encode(src.pass, "UTF-8")}")
         } else {
             val f = cacheFile(src)
-            if (!f.exists()) null else runCatching {
+            // Kopfzeile der M3U: url-tvg="a.xml.gz,b.xml.gz" – alle Adressen nehmen
+            if (!f.exists()) emptyList() else runCatching {
                 val head = f.bufferedReader().use { it.readLine() }.orEmpty()
-                tvgUrl.find(head)?.groupValues?.get(1)?.split(',')?.firstOrNull()?.trim()
-            }.getOrNull()?.takeIf { it.startsWith("http") }
+                tvgUrl.findAll(head).flatMap { m -> m.groupValues[1].split(',', ' ').asSequence() }
+                    .map { it.trim() }.filter { it.startsWith("http") }.toList()
+            }.getOrDefault(emptyList())
         }
-    }
+    }.distinct()
 
-    private val tvgUrl = Regex("(?:url-tvg|x-tvg-url)=\"([^\"]+)\"")
+    private val tvgUrl = Regex("(?:url-tvg|x-tvg-url|tvg-url)\\s*=\\s*\"([^\"]+)\"")
 
     fun delete(source: PlaylistSource) {
         cacheFile(source).delete()

@@ -630,6 +630,9 @@ private fun seekStep(repeat: Int): Long = when {
 @Composable
 private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durMs: Long) -> Unit) {
     val context = LocalContext.current
+    // Filme/Serien: allgemeiner Ton-Bild-Versatz aus den Einstellungen
+    val syncMs = app.audioDelay
+    androidx.compose.runtime.SideEffect { de.aze.iptv.player.AudioSync.setMs(syncMs) }
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
     var showUi by remember { mutableStateOf(true) }
@@ -651,7 +654,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
     val player = remember {
         val http = DefaultHttpDataSource.Factory().setUserAgent(Http.USER_AGENT).setAllowCrossProtocolRedirects(true)
         ExoPlayer.Builder(context)
-            .setRenderersFactory(DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+            .setRenderersFactory(de.aze.iptv.player.SyncRenderersFactory(context).setEnableDecoderFallback(true))
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .setAudioAttributes(
                 androidx.media3.common.AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),

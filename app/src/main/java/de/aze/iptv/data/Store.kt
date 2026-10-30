@@ -207,6 +207,31 @@ class Store(context: Context) {
         get() = prefs.getBoolean("adultFilter", true)
         set(v) = prefs.edit().putBoolean("adultFilter", v).apply()
 
+    /** Eigene EPG-Zuordnung: Sender-Schlüssel → EPG-Kennung (verschlüsselt, Schlüssel enthalten Login-Daten) */
+    fun epgMap(): Map<String, String> = jsonMap(Secure.decrypt(prefs.getString("epgMap", "")) ?: "") { o, k -> o.getString(k) }
+
+    fun saveEpgMap(m: Map<String, String>) {
+        prefs.edit().putString("epgMap", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
+    }
+
+    /** Ton-Versatz für alle Sender in Millisekunden (positiv = Ton später) */
+    var audioDelay: Int
+        get() = prefs.getInt("audioDelay", 0)
+        set(v) = prefs.edit().putInt("audioDelay", v).apply()
+
+    /** Zusätzlicher Ton-Versatz je Sender (Sender-Schlüssel → ms) */
+    fun audioDelays(): Map<String, Int> = jsonMap(Secure.decrypt(prefs.getString("audioDelays", "")) ?: "") { o, k -> o.getInt(k) }
+
+    fun saveAudioDelays(m: Map<String, Int>) {
+        prefs.edit().putString("audioDelays", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
+    }
+
+    private fun <T> jsonMap(json: String, get: (JSONObject, String) -> T): Map<String, T> =
+        if (json.isBlank()) emptyMap() else runCatching {
+            val o = JSONObject(json)
+            o.keys().asSequence().associateWith { get(o, it) }
+        }.getOrDefault(emptyMap())
+
     /** Belegung der Fernbedienungstasten (JSON) */
     var keyMap: String
         get() = prefs.getString("keyMap", "{}") ?: "{}"

@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import de.aze.iptv.data.Channel
 import de.aze.iptv.data.EditGroup
 import de.aze.iptv.data.Epg
+import de.aze.iptv.data.EpgChannel
 import de.aze.iptv.data.EpgRepository
 import de.aze.iptv.data.Lineup
 import de.aze.iptv.data.ListLayout
@@ -46,33 +47,93 @@ class AppController(context: Context, private val scope: CoroutineScope) {
         private set
     var epgLoading by mutableStateOf(false)
         private set
-    var epgUrl by mutableStateOf(store.epgUrl)
+    /** Eigene (externe) EPG-Quellen, eine Adresse je Zeile gespeichert */
+    var epgExtra by mutableStateOf(store.epgUrl.lines().map { it.trim() }.filter { it.startsWith("http") })
         private set
 
-    fun updateEpgUrl(url: String) {
-        epgUrl = url.trim()
-        store.epgUrl = epgUrl
+    /** EPG-Adressen aus den Playlists (Anbieter / url-tvg in der M3U) */
+    fun epgFromSources(): List<String> = runCatching { repo.epgUrls(sources) }.getOrDefault(emptyList())
+
+    fun addEpgUrl(url: String) {
+        val u = url.trim()
+        if (!u.startsWith("http")) { message = "Bitte eine Adresse mit http:// oder https:// eingeben."; return }
+        if (u in epgExtra) return
+        epgExtra = epgExtra + u
+        store.epgUrl = epgExtra.joinToString("\n")
+        refreshEpg()
     }
+
+    fun removeEpgUrl(url: String) {
+        epgExtra = epgExtra - url
+        store.epgUrl = epgExtra.joinToString("\n")
+    }
+
+    var epgReport by mutableStateOf("")
+        private set
+
+    /** Eigene Zuordnung Sender → EPG-Kennung */
+    var epgMap by mutableStateOf(store.epgMap())
+        private set
+
+    fun setEpgMapping(ch: Channel, epgId: String?) {
+        epgMap = if (epgId == null) epgMap - ch.key else epgMap + (ch.key to epgId)
+        store.saveEpgMap(epgMap)
+        epg = epg.withManual(epgMap)
+        // Programm für den neu zugeordneten Sender holen
+        if (epgId != null && epg.programmes(ch) == null) refreshEpg()
+    }
+
+    suspend fun epgCatalog(): List<EpgChannel> = epgRepo.catalog()
 
     fun refreshEpg() {
         if (epgLoading) return
-        val urls = repo.epgUrls(sources) + listOfNotNull(epgUrl.takeIf { it.startsWith("http") })
+        val urls = (epgFromSources() + epgExtra).distinct()
         if (urls.isEmpty()) {
-            message = "Keine EPG-Quelle gefunden. Bei M3U-Listen ohne Programmdaten eine EPG-Adresse eintragen."
+            message = "Keine EPG-Quelle gefunden. Bei M3U-Listen ohne Programmdaten unter Einstellungen → Programm (EPG) eine Quelle hinzufügen."
             return
         }
         scope.launch {
             epgLoading = true
-            val result = epgRepo.refresh(urls, channels)
+            val result = epgRepo.refresh(urls, channels, epgMap)
             epgLoading = false
+            epgReport = epgRepo.lastReport
             result.onSuccess {
                 epg = it
-                message = "Programmzeitschrift geladen: ${it.channelCount} Sender mit Programm."
+                message = "Programmzeitschrift geladen: ${it.channelCount} Sender mit Programm (${epgRepo.lastReport})."
             }.onFailure {
                 message = "Programmzeitschrift konnte nicht geladen werden."
             }
         }
     }
+
+    // ---- Ton-Bild-Synchronisation ----
+    /** Versatz für alle Sender (ms, positiv = Ton später) */
+    var audioDelay by mutableStateOf(store.audioDelay)
+        private set
+    /** Zusätzlicher Versatz je Sender */
+    var audioDelays by mutableStateOf(store.audioDelays())
+        private set
+
+    fun updateAudioDelay(ms: Int) {
+        audioDelay = ms.coerceIn(-2000, 2000)
+        store.audioDelay = audioDelay
+    }
+
+    fun channelDelay(key: String?): Int = key?.let { audioDelays[it] } ?: 0
+
+    fun updateChannelDelay(key: String, ms: Int) {
+        val v = ms.coerceIn(-2000, 2000)
+        audioDelays = if (v == 0) audioDelays - key else audioDelays + (key to v)
+        store.saveAudioDelays(audioDelays)
+    }
+
+    fun clearChannelDelays() {
+        audioDelays = emptyMap()
+        store.saveAudioDelays(audioDelays)
+    }
+
+    /** Wirksamer Versatz für einen Sender: allgemein + Sender */
+    fun effectiveDelay(key: String?): Int = (audioDelay + channelDelay(key)).coerceIn(-3000, 3000)
 
     // Anbieter-M3U-Links werden automatisch zu Server + Login (siehe PlaylistSource.normalized)
     var sources by mutableStateOf(store.sources().map { it.normalized() })
@@ -381,7 +442,7 @@ class AppController(context: Context, private val scope: CoroutineScope) {
             } finally {
                 loading = false
             }
-            epg = runCatching { epgRepo.load() }.getOrDefault(Epg.EMPTY)
+            epg = runCatching { epgRepo.load() }.getOrDefault(Epg.EMPTY).withManual(epgMap)
             if (needsRefresh() || refreshPending) {
                 refreshPending = false
                 refreshNow()

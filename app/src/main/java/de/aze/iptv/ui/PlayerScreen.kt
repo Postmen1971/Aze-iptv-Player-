@@ -106,7 +106,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(20_000)
         ExoPlayer.Builder(context)
-            .setRenderersFactory(DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+            .setRenderersFactory(de.aze.iptv.player.SyncRenderersFactory(context).setEnableDecoderFallback(true))
             // Audio-Fokus: bei Anrufen/anderen Apps leiser bzw. Pause, wie es Android erwartet
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
@@ -232,6 +232,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // Fußball-Videotext (SkorText) als Ebene über dem Programm
     var teletext by remember { mutableStateOf(false) }
     var football by remember { mutableStateOf(false) }
+    // 1 = Ton-Bild-Synchron für den Sender, 2 = EPG zuordnen
+    var tool by remember { mutableStateOf(0) }
     // „Fußball heute“: Liste der gefundenen Sender rechts, bleibt beim Durchschalten offen
     var matchZap by remember { mutableStateOf<Pair<String, List<NumberedChannel>>?>(null) }
     // Senderliste direkt in der Gruppenübersicht öffnen (Taste mit Aktion „Gruppen“)
@@ -253,7 +255,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
     }
     // Zurück beim Fernsehen: erst die Senderliste zeigen (weiter: Gruppen, dann App beenden)
-    androidx.activity.compose.BackHandler(enabled = !overlay && !quickMenu && !search && !teletext && !football && matchZap == null) { overlay = true }
+    androidx.activity.compose.BackHandler(enabled = !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) { overlay = true }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
@@ -269,6 +271,9 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     // VLC statt Media3: wenn so eingestellt, oder automatisch für Sender, die Media3 nicht schafft.
     val useVlc = curCh != null && !YouTube.isYouTube(curCh.url) &&
         (app.playerEngine == PlayerEngine.VLC || (app.playerEngine == PlayerEngine.AUTO && curCh.key in app.vlcFallback))
+    // Ton-Bild-Versatz: allgemein + dieser Sender (wirkt sofort, auch während der Wiedergabe)
+    val syncMs = app.effectiveDelay(curCh?.key)
+    androidx.compose.runtime.SideEffect { de.aze.iptv.player.AudioSync.setMs(syncMs) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -462,8 +467,8 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
     }
 
-    LaunchedEffect(overlay, quickMenu, search, teletext, football, matchZap) {
-        if (!overlay && !quickMenu && !search && !football && matchZap == null) {
+    LaunchedEffect(overlay, quickMenu, search, teletext, football, matchZap, tool) {
+        if (!overlay && !quickMenu && !search && !football && matchZap == null && tool == 0) {
             withFrameNanos { }
             runCatching { focus.requestFocus() }
         }
@@ -531,7 +536,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     return@onKeyEvent true
                 }
                 // Offene Fenster (Senderliste, Schnellmenü, Suche, Fußball heute) bekommen die Tasten selbst
-                if (overlay || quickMenu || search || football || matchZap != null) return@onKeyEvent false
+                if (overlay || quickMenu || search || football || matchZap != null || tool != 0) return@onKeyEvent false
                 val isOk = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
                     code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
 
@@ -612,12 +617,12 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                 detectTapGestures(
                     // Nur wenn kein Fenster offen ist – sonst würde ein Tipp daneben ein zweites Fenster öffnen
                     onTap = {
-                        if (!overlay && !quickMenu && !search && !football && !teletext && matchZap == null) {
+                        if (!overlay && !quickMenu && !search && !football && !teletext && matchZap == null && tool == 0) {
                             if (touchDevice) { touchBar = !touchBar; touchTick++ } else overlay = true
                         }
                     },
-                    onDoubleTap = { if (!overlay && !quickMenu && !search && !football && !teletext && matchZap == null) app.playPrevious() },
-                    onLongPress = { if (!overlay && !search && !football && !teletext && matchZap == null) quickMenu = true },
+                    onDoubleTap = { if (!overlay && !quickMenu && !search && !football && !teletext && matchZap == null && tool == 0) app.playPrevious() },
+                    onLongPress = { if (!overlay && !search && !football && !teletext && matchZap == null && tool == 0) quickMenu = true },
                 )
             }
             .pointerInput(Unit) {
@@ -628,7 +633,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     onDragStart = { dx = 0f; dy = 0f },
                     onDrag = { change, amount -> dx += amount.x; dy += amount.y; change.consume() },
                     onDragEnd = {
-                        if (!overlay && !quickMenu && !search && !football && !teletext && matchZap == null) {
+                        if (!overlay && !quickMenu && !search && !football && !teletext && matchZap == null && tool == 0) {
                             val limit = 60.dp.toPx()
                             when {
                                 kotlin.math.abs(dy) > kotlin.math.abs(dx) && dy < -limit -> app.step(+1)
@@ -675,6 +680,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                         cachingMs = level.vlcCachingMs(),
                         aspect = aspect,
                         handle = vlcHandle,
+                        audioDelayMs = syncMs,
                         onFirstFrame = { noPicture = false },
                         onError = {
                             noPicture = true
@@ -729,7 +735,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             digits.isNotEmpty() -> { { Text(digits, color = Palette.Highlight, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             notFound != null -> { { Text(notFound ?: "", color = Palette.Live, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             ytError != null && !overlay && !search -> { { Text(ytError ?: "", color = Palette.Live, fontSize = 22.sp, fontWeight = FontWeight.Bold) } }
-            cur != null && !overlay && !search && !teletext && matchZap == null &&
+            cur != null && !overlay && !search && !teletext && matchZap == null && tool == 0 &&
                 when (app.nameDisplay) { 0 -> noPicture; 1 -> zapInfo || noPicture; else -> false } -> {
                 {
                     Column {
@@ -788,7 +794,7 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
         }
 
         // Tablet/Handy: Knopfleiste (oben) und große Zapp-Knöpfe (rechts); verschwindet nach 6 s
-        if (touchDevice && touchBar && !overlay && !quickMenu && !search && !football && !teletext && matchZap == null) {
+        if (touchDevice && touchBar && !overlay && !quickMenu && !search && !football && !teletext && matchZap == null && tool == 0) {
             LaunchedEffect(touchTick) {
                 delay(6_000)
                 touchBar = false
@@ -842,6 +848,11 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
             TeletextView(web = w, modifier = Modifier.fillMaxSize())
         }
 
+        if (tool != 0 && curCh != null) {
+            if (tool == 1) AudioSyncPanel(app, curCh, onClose = { tool = 0 })
+            else EpgMapDialog(app, curCh, onClose = { tool = 0 })
+        }
+
         if (quickMenu) {
             // tracksVersion lesen, damit die Werte nach einem Spurwechsel neu angezeigt werden.
             @Suppress("UNUSED_VARIABLE") val v = tracksVersion
@@ -863,6 +874,22 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
                     if (useVlc) vlcHandle.nextAudio()
                     else TrackHelper.nextAudio(player)?.language?.let { app.updateAudioLanguage(it) }
                     tracksVersion++
+                },
+                QuickItem("Lippensynchron", msLabel(app.channelDelay(curCh?.key))) {
+                    quickMenu = false
+                    if (curCh != null) tool = 1
+                },
+                QuickItem(
+                    "Programm (EPG)",
+                    when {
+                        curCh == null -> "–"
+                        app.epg.isManual(curCh) -> "eigene Zuordnung"
+                        app.epg.now(curCh) != null -> "vorhanden"
+                        else -> "zuordnen"
+                    },
+                ) {
+                    quickMenu = false
+                    if (curCh != null) tool = 2
                 },
                 QuickItem(
                     "Player",

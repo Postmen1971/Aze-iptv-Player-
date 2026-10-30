@@ -422,22 +422,73 @@ private fun RefreshSection(app: AppController) {
     }
 }
 
+/** Öffentliche EPG-Quellen zum Antippen (XMLTV, gz) */
+private val epgPresets = listOf(
+    "Deutschland (epgshare01)" to "https://epgshare01.online/epgshare01/epg_ripper_DE1.xml.gz",
+    "Türkei (epgshare01)" to "https://epgshare01.online/epgshare01/epg_ripper_TR1.xml.gz",
+)
+
 @Composable
 private fun EpgSection(app: AppController) {
+    var adding by remember { mutableStateOf(false) }
     Section("Programmzeitschrift (EPG)") {
         Text(
-            "Bei Server + Login kommt das Programm automatisch vom Anbieter, bei M3U-Listen aus der Angabe in der Liste. " +
-                "Fehlt sie, hier eine eigene EPG-Adresse (XMLTV, auch .gz) eintragen. Das Programm wird zusammen mit der Senderliste aktualisiert.",
+            "Das Programm wird automatisch zugeordnet: zuerst über tvg-id aus der Senderliste, dann über tvg-name und den Sendernamen " +
+                "(„DE: Das Erste HD“ passt auch zu „Das Erste“). Fehlt ein Programm, im Bild OK lang → „Programm (EPG)“ den Sender von Hand zuordnen.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
-        InputRow("Eigene EPG-Adresse (optional)", app.epgUrl, placeholder = "http://…/epg.xml.gz", keyboard = KeyboardType.Uri) { app.updateEpgUrl(it) }
+        val own = remember(app.sources) { app.epgFromSources() }
+        Text("Vom Anbieter / aus der Playlist", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        if (own.isEmpty()) Text("Keine – die Playlist enthält keine EPG-Adresse (url-tvg).", color = Palette.TextMuted, fontSize = 13.sp)
+        own.forEach { Text("• " + shortUrl(it), color = Palette.Text, fontSize = 13.sp, maxLines = 1) }
+    }
+    Section("Weitere EPG-Quellen") {
         Text(
-            if (app.epg.channelCount > 0) "Geladen: ${app.epg.channelCount} Sender mit Programm" else "Noch keine Programmdaten geladen",
+            "Für Listen ohne oder mit lückenhaftem Programm: XMLTV-Adressen anderer Anbieter oder öffentliche Listen hinzufügen (.xml oder .xml.gz). " +
+                "Alle Quellen werden zusammengeführt.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        app.epgExtra.forEach { u ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(shortUrl(u), color = Palette.Text, fontSize = 14.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                TvButton("Entfernen", danger = true, onClick = { app.removeEpgUrl(u) })
+            }
+        }
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("+ Eigene Adresse", onClick = { adding = true })
+            epgPresets.filter { it.second !in app.epgExtra }.forEach { (label, url) ->
+                TvButton("+ $label", onClick = { app.addEpgUrl(url) })
+            }
+        }
+    }
+    Section("EPG-Status") {
+        val withEpg = remember(app.epg, app.lineup) { app.lineup.all.count { app.epg.idFor(it.channel) != null } }
+        Text(
+            if (app.epg.channelCount > 0) "$withEpg von ${app.lineup.all.size} Sendern haben Programm · eigene Zuordnungen: ${app.epgMap.size}"
+            else "Noch keine Programmdaten geladen",
             color = Palette.TextSoft, fontSize = 13.sp,
         )
+        if (app.epgReport.isNotEmpty()) Text(app.epgReport, color = Palette.TextMuted, fontSize = 13.sp)
         TvButton(if (app.epgLoading) "Wird geladen …" else "Programm jetzt laden", onClick = { app.refreshEpg() })
     }
+    if (adding) {
+        InputDialog(
+            label = "EPG-Adresse (XMLTV, auch .gz)",
+            initial = "",
+            password = false,
+            keyboard = KeyboardType.Uri,
+            onDone = {
+                adding = false
+                app.addEpgUrl(it)
+            },
+            onCancel = { adding = false },
+        )
+    }
 }
+
+/** Adresse ohne Login-Daten anzeigen */
+private fun shortUrl(u: String): String =
+    u.substringBefore('?').let { if (u.contains("password=")) "$it (mit Login)" else it }
 
 @Composable
 private fun AutostartSection(app: AppController) {
@@ -654,6 +705,28 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         InputRow("OMDb-Schlüssel", app.omdbKey, placeholder = "z. B. a1b2c3d4") { app.updateOmdbKey(it) }
+    }
+    if (part != 1) Section("Ton-Bild-Synchron (alle Sender)") {
+        Text(
+            "Ist der Ton bei allen Sendern versetzt (z. B. durch Soundbar oder AV-Receiver), hier einstellen. " +
+                "Für einzelne Sender: im Bild OK lang → „Lippensynchron“ – das gilt dann zusätzlich nur für diesen Sender.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(msLabel(app.audioDelay), color = Palette.Highlight, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            TvButton("− 100", onClick = { app.updateAudioDelay(app.audioDelay - 100) })
+            TvButton("− 20", onClick = { app.updateAudioDelay(app.audioDelay - 20) })
+            TvButton("+ 20", onClick = { app.updateAudioDelay(app.audioDelay + 20) })
+            TvButton("+ 100", onClick = { app.updateAudioDelay(app.audioDelay + 100) })
+            TvButton("0", onClick = { app.updateAudioDelay(0) })
+        }
+        Text("Plus = Ton später, Minus = Ton früher.", color = Palette.TextMuted, fontSize = 12.sp)
+        if (app.audioDelays.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("${app.audioDelays.size} Sender mit eigenem Wert", color = Palette.TextSoft, fontSize = 13.sp)
+                TvButton("Alle Senderwerte löschen", onClick = { app.clearChannelDelays() })
+            }
+        }
     }
     if (part != 1) Section("Wiedergabe") {
       if (!app.expertMode) {

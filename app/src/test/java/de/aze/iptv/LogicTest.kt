@@ -158,4 +158,36 @@ class LogicTest {
         assertEquals(1, found.size)
         assertTrue(found[0].sure)
     }
+
+    @Test fun epg_matchingOrder() {
+        val prog = listOf(Programme(0, Long.MAX_VALUE / 2, "Tagesschau"))
+        val epg = Epg(
+            byId = mapOf("DasErste.de" to prog, "showtv.tr" to prog, "kanal7.tr" to prog),
+            idByName = mapOf(Epg.normName("Show TV") to "showtv.tr", Epg.normName("Kanal 7") to "kanal7.tr"),
+        )
+        // tvg-id mit anderer Groß-/Kleinschreibung
+        assertEquals("DasErste.de", epg.idFor(Channel("ARD", "DE", null, "u1", tvgId = "daserste.de")))
+        // Ländervorsatz und HD im Namen
+        assertEquals("showtv.tr", epg.idFor(Channel("TR: SHOW TV HD", "TR", null, "u2")))
+        assertEquals("showtv.tr", epg.idFor(Channel("|TR| Show TV FHD", "TR", null, "u3")))
+        // tvg-name, wenn Anzeigename anders
+        assertEquals("kanal7.tr", epg.idFor(Channel("K7 Ulusal", "TR", null, "u4", tvgName = "Kanal 7")))
+        // eigene Zuordnung geht vor
+        val manual = epg.withManual(mapOf("u2" to "kanal7.tr"))
+        assertEquals("kanal7.tr", manual.idFor(Channel("TR: SHOW TV HD", "TR", null, "u2")))
+        assertTrue(manual.isManual(Channel("x", "", null, "u2")))
+        // unbekannt
+        assertEquals(null, epg.idFor(Channel("Irgendwas", "", null, "u5")))
+    }
+
+    @Test fun m3uParser_readsTvgName() {
+        val l = M3uParser.parse(
+            """
+            #EXTM3U
+            #EXTINF:-1 tvg-name="Kanal 7" group-title="TR",K7 Ulusal
+            http://x/7.ts
+            """.trimIndent(),
+        )
+        assertEquals("Kanal 7", l.single().tvgName)
+    }
 }

@@ -12,6 +12,8 @@ data class Channel(
     val source: String = "",
     /** Kennung für die Programmzeitschrift (tvg-id) */
     val tvgId: String? = null,
+    /** Name für die Programmzeitschrift (tvg-name), falls anders als der angezeigte Name */
+    val tvgName: String? = null,
 ) {
     val key: String get() = url
 }

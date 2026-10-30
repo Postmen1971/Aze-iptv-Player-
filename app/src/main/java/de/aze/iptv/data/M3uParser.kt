@@ -46,6 +46,7 @@ object M3uParser {
                                 logo = attrs["tvg-logo"]?.takeIf { it.isNotBlank() },
                                 url = line,
                                 tvgId = attrs["tvg-id"]?.trim()?.takeIf { it.isNotEmpty() },
+                                tvgName = attrs["tvg-name"]?.trim()?.takeIf { it.isNotEmpty() && it != name.trim() },
                             ),
                         )
                     }

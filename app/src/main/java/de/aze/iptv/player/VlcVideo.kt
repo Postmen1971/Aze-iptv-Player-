@@ -63,8 +63,11 @@ fun VlcVideo(
     onFirstFrame: () -> Unit,
     onError: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Ton-Versatz in ms (positiv = Ton später) */
+    audioDelayMs: Int = 0,
 ) {
     val context = LocalContext.current
+    val delayMs by rememberUpdatedState(audioDelayMs)
     val firstFrame by rememberUpdatedState(onFirstFrame)
     val error by rememberUpdatedState(onError)
     var restart by remember { mutableIntStateOf(0) }
@@ -80,6 +83,7 @@ fun VlcVideo(
         mp.attachViews(layout, null, false, false)
         mp.setEventListener { ev ->
             when (ev.type) {
+                MediaPlayer.Event.Playing -> runCatching { mp.setAudioDelay(delayMs * 1000L) }
                 MediaPlayer.Event.Vout -> if (ev.voutCount > 0) {
                     failures = 0
                     firstFrame()
@@ -122,6 +126,8 @@ fun VlcVideo(
         media.release()
         mp.play()
     }
+
+    LaunchedEffect(audioDelayMs) { runCatching { mp.setAudioDelay(audioDelayMs * 1000L) } }
 
     // Drehen (Hoch-/Querformat): VLC muss die neue Bildfläche kennen, sonst bleibt das Bild verzerrt
     val orientation = androidx.compose.ui.platform.LocalConfiguration.current.orientation
