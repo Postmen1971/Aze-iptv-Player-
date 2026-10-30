@@ -710,7 +710,8 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         }.also { rebuildJob = it }
     }
 
-    private val vodProviders = HashMap<String, de.aze.iptv.data.VodProvider>()
+    // je Playlist nur EIN Anbieter-Objekt (alte nach dem Aktualisieren verwerfen, sonst bleiben ganze Filmlisten im Speicher)
+    private val vodProviders = HashMap<String, Pair<String, de.aze.iptv.data.VodProvider>>()
 
     /** Playlists, die Filme & Serien haben können (Server + Login und M3U). */
     val vodSources: List<PlaylistSource>
@@ -720,10 +721,11 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     fun vodProvider(src: PlaylistSource): de.aze.iptv.data.VodProvider {
         val file = repo.cacheFileOf(src)
         val key = "${src.id}|${src.url}|${src.user}|${file.lastModified()}"
-        return vodProviders.getOrPut(key) {
-            if (src.type == SourceType.XTREAM) de.aze.iptv.data.XtreamVod(src)
-            else de.aze.iptv.data.HybridVod(file, src.name)
-        }
+        vodProviders[src.id]?.let { (k, p) -> if (k == key) return p }
+        val p = if (src.type == SourceType.XTREAM) de.aze.iptv.data.XtreamVod(src)
+        else de.aze.iptv.data.HybridVod(file, src.name)
+        vodProviders[src.id] = key to p
+        return p
     }
 
     /**

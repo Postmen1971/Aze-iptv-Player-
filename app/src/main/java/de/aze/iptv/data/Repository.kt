@@ -120,33 +120,27 @@ class Repository(context: Context) {
             catOrder.add(id)
         }
 
-        val streams = JSONArray(Http.text("$api&action=get_live_streams"))
-        if (streams.length() == 0) return false
+        // Senderliste Stück für Stück lesen (nicht die ganze, oft 20–50 MB große Antwort auf einmal in den Speicher)
+        val streams = readLiveStreams("$api&action=get_live_streams")
+        if (streams.isEmpty()) return false
         // Pfad-Teile wie beim Anbieter: /live/benutzer/passwort/id.ts
         val pathUser = src.user.trim()
         val pathPass = src.pass
 
         // Nach Kategorie-Reihenfolge des Anbieters sortieren, innerhalb nach "num".
-        val byCat = LinkedHashMap<String, MutableList<org.json.JSONObject>>()
+        val byCat = LinkedHashMap<String, MutableList<LiveStream>>()
         catOrder.forEach { byCat[it] = ArrayList() }
-        for (i in 0 until streams.length()) {
-            val s = streams.getJSONObject(i)
-            // Manche Server liefern statt "category_id" nur eine Liste "category_ids"
-            val cid = s.optString("category_id").takeIf { it.isNotBlank() && it != "null" }
-                ?: s.optJSONArray("category_ids")?.let { a -> if (a.length() > 0) a.optString(0) else null }
-                ?: ""
-            byCat.getOrPut(cid) { ArrayList() }.add(s)
-        }
+        streams.forEach { s -> byCat.getOrPut(s.cat) { ArrayList() }.add(s) }
         target.bufferedWriter().use { w ->
             w.write("#EXTM3U\n")
             byCat.forEach { (catId, list) ->
-                list.sortBy { it.optInt("num", Int.MAX_VALUE) }
+                list.sortBy { it.num }
                 val group = clean(catNames[catId] ?: "Ohne Gruppe")
                 list.forEach { s ->
-                    val name = clean(s.optString("name"))
-                    val logo = clean(s.optString("stream_icon"))
-                    val id = s.optString("stream_id")
-                    val epgId = clean(s.optString("epg_channel_id").takeIf { it != "null" }.orEmpty())
+                    val name = clean(s.name)
+                    val logo = clean(s.logo)
+                    val id = s.id
+                    val epgId = clean(s.epg)
                     if (id.isNotEmpty()) {
                         w.write("#EXTINF:-1 tvg-id=\"$epgId\" tvg-logo=\"$logo\" group-title=\"$group\",$name\n")
                         w.write("$base/live/$pathUser/$pathPass/$id.ts\n")
@@ -155,6 +149,56 @@ class Repository(context: Context) {
             }
         }
         return true
+    }
+
+    private class LiveStream(val name: String, val logo: String, val id: String, val epg: String, val num: Int, val cat: String)
+
+    private fun readLiveStreams(url: String): List<LiveStream> {
+        val out = ArrayList<LiveStream>()
+        val conn = Http.open(url)
+        try {
+            android.util.JsonReader(conn.inputStream.bufferedReader()).use { r ->
+                if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) return out
+                r.beginArray()
+                while (r.hasNext()) {
+                    if (r.peek() != android.util.JsonToken.BEGIN_OBJECT) { r.skipValue(); continue }
+                    var name = ""; var logo = ""; var id = ""; var epg = ""; var num = Int.MAX_VALUE; var cat = ""
+                    r.beginObject()
+                    while (r.hasNext()) {
+                        when (r.nextName()) {
+                            "name" -> name = str(r)
+                            "stream_icon" -> logo = str(r)
+                            "stream_id" -> id = str(r)
+                            "epg_channel_id" -> epg = str(r)
+                            "num" -> num = str(r).toIntOrNull() ?: Int.MAX_VALUE
+                            "category_id" -> str(r).takeIf { it.isNotBlank() }?.let { cat = it }
+                            // Manche Server liefern statt "category_id" nur eine Liste "category_ids"
+                            "category_ids" -> if (r.peek() == android.util.JsonToken.BEGIN_ARRAY) {
+                                r.beginArray()
+                                var first = true
+                                while (r.hasNext()) { val v = str(r); if (first && cat.isEmpty()) cat = v; first = false }
+                                r.endArray()
+                            } else r.skipValue()
+                            else -> r.skipValue()
+                        }
+                    }
+                    r.endObject()
+                    out.add(LiveStream(name, logo, id, epg, num, cat))
+                }
+                r.endArray()
+            }
+        } finally {
+            conn.disconnect()
+        }
+        return out
+    }
+
+    /** Beliebigen Wert als Text lesen (Zahl, Text, null, true/false); Listen/Objekte werden übersprungen. */
+    private fun str(r: android.util.JsonReader): String = when (r.peek()) {
+        android.util.JsonToken.NULL -> { r.nextNull(); "" }
+        android.util.JsonToken.STRING, android.util.JsonToken.NUMBER -> r.nextString().let { if (it == "null") "" else it }
+        android.util.JsonToken.BOOLEAN -> r.nextBoolean().toString()
+        else -> { r.skipValue(); "" }
     }
 
     private fun clean(s: String) = s.replace("\"", "'").replace("\n", " ").replace("\r", " ").trim()

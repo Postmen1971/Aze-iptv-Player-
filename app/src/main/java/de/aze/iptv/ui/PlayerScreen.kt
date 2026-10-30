@@ -251,7 +251,16 @@ fun PlayerScreen(app: AppController, onOpenSettings: () -> Unit, onOpenVod: (ser
     var touchTick by remember { mutableIntStateOf(0) }
     var teletextWeb by remember { mutableStateOf<android.webkit.WebView?>(null) }
     // Versteckter Videotext rechnet nicht weiter im Hintergrund
-    LaunchedEffect(teletext) { teletextWeb?.let { if (teletext) it.onResume() else it.onPause() } }
+    LaunchedEffect(teletext) {
+        teletextWeb?.let { if (teletext) it.onResume() else it.onPause() }
+        // 10 Minuten nicht benutzt: Videotext-Anzeige ganz freigeben (eine WebView braucht viel Speicher)
+        if (!teletext && teletextWeb != null) {
+            delay(10 * 60_000L)
+            val w = teletextWeb
+            teletextWeb = null
+            runCatching { w?.loadUrl("about:blank"); w?.destroy() }
+        }
+    }
     // SkorText-WebView erst beim Verlassen des Players freigeben
     DisposableEffect(Unit) {
         onDispose {

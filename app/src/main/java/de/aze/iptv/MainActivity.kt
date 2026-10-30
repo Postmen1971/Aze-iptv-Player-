@@ -48,7 +48,7 @@ class MainActivity : ComponentActivity() {
         // auch wenn der Server "nicht speichern" meldet – so sind Poster beim zweiten Mal sofort da.
         coil.Coil.setImageLoader(
             coil.ImageLoader.Builder(this)
-                .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(0.25).build() }
+                .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(0.15).build() }
                 .diskCache {
                     coil.disk.DiskCache.Builder()
                         .directory(cacheDir.resolve("bilder"))
