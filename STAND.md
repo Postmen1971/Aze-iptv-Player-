@@ -110,3 +110,13 @@
 - YouTube-Streams werden nicht „abgegriffen“ (Sperre der Sender respektieren); stattdessen YouTube-App bzw. offizielle Streams
 - Standard-Bildqualität = schnelles Umschalten (gewünscht)
 - Bedienung im TiviMate-Stil, aber keine TiviMate-Namen in der App
+
+## v1.0.69 – Großes Sammel-Update
+- Einstellungen: Standard/Erweitert (Schalter unten links), aufklappbare Abschnitte; Netzwerk und Wiedergabe-Details nur im Expertenmodus.
+- Neue Standardwerte (Migration tuned4): Puffer Mittel, Media3, Bildqualität Automatisch, Bildwiederholrate Nie umschalten.
+- Senderliste verwalten wie IBO Player: links Kategorien, rechts Sender; OK = ein/aus, OK lang = verschieben, Menü = umbenennen; Tablet mit ▲▼✓.
+- Bedienung: Zappen alle/nur in Gruppe, Sendername beim Umschalten (nie/kurz/immer), frei belegbare Tasten inkl. OK lang (data/Controls.kt).
+- Fußball: nach Senderwahl bleibt rechts die Liste aller Sender des Spiels offen (MatchZapPanel), Zurück schließt.
+- Sicherheit: kein Klartext-Fallback in Secure (encfail:), HTTPS→HTTP-Umleitungen blockiert, Antworten max. 64 MB, Updater nur Repo-APK mit .part, Größen- und SHA-256-Prüfung.
+- Automatische Tests (app/src/test/LogicTest.kt) laufen bei jedem Build: M3U, Nummerierung, XXL-Filter, Tastenbelegung, liveonsat, Fußball-Zuordnung.
+- Offen: Release-Signatur nutzt weiter den Test-Schlüssel, bis KEYSTORE_BASE64/KEYSTORE_PASSWORD als GitHub-Secrets gesetzt sind.
