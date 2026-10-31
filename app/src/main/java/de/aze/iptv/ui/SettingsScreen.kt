@@ -942,6 +942,8 @@ private fun UpdateSection() {
 private fun AboutSection(app: AppController) {
     val context = LocalContext.current
     var size by remember { mutableStateOf<Long?>(null) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var clearing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { size = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.CacheCleaner.sizeMb(context) } }
     Section("Zwischenspeicher") {
         Text(
@@ -952,10 +954,18 @@ private fun AboutSection(app: AppController) {
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Belegt: ${size?.let { "$it MB" } ?: "…"}", color = Palette.TextSoft, fontSize = 13.sp)
-            TvButton("Alles leeren (auch Logos)", onClick = {
-                de.aze.iptv.data.CacheCleaner.clearAll(context)
-                size = 0
-                app.message = "Zwischenspeicher geleert – Logos werden beim Anzeigen neu geladen."
+            TvButton(if (clearing) "Wird geleert …" else "Alles leeren (auch Logos)", onClick = {
+                if (clearing) return@TvButton
+                clearing = true
+                scope.launch {
+                    try {
+                        de.aze.iptv.data.CacheCleaner.clearAll(context)
+                        size = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.CacheCleaner.sizeMb(context) }
+                        app.message = "Zwischenspeicher geleert – Logos werden beim Anzeigen neu geladen."
+                    } finally {
+                        clearing = false
+                    }
+                }
             })
         }
     }

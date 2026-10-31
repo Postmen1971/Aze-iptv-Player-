@@ -192,6 +192,11 @@
 - „Laut liveonsat außerdem“: jeder Eintrag ist anwählbar → OK zeigt ähnliche eigene Sender ohne Länder-Prüfung (`Football.matchByNameLoose`), passendes Land zuerst; Zurück = Übersicht.
 - Werkzeug `.github/workflows/liveonsat-check.yml` (nur von Hand): lädt liveonsat bei GitHub und zeigt den Abschnitt zu einer Mannschaft als Hinweis – zum Prüfen, was liveonsat wirklich auflistet.
 
+## „Alles leeren“ stürzte ab (behoben)
+- Ursache: CacheCleaner.clearAll lief auf dem Bedien-Thread (bis 250 MB Logos löschen → „App reagiert nicht“) und löschte auch Ordner, die Bild-Lader/Web-Anzeige offen hatten.
+- Jetzt: suspend im Hintergrund (Dispatchers.IO), Bilder-Ablage leert Coil selbst, Web-Anzeige-Ordner bleiben; Knopf zeigt „Wird geleert …“.
+- Emulator-Test 7 (Start-Parameter `aze_test_clear_cache`): Leeren während ein Sender läuft, App muss weiterlaufen.
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).

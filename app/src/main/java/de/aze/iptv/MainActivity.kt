@@ -17,6 +17,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import de.aze.iptv.ui.Palette
 import de.aze.iptv.ui.PinScreen
 import de.aze.iptv.ui.VodScreen
@@ -46,6 +47,14 @@ class MainActivity : ComponentActivity() {
         app.start()
         // Nur im Test-Build (Emulator-Test bei GitHub): Test-Playlist per Start-Parameter. Im normalen Build gibt es das nicht.
         if (BuildConfig.TEST_HOOKS) {
+            // Zwischenspeicher leeren wie der Knopf in den Einstellungen (während ein Sender läuft)
+            if (intent?.getBooleanExtra("aze_test_clear_cache", false) == true) {
+                lifecycleScope.launch {
+                    kotlinx.coroutines.delay(8_000)
+                    de.aze.iptv.data.CacheCleaner.clearAll(applicationContext)
+                    de.aze.iptv.ui.qaLog("CACHE_CLEARED")
+                }
+            }
             // Lippensynchron-Wert für den Test setzen
             intent?.getIntExtra("aze_test_audio_delay", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE }?.let { app.updateAudioDelay(it) }
             // zusätzlicher Versatz für einen Sender (Schlüssel = Adresse)

@@ -96,6 +96,17 @@ adb shell am force-stop $PKG
 adb shell am start -n $PKG/.MainActivity --ei aze_test_audio_delay 0 --es aze_test_channel_delay_url "http://10.0.2.2:8090/ok.ts" --ei aze_test_channel_delay 0
 sleep 5
 
+log "== Test 7: Zwischenspeicher leeren, während ein Sender läuft"
+adb shell am force-stop $PKG
+sleep 2
+n=$(count "FIRST_FRAME")
+adb shell am start -n $PKG/.MainActivity --ez aze_test_clear_cache true
+wait_for "CACHE_CLEARED" 1 60
+sleep 15
+alive || fail "App nach dem Leeren des Zwischenspeichers nicht mehr da"
+[ "$(count FIRST_FRAME)" -gt "$n" ] || fail "Nach dem Leeren kein Bild"
+shot "test7-nach-leeren"
+
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
 if adb logcat -d -b crash | grep -q "$PKG"; then fail "Absturz im Protokoll gefunden"; fi

@@ -40,10 +40,20 @@ object CacheCleaner {
             (context.cacheDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }) / (1024 * 1024)
         }.getOrDefault(0L)
 
-    /** Von Hand: zusätzlich alle gespeicherten Logos und Plakate löschen. */
-    fun clearAll(context: Context) {
-        runCatching { coil.Coil.imageLoader(context).memoryCache?.clear() }
-        runCatching { coil.Coil.imageLoader(context).diskCache?.clear() }
-        runCatching { context.cacheDir.listFiles()?.forEach { it.deleteRecursively() } }
+    /**
+     * Von Hand: zusätzlich alle gespeicherten Logos und Plakate löschen.
+     * Läuft im Hintergrund – vorher auf dem Bedien-Thread: hunderte MB löschen dauerte so lange, dass Android
+     * die App als „reagiert nicht“ beendete. Die Bilder-Ablage leert der Bild-Lader selbst (der hat sie offen);
+     * Ordner, die die Web-Anzeige gerade benutzt, bleiben stehen.
+     */
+    suspend fun clearAll(context: Context) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val loader = runCatching { coil.Coil.imageLoader(context) }.getOrNull()
+        runCatching { loader?.memoryCache?.clear() }
+        runCatching { loader?.diskCache?.clear() }
+        context.cacheDir.listFiles()?.forEach { f ->
+            val n = f.name.lowercase()
+            if (n == "bilder" || n.contains("webview") || n.contains("chromium")) return@forEach
+            runCatching { f.deleteRecursively() }
+        }
     }
 }
