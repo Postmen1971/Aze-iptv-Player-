@@ -1,0 +1,41 @@
+name: liveonsat prüfen
+
+# Nur von Hand: lädt die liveonsat-Seite wie die App und zeigt den Abschnitt zu einem Spiel (zur Fehlersuche)
+on:
+  workflow_dispatch:
+    inputs:
+      team:
+        description: "Mannschaft (Teil des Namens)"
+        default: "Fenerbahce"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Seite laden und Abschnitt zeigen
+        env:
+          TEAM: ${{ github.event.inputs.team }}
+        run: |
+          curl -sL -A "Mozilla/5.0 (Linux; Android 11; SHIELD Android TV) AppleWebKit/537.36 Chrome/120.0 Safari/537.36" \
+            -H "Accept-Language: de-DE,de;q=0.9,en;q=0.8" https://liveonsat.com/2day.php -o page.html
+          ls -la page.html
+          python3 - <<'PY'
+          import os, re, html
+          t = open("page.html", encoding="utf-8", errors="replace").read()
+          t = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", t)
+          t = re.sub(r"(?is)\s(on\w+|title|data-[\w-]+)\s*=\s*(\"[^\"]*\"|'[^']*')", " ", t)
+          t = re.sub(r"(?i)<\s*(br|/div|/p|/tr|/td|/li|/h\d|/a|/span|/table)[^>]*>", "\n", t)
+          t = html.unescape(re.sub(r"<[^>]+>", " ", t))
+          lines = [re.sub(r"\s+", " ", l).strip() for l in t.split("\n")]
+          lines = [l for l in lines if l]
+          team = os.environ.get("TEAM", "Fenerbahce").lower()
+          hits = [i for i, l in enumerate(lines) if team in l.lower()]
+          out = []
+          for i in hits[:4]:
+              out.append(f"--- Zeile {i}")
+              out += lines[max(0, i - 3): i + 45]
+          msg = "\n".join(out) or "nicht gefunden"
+          print(msg)
+          enc = msg[-30000:].replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+          print(f"::notice title=liveonsat {team}::{enc}")
+          PY
