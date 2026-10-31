@@ -663,8 +663,19 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                 true,
             )
             .setHandleAudioBecomingNoisy(!de.aze.iptv.player.FrameRate.isTv(context))
+            // Speichergrenze wie beim Live-TV (sonst bis ~130 MB Vorrat – zu viel für schwache Fire TV Sticks)
+            .setLoadControl(de.aze.iptv.player.PlaybackConfig.loadControl(context, de.aze.iptv.player.BufferLevel.LARGE))
             .build()
             .apply { videoChangeFrameRateStrategy = C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF }
+    }
+    // Home-Taste / Bildschirmschoner: Film anhalten (läuft sonst hinter anderen Apps weiter)
+    val vodLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(vodLifecycle, player) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP) player.playWhenReady = false
+        }
+        vodLifecycle.lifecycle.addObserver(obs)
+        onDispose { vodLifecycle.lifecycle.removeObserver(obs) }
     }
     // Bildwiederholrate an den Film anpassen (z. B. 24 Hz bei Kinofilmen)
     val activity = remember(context) { FrameRate.findActivity(context) }

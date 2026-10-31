@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
@@ -115,7 +116,8 @@ fun PlayerScreen(
             .setUserAgent(Http.USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
+            // Live-Sender schicken laufend Daten: 10 s Stille heißt Verbindung tot (vorher 20 s Standbild)
+            .setReadTimeoutMs(10_000)
         ExoPlayer.Builder(context)
             .setRenderersFactory(
                 (if (syncUsed) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context)).setEnableDecoderFallback(true),
@@ -164,41 +166,57 @@ fun PlayerScreen(
             switching = true
             player.stop()
             scope.launch {
-                val before = displayWatch.tick
-                FrameRate.apply(act, mode)
-                displayWatch.awaitChange(before, 8_000)
-                delay(app.afrDelay * 1_000L) // Fernseher/HDMI braucht nach dem Wechsel noch einen Moment
-                switching = false
-                restartTick++
+                // finally: auch bei Abbruch darf „Umschalten“ nie hängen bleiben – sonst startet kein Sender mehr
+                try {
+                    val before = displayWatch.tick
+                    FrameRate.apply(act, mode)
+                    displayWatch.awaitChange(before, 8_000)
+                    delay(app.afrDelay * 1_000L) // Fernseher/HDMI braucht nach dem Wechsel noch einen Moment
+                } finally {
+                    switching = false
+                    restartTick++
+                }
             }
         }.also { it.attach(player) }
     }
-    // „Immer 50 Hz“: einmal umschalten, bevor/solange nichts läuft – danach nie wieder während der Wiedergabe
+    // „Immer 50 Hz“ einschalten bzw. beim Ausschalten zurück zur Standard-Frequenz – immer wie oben:
+    // anhalten → umschalten → warten → neu starten (nie mitten in der Wiedergabe, das friert auf SHIELD/Fire TV ein)
     val afr50On = app.afr50
-    LaunchedEffect(afr50On) {
+    LaunchedEffect(afrOn, afr50On) {
         val act = activity ?: return@LaunchedEffect
-        if (!afr50On) return@LaunchedEffect
-        val mode = FrameRate.target50(act) ?: return@LaunchedEffect
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M) return@LaunchedEffect
+        val mode: Int = when {
+            afr50On -> FrameRate.target50(act) ?: return@LaunchedEffect
+            !afrOn && act.window.attributes.preferredDisplayModeId != 0 -> 0
+            else -> return@LaunchedEffect
+        }
         switching = true
         app.displaySettleUntil = System.currentTimeMillis() + 15_000
-        player.stop()
-        val before = displayWatch.tick
-        FrameRate.apply(act, mode)
-        displayWatch.awaitChange(before, 8_000)
-        delay(app.afrDelay * 1_000L)
-        app.displaySettleUntil = 0
-        switching = false
-        restartTick++
+        try {
+            player.stop()
+            val before = displayWatch.tick
+            if (mode == 0) FrameRate.reset(act) else FrameRate.apply(act, mode)
+            displayWatch.awaitChange(before, 8_000)
+            delay(app.afrDelay * 1_000L)
+        } finally {
+            app.displaySettleUntil = 0
+            switching = false
+            restartTick++
+        }
     }
-    // Wächter gegen stehendes Bild. Greift in drei Fällen ein (höchstens 3× hintereinander, nach 60 s flüssigem
-    // Bild wieder voll verfügbar):
-    //  1. „läuft“, aber 6 s kein neues Bild – auch wenn der Ton weiterläuft (Bild hängt, Ton nicht)
-    //  2. „puffert“ mitten im Programm und 8 s kommen GAR KEINE Daten mehr (Verbindung tot) → sofort neu verbinden,
-    //     statt bis zur Zeitüberschreitung der Verbindung (20 s) zu warten
+    // Wächter gegen stehendes Bild:
+    //  1. „läuft“, aber 6 s kein neues Bild – auch wenn der Ton weiterläuft
+    //  2. „puffert“ und 8 s kommen GAR KEINE Daten mehr (Verbindung tot) → neu verbinden, statt bis zur
+    //     Zeitüberschreitung zu warten. Beim Senderstart erst, wenn nach 10 s noch kein Bild da ist.
     //  3. Puffern, solange noch Daten kommen, wird NIE unterbrochen (das verursachte früher die Neustart-Schleife).
-    // Fall 1 und 2 nur, wenn seit dem Start schon Bilder kamen – der Senderstart selbst wird nicht gestört.
+    //  Gibt nie ganz auf, wird aber immer ruhiger: sofort, dann frühestens nach 5 s, 15 s, 30 s, danach jede Minute.
+    //  Nach 60 s flüssigem Bild beginnt die Zählung von vorn. Keine Neustarts, solange z. B. Alexa den Ton hat.
     var watchdogRestarts by remember { mutableIntStateOf(0) }
     var diagText by remember { mutableStateOf("") }
+    /** Seit dem letzten (Neu-)Start schon ein Bild gezeigt? (vom Player gemeldet, klappt auch mit Tunneling) */
+    var firstFrameSeen by remember { mutableStateOf(false) }
+    /** Zeitpunkt des letzten Starts (prepare) */
+    var preparedAt by remember { mutableStateOf(0L) }
     LaunchedEffect(player) {
         var lastFrames = -1L
         var lastPos = -1L
@@ -206,8 +224,10 @@ fun PlayerScreen(
         var frozen = 0
         var starved = 0
         var healthy = 0
+        var nextAllowed = 0L
         while (true) {
             delay(1_000)
+            val now = System.currentTimeMillis()
             val f = probe.frames
             val pos = player.currentPosition
             val buffered = player.bufferedPosition
@@ -215,18 +235,18 @@ fun PlayerScreen(
             if (!switching && player.playbackState != Player.STATE_IDLE && !player.playWhenReady) {
                 player.playWhenReady = true
             }
-            val framesMoved = lastFrames >= 0 && f != lastFrames
-            val started = f > probe.framesAtStart
+            // Bei Tunneling meldet das Gerät keine einzelnen Bilder – dann gilt die laufende Zeit
+            val pictureMoving = if (app.tunneling) lastPos >= 0 && pos != lastPos else lastFrames >= 0 && f != lastFrames
             val hasVideo = player.videoFormat != null
-            val ready = player.playbackState == Player.STATE_READY && player.playWhenReady
+            val unsuppressed = player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
+            val ready = player.playbackState == Player.STATE_READY && player.playWhenReady && unsuppressed
             val buffering = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady
-            // Bei Tunneling meldet das Gerät keine einzelnen Bilder – dann nur „Bild und Zeit stehen“ werten
-            val noNewPicture = if (app.tunneling) !framesMoved && pos == lastPos else !framesMoved
+            val sinceStart = if (preparedAt > 0) now - preparedAt else 0L
 
-            frozen = if (!switching && ready && hasVideo && started && noNewPicture) frozen + 1 else 0
-            starved = if (!switching && buffering && started && buffered == lastBuffered) starved + 1 else 0
-            if (framesMoved && !buffering) healthy++ else if (!framesMoved) healthy = 0
-            if (healthy >= 60) { healthy = 0; watchdogRestarts = 0 }
+            frozen = if (!switching && ready && hasVideo && firstFrameSeen && !pictureMoving) frozen + 1 else 0
+            starved = if (!switching && buffering && buffered == lastBuffered && (firstFrameSeen || sinceStart >= 10_000)) starved + 1 else 0
+            if (firstFrameSeen && pictureMoving && !buffering) healthy++ else if (!pictureMoving) healthy = 0
+            if (healthy >= 60) { healthy = 0; watchdogRestarts = 0; nextAllowed = 0 }
 
             if (app.showDiag) {
                 @Suppress("DEPRECATION")
@@ -244,20 +264,29 @@ fun PlayerScreen(
                     if (switching) " · Umschalten …" else if (watchdogRestarts > 0) " · Neustarts $watchdogRestarts" else "",
                 )
             }
+            // Nur im Test-Build: Zustand jede Sekunde ins Protokoll (zur Auswertung des Emulator-Tests)
+            if (de.aze.iptv.BuildConfig.TEST_HOOKS && preparedAt > 0) {
+                qaLog(
+                    "TICK st=${player.playbackState} pwr=${player.playWhenReady} sup=${player.playbackSuppressionReason} " +
+                        "img=${if (lastFrames < 0) 0 else f - lastFrames} pos=$pos buf=$buffered first=$firstFrameSeen " +
+                        "frozen=$frozen starved=$starved",
+                )
+            }
             lastFrames = f
             lastPos = pos
             lastBuffered = buffered
-            if ((frozen >= 6 || starved >= 8) && watchdogRestarts < 3) {
+            if ((frozen >= 6 || starved >= 8) && now >= nextAllowed) {
                 qaLog("WATCHDOG ${if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name}")
                 frozen = 0
                 starved = 0
                 healthy = 0
+                val pause = longArrayOf(5_000, 15_000, 30_000, 60_000)
+                nextAllowed = now + pause[minOf(watchdogRestarts, pause.size - 1)]
                 watchdogRestarts++
                 restartTick++
             }
         }
     }
-    LaunchedEffect(afrOn, afr50On) { if (!afrOn && !afr50On) activity?.let { FrameRate.reset(it) } }
 
     var noPicture by remember { mutableStateOf(true) }
     var digits by remember { mutableStateOf("") }
@@ -323,6 +352,7 @@ fun PlayerScreen(
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
+                firstFrameSeen = true
                 qaLog("FIRST_FRAME ${app.current?.channel?.name}")
                 noPicture = false
                 if (ytError?.startsWith("Anbieter antwortet") == true) ytError = null
@@ -355,7 +385,7 @@ fun PlayerScreen(
                 val group = error.errorCode / 1000
                 val http = generateSequence<Throwable>(error) { it.cause }
                     .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()
-                if (app.playerEngine == PlayerEngine.AUTO && key != null && (group == 3 || group == 4 || (retries >= 2 && http == null))) {
+                if (app.playerEngine == PlayerEngine.AUTO && key != null && (group == 3 || group == 4 || (retries >= 2 && http == null && group != 2))) {
                     player.stop()
                     app.markVlc(key)
                     return
@@ -442,13 +472,17 @@ fun PlayerScreen(
         val ch = app.current?.channel ?: return@LaunchedEffect
         retryJob?.cancel()
         if (startedKey != ch.key) retries = 0
-        probe.restart()
         startedKey = ch.key
         noPicture = true
         ytError = null
         resolvedUrl = null
         // Altes Programm sofort anhalten, damit beim schnellen Durchschalten nichts nachläuft.
         player.stop()
+        // erst NACH dem Anhalten zurücksetzen – sonst zählen Bilder des alten Senders für den neuen
+        firstFrameSeen = false
+        probe.restart()
+        // App im Hintergrund (Home-Taste): nichts starten, sonst läuft der Ton hinter anderen Apps
+        if (inBackground) return@LaunchedEffect
         if (YouTube.isYouTube(ch.url)) {
             // YouTube läuft in einem eigenen Player; Media3 leeren.
             player.clearMediaItems()
@@ -481,6 +515,7 @@ fun PlayerScreen(
             ytError = "Portal: Sender nicht verfügbar"
             return@LaunchedEffect
         }
+        if (inBackground) return@LaunchedEffect
         resolvedUrl = url
         if (useVlc) return@LaunchedEffect
         // Bevorzugte Tonsprache und Untertitel-Wahl gelten für jeden neuen Sender.
@@ -500,6 +535,7 @@ fun PlayerScreen(
         player.setMediaItem(builder.build())
         // Live-TV läuft immer – auch falls der Player zuvor (z. B. vom System) pausiert wurde
         player.playWhenReady = true
+        preparedAt = System.currentTimeMillis()
         player.prepare()
     }
 
@@ -574,6 +610,8 @@ fun PlayerScreen(
             .background(if (ytActive) Color.Transparent else Color.Black)
             .focusRequester(focus)
             .onKeyEvent { e ->
+                // Einstellungen/PIN liegen darüber: keine Tasten an den Player (sonst unsichtbares Umschalten)
+                if (!active) return@onKeyEvent false
                 val code = e.nativeKeyEvent.keyCode
                 // Videotext offen: alle Tasten gehen an den Videotext.
                 if (teletext) {
@@ -670,6 +708,7 @@ fun PlayerScreen(
                     else -> false
                 }
             }
+            .focusProperties { canFocus = active }
             .focusable()
             .pointerInput(Unit) {
                 detectTapGestures(
@@ -752,7 +791,9 @@ fun PlayerScreen(
                     )
                 }
             }
-        } else AndroidView(
+        } else key(if (afrOn || afr50On) displayWatch.tick else 0) {
+            // Nach einem Frequenzwechsel die Bildfläche neu anlegen: manche Geräte lassen die alte stehen (Standbild)
+            AndroidView(
             modifier = videoModifier,
             factory = { ctx ->
                 PlayerView(ctx).apply {
@@ -766,12 +807,14 @@ fun PlayerScreen(
                 view.player = player
                 view.resizeMode = resize
             },
+            onRelease = { view -> view.player = null },
         )
+        }
 
         if (app.lineup.all.isEmpty()) {
             if (app.loading) {
                 Text("Senderliste wird geladen …", color = Palette.TextMuted, fontSize = 20.sp, modifier = Modifier.align(Alignment.Center).padding(32.dp))
-            } else {
+            } else if (active) {
                 // Noch keine Playlist: klare Knöpfe statt Sackgasse
                 val btn = remember { FocusRequester() }
                 LaunchedEffect(active) { if (active) { withFrameNanos { }; runCatching { btn.requestFocus() } } }
@@ -899,11 +942,18 @@ fun PlayerScreen(
 
         if (teletext) {
             val w = teletextWeb ?: Teletext.create(context, onCrash = {
-                // Absturz der Anzeige: nur den Videotext schließen und beim nächsten Mal neu anlegen
+                // Absturz der Anzeige: nur den Videotext schließen und beim nächsten Mal neu anlegen.
+                // Die kaputte Anzeige freigeben, sobald sie aus der Oberfläche entfernt ist.
+                val dead = teletextWeb
                 teletext = false
                 teletextWeb = null
-            }).also { teletextWeb = it }
-            TeletextView(web = w, modifier = Modifier.fillMaxSize())
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ runCatching { dead?.destroy() } }, 500)
+            })?.also { teletextWeb = it }
+            if (w != null) TeletextView(web = w, modifier = Modifier.fillMaxSize())
+            else LaunchedEffect(Unit) {
+                teletext = false
+                app.message = "Videotext kann gerade nicht angezeigt werden – bitte gleich noch einmal versuchen."
+            }
         }
 
         if (tool != 0 && curCh != null) {

@@ -58,8 +58,9 @@ object Teletext {
     }
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
-    fun create(context: Context, onCrash: () -> Unit): WebView {
-        val web = WebView(context)
+    fun create(context: Context, onCrash: () -> Unit): WebView? {
+        // Fire TV aktualisiert die Web-Anzeige manchmal im Hintergrund – dann schlägt das Anlegen fehl (kein Absturz)
+        val web = runCatching { WebView(context) }.getOrNull() ?: return null
         web.isFocusable = false
         web.isFocusableInTouchMode = false
         web.setBackgroundColor(android.graphics.Color.BLACK)

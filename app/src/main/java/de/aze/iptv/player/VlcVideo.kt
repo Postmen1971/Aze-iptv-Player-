@@ -77,6 +77,8 @@ fun VlcVideo(
     val libVlc = remember { VlcEngine.get(context) }
     val mp = remember { MediaPlayer(libVlc) }
     val layout = remember { VLCVideoLayout(context) }
+    /** Zeitpunkt der letzten Bewegung der Wiedergabe-Zeit (für den VLC-Wächter); 0 = noch nicht gestartet */
+    val lastProgress = remember { java.util.concurrent.atomic.AtomicLong(0L) }
 
     DisposableEffect(Unit) {
         handle.player = mp
@@ -84,8 +86,11 @@ fun VlcVideo(
         mp.setEventListener { ev ->
             when (ev.type) {
                 MediaPlayer.Event.Playing -> runCatching { mp.setAudioDelay(delayMs * 1000L) }
+                MediaPlayer.Event.TimeChanged -> lastProgress.set(System.currentTimeMillis())
                 MediaPlayer.Event.Vout -> if (ev.voutCount > 0) {
                     failures = 0
+                    lastProgress.set(System.currentTimeMillis())
+                    de.aze.iptv.ui.qaLog("FIRST_FRAME_VLC")
                     firstFrame()
                 }
                 MediaPlayer.Event.EncounteredError, MediaPlayer.Event.EndReached -> {
@@ -122,7 +127,23 @@ fun VlcVideo(
         media.addOption(":http-user-agent=${Http.USER_AGENT}")
         mp.media = media
         media.release()
+        lastProgress.set(0L)
         mp.play()
+    }
+
+    // VLC-Wächter: Bild war schon da, aber 8 s bewegt sich die Wiedergabe-Zeit nicht mehr (hängt/puffert ohne Daten)
+    // → neu verbinden. VLC meldet so einen Hänger sonst nie als Fehler.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1_000)
+            val t = lastProgress.get()
+            if (t > 0 && System.currentTimeMillis() - t > 8_000) {
+                lastProgress.set(0L)
+                de.aze.iptv.ui.qaLog("WATCHDOG vlc")
+                error()
+                restart++
+            }
+        }
     }
 
     LaunchedEffect(audioDelayMs) { runCatching { mp.setAudioDelay(audioDelayMs * 1000L) } }
@@ -162,7 +183,7 @@ object VlcEngine {
     }
 
     fun get(context: android.content.Context): LibVLC = instance ?: synchronized(this) {
-        instance ?: LibVLC(context.applicationContext, arrayListOf("--http-reconnect", "--no-stats", "--audio-time-stretch"))
+        instance ?: LibVLC(context.applicationContext, arrayListOf("--no-stats", "--audio-time-stretch"))
             .also { instance = it }
     }
 }

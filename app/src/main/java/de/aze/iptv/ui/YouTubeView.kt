@@ -40,7 +40,8 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
     // EINE WebView für alle YouTube-Sender: beim Umschalten wird nur die Adresse gewechselt
     // (eine neue WebView je Sender kostet spürbar Zeit und Speicher)
     val web = remember(generation) {
-        WebView(context).apply {
+        // Fire TV aktualisiert die Web-Anzeige manchmal im Hintergrund – dann schlägt das Anlegen fehl (kein Absturz)
+        runCatching { WebView(context) }.getOrNull()?.apply {
             isFocusable = false
             isFocusableInTouchMode = false
             // durchsichtig, damit ein "durchgestanztes" Video sichtbar wird; die Seite selbst ist schwarz
@@ -64,6 +65,10 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
             }
             webChromeClient = WebChromeClient()
         }
+    }
+    if (web == null) {
+        androidx.compose.runtime.LaunchedEffect(Unit) { failed("Web-Anzeige gerade nicht verfügbar") }
+        return
     }
 
     // Adresse laden – kurz warten, damit beim schnellen Durchschalten nur der letzte Sender lädt.

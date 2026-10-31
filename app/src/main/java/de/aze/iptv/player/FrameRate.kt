@@ -143,9 +143,13 @@ class FpsProbe(private val onFps: (Float) -> Unit) : VideoFrameMetadataListener 
             main.post { onFps(f) }
             return
         }
-        if (count > 0 && presentationTimeUs <= stamps[count - 1]) return
-        stamps[count++] = presentationTimeUs
-        if (count < stamps.size) return
+        // count nur EINMAL lesen: restart() kann zwischendurch (anderer Thread) auf 0 setzen → sonst stamps[-1]
+        val c = count
+        if (c >= stamps.size) return
+        if (c > 0 && presentationTimeUs <= stamps[c - 1]) return
+        stamps[c] = presentationTimeUs
+        count = c + 1
+        if (c + 1 < stamps.size) return
         done = true
         val deltas = (1 until stamps.size).map { stamps[it] - stamps[it - 1] }.filter { it > 0 }.sorted()
         if (deltas.isEmpty()) return

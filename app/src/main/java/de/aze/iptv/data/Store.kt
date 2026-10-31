@@ -325,7 +325,11 @@ class Store(context: Context) {
         const val DEFAULT_PIN = "0000"
     }
 
+    // Eigene kleine Datei: wird bei JEDEM Umschalten geschrieben. In der großen Einstellungs-Datei (mit Senderlisten-
+    // Anordnung) hieß das jedes Mal die ganze Datei neu schreiben – Ruckeln beim Zappen und Hänger beim Verlassen der App.
+    private val lastPrefs = context.getSharedPreferences("aze_last", Context.MODE_PRIVATE)
+
     var lastChannelKey: String?
-        get() = Secure.decrypt(prefs.getString("lastChannel", null))
-        set(v) = prefs.edit().putString("lastChannel", v?.let { Secure.encrypt(it) }).apply()
+        get() = Secure.decrypt(lastPrefs.getString("lastChannel", null) ?: prefs.getString("lastChannel", null))
+        set(v) = lastPrefs.edit().putString("lastChannel", v?.let { Secure.encrypt(it) }).apply()
 }

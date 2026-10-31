@@ -11,7 +11,8 @@ FAILS=0
 STEP=0
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
-qa() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F "AzeQA" ; }
+qa() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F "AzeQA" | grep -v " TICK " ; }
+ticks() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F " TICK " ; }
 count() { qa | grep -cF -- "$1" || true; }
 shot() { STEP=$((STEP+1)); adb exec-out screencap -p > "$OUT/$(printf %02d $STEP)-$1.png" 2>/dev/null || true; }
 alive() { [ -n "$(adb shell pidof $PKG | tr -d '\r')" ]; }
@@ -53,11 +54,14 @@ wait_for "FIRST_FRAME Test 2" 1 60
 wait_for "WATCHDOG starved Test 2" 1 50
 wait_for "FIRST_FRAME Test 2" 2 40 && shot "test2-wieder-da"
 
-log "== Test 3: Bild bleibt stehen, Ton läuft weiter"
+log "== Test 3: Bild bleibt stehen, Ton läuft weiter (Bild hört 15 s nach Start auf)"
+w=$(count "WATCHDOG")
 channel 3
 wait_for "FIRST_FRAME Test 3" 1 60
-wait_for "WATCHDOG" "$(( $(count WATCHDOG) + 1 ))" 50
-wait_for "FIRST_FRAME Test 3" 2 40 && shot "test3-wieder-da"
+# spätestens ~15 s Bild + 12 s Erkennung → Neustart
+wait_for "WATCHDOG" $((w+1)) 35
+wait_for "FIRST_FRAME Test 3" 2 30 && shot "test3-wieder-da"
+note "Zustand Test 3" "$(ticks | tail -45)"
 
 log "== Test 4: Server trennt die Verbindung"
 channel 4
@@ -66,16 +70,19 @@ wait_for "FIRST_FRAME Test 4" 2 60 && shot "test4-wieder-da"
 
 log "== Test 5: schnelles Zappen (20× hoch/runter), danach muss Test 1 laufen"
 for i in $(seq 1 10); do adb shell input keyevent KEYCODE_DPAD_UP; adb shell input keyevent KEYCODE_DPAD_DOWN; done
-channel 1
+sleep 3
 n=$(count "FIRST_FRAME Test 1")
+channel 1
 wait_for "FIRST_FRAME Test 1" $((n+1)) 60 && shot "test5-nach-zappen"
+sleep 20
+alive || fail "App nach dem Zappen nicht mehr da"
 
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
 if adb logcat -d -b crash | grep -q "$PKG"; then fail "Absturz im Protokoll gefunden"; fi
 
 adb logcat -d > "$OUT/logcat.txt"
-qa > "$OUT/azeqa.txt"
+qa > "$OUT/azeqa.txt"; ticks > "$OUT/ticks.txt"
 log "Protokoll (AzeQA):"; cat "$OUT/azeqa.txt"
 note "AzeQA-Protokoll" "$(cat "$OUT/azeqa.txt")"
 note "App-Fehler im Protokoll" "$(grep -E 'AndroidRuntime|FATAL|de\.aze|ExoPlayerImpl|MediaCodec.*(rror|xception)' "$OUT/logcat.txt" | grep -v 'AzeQA' | tail -60)"
