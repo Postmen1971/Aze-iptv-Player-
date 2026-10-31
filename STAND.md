@@ -160,6 +160,15 @@
 - Neu: Neustart bei 6 s ohne neues Bild im Zustand „läuft“ (auch wenn Ton läuft; bei Tunneling weiter Bild+Zeit) oder 8 s „puffert“ ganz ohne neue Daten (bufferedPosition unverändert). Puffern mit ankommenden Daten wird nie unterbrochen. Nur wenn seit dem (Neu-)Start schon Bilder kamen (FpsProbe.framesAtStart). Max. 3 Neustarts, nach 60 s flüssigem Bild wieder verfügbar. Diagnose zeigt zusätzlich „Vorrat“.
 - Falls es weiter hängt: Diagnose-Anzeige einschalten und Foto vom Moment des Hängers (Bilder/s, Zeit, Zustand, Vorrat, Ton).
 
+## Automatischer Emulator-Test (ab v1.0.89)
+- Ablauf bei jedem Push: build → emulator-test → release. Veröffentlicht wird NUR, wenn der Emulator-Test besteht.
+- Test-Build „qa“ (wie Release mit R8, Debug-Signatur, `BuildConfig.TEST_HOOKS = true`): Start-Parameter `aze_test_playlist` legt eine Test-Playlist an. Im normalen Build ist das aus.
+- `.github/qa/make_media.sh` erzeugt Test-Videos mit ffmpeg, `.github/qa/test_server.py` liefert sie in Echtzeit: Normal, tote Verbindung (stall), Bild hört auf/Ton läuft (vstop), Verbindungsabbruch (drop).
+- `.github/qa/run_emulator_test.sh` (Android 11, x86_64): App startet, Bild kommt, normaler Sender 45 s ohne Wächter-Neustart, Wächter erholt sich bei stall/vstop, drop erholt sich, 20× schnelles Zappen, kein Absturz. Liest die logcat-Zeilen mit Kennung `AzeQA` (FIRST_FRAME, WATCHDOG, ERROR, ENDED – `qaLog()` in PlayerScreen.kt).
+- Ergebnis (Bildschirmfotos, Protokoll) als Artefakt „emulator-test-ergebnis“ am Lauf.
+- Grenze: echter Anbieter und Video-Chip von SHIELD/Fire TV sind nicht nachgebildet – Test am Fernseher bleibt letzter Schritt.
+- Zusätzlich vor jeder Version: unabhängige Code-Prüfung durch eine frische KI-Instanz (ohne Kenntnis der Änderungen).
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).

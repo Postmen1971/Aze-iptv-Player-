@@ -248,6 +248,7 @@ fun PlayerScreen(
             lastPos = pos
             lastBuffered = buffered
             if ((frozen >= 6 || starved >= 8) && watchdogRestarts < 3) {
+                qaLog("WATCHDOG ${if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name}")
                 frozen = 0
                 starved = 0
                 healthy = 0
@@ -322,6 +323,7 @@ fun PlayerScreen(
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
+                qaLog("FIRST_FRAME ${app.current?.channel?.name}")
                 noPicture = false
                 if (ytError?.startsWith("Anbieter antwortet") == true) ytError = null
                 retries = 0
@@ -334,6 +336,7 @@ fun PlayerScreen(
             override fun onPlaybackStateChanged(state: Int) {
                 // Manche Live-Streams "enden" einfach (Verbindung vom Server getrennt): neu verbinden.
                 if (state == Player.STATE_ENDED && player.currentMediaItem != null) {
+                    qaLog("ENDED ${app.current?.channel?.name}")
                     retryJob?.cancel()
                     retryJob = scope.launch {
                         delay(1_000)
@@ -344,6 +347,7 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                qaLog("ERROR ${error.errorCodeName} ${app.current?.channel?.name}")
                 noPicture = true
                 retryJob?.cancel()
                 // Automatisch: Format-/Decoder-Fehler oder wiederholte Abbrüche → diesen Sender mit VLC abspielen.
@@ -977,4 +981,10 @@ fun PlayerScreen(
             QuickMenu(items = items, onClose = { quickMenu = false })
         }
     }
+}
+
+
+/** Kurze Zeilen fürs Protokoll (logcat, Kennung AzeQA) – der automatische Emulator-Test liest sie mit. */
+internal fun qaLog(msg: String) {
+    android.util.Log.i("AzeQA", msg)
 }

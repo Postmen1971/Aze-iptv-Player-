@@ -8,3 +8,6 @@ local.properties
 .DS_Store
 
 !keystore/test.jks
+
+# Emulator-Test: erzeugte Test-Videos
+.github/qa/media/

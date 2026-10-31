@@ -20,6 +20,8 @@ android {
         versionName = "1.0.$buildNumber"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "UPDATE_REPO", "\"Postmen1971/Aze-iptv-Player-\"")
+        // Test-Zugänge (Start-Parameter für die Test-Playlist) – nur im Test-Build "qa" an
+        buildConfigField("boolean", "TEST_HOOKS", "false")
     }
 
     signingConfigs {
@@ -43,6 +45,14 @@ android {
             } else {
                 signingConfigs.getByName("debug")
             }
+        }
+        // Test-Build für den automatischen Emulator-Test: wie Release (R8 an), aber mit Test-Zugängen.
+        // Wird nie veröffentlicht.
+        create("qa") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            buildConfigField("boolean", "TEST_HOOKS", "true")
         }
     }
 

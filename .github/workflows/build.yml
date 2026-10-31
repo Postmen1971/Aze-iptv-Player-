@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      label: ${{ steps.key.outputs.label }}
     steps:
       - uses: actions/checkout@v4
 
@@ -59,7 +61,7 @@ jobs:
         run: |
           set -o pipefail
           # Compiler-Fehler zusätzlich als Hinweise am Lauf anzeigen (Logs sind nicht immer abrufbar)
-          gradle :app:testReleaseUnitTest :app:assembleRelease --stacktrace 2>&1 | tee build.log || {
+          gradle :app:testReleaseUnitTest :app:assembleRelease :app:assembleQa --stacktrace 2>&1 | tee build.log || {
             # fehlgeschlagene Tests als Hinweise anzeigen
             for f in app/build/test-results/testReleaseUnitTest/*.xml; do
               [ -f "$f" ] && grep -o 'testcase name="[^"]*"[^>]*>\s*<failure message="[^"]*"' "$f" | head -20 | while IFS= read -r l; do echo "::error::Test: $l"; done
@@ -75,6 +77,9 @@ jobs:
             cp "$f" "out/Aze-IPTV-Player-${abi}.apk"
           done
           ls -la out
+          # Test-Build für den Emulator (wird nicht veröffentlicht)
+          mkdir -p qa
+          cp app/build/outputs/apk/qa/app-x86_64-qa.apk qa/aze-qa-x86_64.apk
 
       - name: APK als Artefakt ablegen
         uses: actions/upload-artifact@v4
@@ -82,10 +87,76 @@ jobs:
           name: Aze-IPTV-Player-1.0.${{ github.run_number }}
           path: out/*.apk
 
+      - name: Test-Build ablegen
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-apk
+          path: qa/aze-qa-x86_64.apk
+          retention-days: 3
+
+  # Automatischer Test: App im Android-Emulator starten und Hänger simulieren.
+  # Nur wenn alles besteht, wird die neue Version veröffentlicht.
+  emulator-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: KVM freischalten (schneller Emulator)
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-apk
+          path: qa
+
+      - name: Test-Sender erzeugen und Test-Server starten
+        run: |
+          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+          bash .github/qa/make_media.sh
+          nohup python3 .github/qa/test_server.py 8090 > qa-server.log 2>&1 &
+          sleep 2
+          curl -sf http://127.0.0.1:8090/list.m3u | head -3
+
+      - name: Emulator-Test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: default
+          ram-size: 2048M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash .github/qa/run_emulator_test.sh qa/aze-qa-x86_64.apk qa-out
+
+      - name: Test-Ergebnis ablegen (Bilder, Protokoll)
+        if: always()
+        run: cp qa-server.log qa-out/ 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-test-ergebnis
+          path: qa-out/
+          retention-days: 14
+
+  release:
+    needs: [build, emulator-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Aze-IPTV-Player-1.0.${{ github.run_number }}
+          path: out
+
       - name: Release veröffentlichen
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v1.0.${{ github.run_number }}
-          name: Aze-IPTV-Player 1.0.${{ github.run_number }}${{ steps.key.outputs.label }}
+          name: Aze-IPTV-Player 1.0.${{ github.run_number }}${{ needs.build.outputs.label }}
           body: ${{ github.event.head_commit.message }}
           files: out/*.apk
