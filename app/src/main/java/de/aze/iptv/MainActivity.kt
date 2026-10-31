@@ -46,6 +46,8 @@ class MainActivity : ComponentActivity() {
         app.start()
         // Nur im Test-Build (Emulator-Test bei GitHub): Test-Playlist per Start-Parameter. Im normalen Build gibt es das nicht.
         if (BuildConfig.TEST_HOOKS) {
+            // Lippensynchron-Wert für den Test setzen
+            intent?.getIntExtra("aze_test_audio_delay", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE }?.let { app.updateAudioDelay(it) }
             intent?.getStringExtra("aze_test_playlist")?.let { url ->
                 if (app.sources.none { it.url == url }) {
                     app.addSource(de.aze.iptv.data.PlaylistSource(java.util.UUID.randomUUID().toString(), "Test", de.aze.iptv.data.SourceType.M3U, url))
