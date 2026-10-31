@@ -188,6 +188,8 @@
 - Fußball „laut liveonsat“: Länder im liveonsat-Namen wurden beim Vergleich verworfen → „Disney+ Norge“ passte auf jeden Disney-Sender. Jetzt muss das Land passen (`Football.listedCountry` vs. `Epg.countryOf`; eigene Sender ohne Land nur für DE/TR/AT/CH). `Epg.countryOf` erkennt jetzt auch „(TR)“ / „[DE]“.
 - Fußball „vermutlich“ (EPG-Notlösung): Sendungen, die einen ANDEREN Wettbewerb nennen („Fußball: Premier League“ bei Süper-Lig-Spiel), zählen nicht mehr (`Football.namesOtherLeague`, 2. Bundesliga ≠ Bundesliga).
 - liveonsat: Jugend-/Frauen-Spiele derselben Vereine werden nicht mehr verwechselt.
+- Land eigener Sender: `Football.ownCountry` (Vorsatz/Gruppe/tvg-id, Länderwort wie „FRANCE“, Kürzel vorne/hinten wie „… FR“); „Sports“ = „Sport“ = „Spor“ beim Namensvergleich.
+- „Laut liveonsat außerdem“: jeder Eintrag ist anwählbar → OK zeigt ähnliche eigene Sender ohne Länder-Prüfung (`Football.matchByNameLoose`), passendes Land zuerst; Zurück = Übersicht.
 - Werkzeug `.github/workflows/liveonsat-check.yml` (nur von Hand): lädt liveonsat bei GitHub und zeigt den Abschnitt zu einer Mannschaft als Hinweis – zum Prüfen, was liveonsat wirklich auflistet.
 
 ## Für einen neuen Chat

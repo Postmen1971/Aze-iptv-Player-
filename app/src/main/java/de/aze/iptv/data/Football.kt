@@ -198,8 +198,11 @@ object Football {
         "danmark", "denmark", "sverige", "norge", "czech", "cz", "slovakia", "sk", "albania", "kosovo", "macedonia", "mk",
     )
 
+    // Schreibweisen vereinheitlichen: "beIN SPORT 1" = "beIN Sports 1"
+    private val tokenAlias = mapOf("sports" to "sport", "spor" to "sport", "sporty" to "sport")
+
     private fun nameTokens(s: String): List<String> =
-        norm(s).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in nameNoise }
+        norm(s).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in nameNoise }.map { tokenAlias[it] ?: it }
 
     /** Eigene Sender mit vorbereiteten Namen und Land (einmal je Fenster). */
     class NameIndex(val items: List<Pair<NumberedChannel, String>>, val countries: List<String?> = emptyList())
@@ -207,8 +210,27 @@ object Football {
     fun nameIndex(lineup: Lineup): NameIndex =
         NameIndex(
             lineup.all.map { it to " " + nameTokens(it.channel.name).joinToString(" ") + " " },
-            lineup.all.map { Epg.countryOf(it.channel) },
+            lineup.all.map { ownCountry(it.channel) },
         )
+
+    // Länder-Kürzel, wie sie vorne/hinten in Sendernamen oder Gruppen stehen ("FR: …", "… FR", Gruppe "FR | SPORT")
+    private val shortCodes = setOf(
+        "fr", "de", "tr", "uk", "it", "es", "pl", "pt", "nl", "be", "ru", "ro", "hr", "rs", "ba", "si", "al", "gr", "bg", "hu",
+        "cz", "sk", "dk", "se", "no", "fi", "at", "ch", "kz", "gb", "ger", "fra", "ita", "esp", "por", "pol", "rus",
+    )
+    private val shortAlias = mapOf("gb" to "uk", "ger" to "de", "fra" to "fr", "ita" to "it", "esp" to "es", "por" to "pt", "pol" to "pl", "rus" to "ru")
+
+    /** Land eines eigenen Senders: Vorsatz/Gruppe/tvg-id, sonst Länderwort oder Kürzel vorne/hinten in Name oder Gruppe. */
+    fun ownCountry(ch: Channel): String? {
+        Epg.countryOf(ch)?.let { return it }
+        listedCountry(ch.name)?.let { return it }
+        listedCountry(ch.group)?.let { return it }
+        for (s in listOf(ch.name, ch.group)) {
+            val w = norm(s).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() }
+            for (c in listOfNotNull(w.firstOrNull(), w.lastOrNull())) if (c in shortCodes) return shortAlias[c] ?: c
+        }
+        return null
+    }
 
     // Länder in Sendernamen von liveonsat (z. B. "Disney+ Norge", "Sky Sport Deutschland", "beIN Sports Türkiye")
     private val listedCountryWords = mapOf(
@@ -219,6 +241,8 @@ object Football {
         "sverige" to "se", "suomi" to "fi", "bih" to "ba", "srbija" to "rs", "hrvatska" to "hr", "slovenija" to "si",
         "hungary" to "hu", "romania" to "ro", "bulgaria" to "bg", "greece" to "gr", "hellas" to "gr", "cyprus" to "cy",
         "czech" to "cz", "slovakia" to "sk", "albania" to "al", "kosovo" to "xk", "macedonia" to "mk", "baltic" to "baltic",
+        "francais" to "fr", "italy" to "it", "spain" to "es", "poland" to "pl", "russia" to "ru", "rossiya" to "ru",
+        "qazaqstan" to "kz", "kazakhstan" to "kz", "english" to "uk",
     )
 
     /** Land eines Senders laut liveonsat-Namen (null = nicht angegeben). */
@@ -242,6 +266,27 @@ object Football {
             val own = idx.countries.getOrNull(i)
             lc == null || own == lc || (own == null && lc in homeCountries)
         }.map { idx.items[it].first }.take(4)
+    }
+
+    // Wörter, die für die Ähnlichkeitssuche zu allgemein sind
+    private val weakTokens = setOf("sport", "channel", "tv", "plus", "streaming", "connect", "max", "premium")
+
+    /**
+     * Ähnliche eigene Sender für einen Sender aus dem TV-Plan, OHNE Länder-Prüfung (zum Selbst-Auswählen).
+     * Erst alle Wörter, sonst alle aussagekräftigen Wörter; passendes Land zuerst.
+     */
+    fun matchByNameLoose(listed: String, idx: NameIndex, limit: Int = 12): List<NumberedChannel> {
+        val t = nameTokens(listed)
+        if (t.isEmpty()) return emptyList()
+        val lc = listedCountry(listed)
+        fun find(tokens: List<String>) = idx.items.indices.filter { i -> tokens.all { idx.items[i].second.contains(" $it ") } }
+        var hits = find(t)
+        if (hits.isEmpty()) {
+            val strong = t.filter { it !in weakTokens }
+            if (strong.isNotEmpty() && strong.size < t.size) hits = find(strong)
+        }
+        return hits.sortedBy { i -> if (lc != null && idx.countries.getOrNull(i) == lc) 0 else 1 }
+            .map { idx.items[it].first }.take(limit)
     }
 
     /** Vorbereitete Programmzeitschrift: je Sender die Sendungen des Tages mit vereinfachtem Titel. */

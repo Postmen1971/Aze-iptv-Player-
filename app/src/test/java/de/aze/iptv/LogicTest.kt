@@ -174,6 +174,33 @@ class LogicTest {
         assertEquals("tr", Epg.countryOf(own[0]))
     }
 
+    @Test fun football_foreignChannelsAreFoundWhenCountryMatches() {
+        val own = M3uParser.parse(
+            """
+            #EXTM3U
+            #EXTINF:-1 group-title="FRANCE",beIN SPORT 1 FHD
+            http://x/f1.ts
+            #EXTINF:-1 group-title="SPORTS",BEIN SPORTS 2 FR
+            http://x/f2.ts
+            #EXTINF:-1 group-title="TR | SPOR",TR: beIN SPORTS 1 FHD
+            http://x/t1.ts
+            #EXTINF:-1 group-title="TR | ULUSAL",(TR) 7-24 Disney+ 1
+            http://x/d1.ts
+            """.trimIndent(),
+        )
+        assertEquals("fr", Football.ownCountry(own[0])) // Gruppe "FRANCE"
+        assertEquals("fr", Football.ownCountry(own[1])) // Kürzel am Ende
+        val idx = Football.nameIndex(Numbering.build(own, emptyList()))
+        // "Sports" = "Sport", Land Frankreich
+        assertEquals("beIN SPORT 1 FHD", Football.matchByName("beIN Sports France 1 HD", idx).single().channel.name)
+        assertEquals("BEIN SPORTS 2 FR", Football.matchByName("beIN Sports France 2 HD", idx).single().channel.name)
+        // Selbst-Auswahl: ähnliche Sender ohne Länder-Prüfung, passendes Land zuerst
+        val loose = Football.matchByNameLoose("beIN Sports France 1 HD", idx).map { it.channel.name }
+        assertEquals("beIN SPORT 1 FHD", loose.first())
+        assertTrue(loose.contains("TR: beIN SPORTS 1 FHD"))
+        assertEquals("(TR) 7-24 Disney+ 1", Football.matchByNameLoose("Disney+ Norge (${'$'}/geo/R)", idx).single().channel.name)
+    }
+
     @Test fun football_otherLeagueIsNotThisMatch() {
         val kick = 1_700_000_000_000L
         fun ch(n: String, id: String) = Channel(n, "Sport", null, "http://x/$id.ts", tvgId = id)

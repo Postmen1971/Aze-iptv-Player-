@@ -57,6 +57,8 @@ private class GuideData(
     val diag: String = "",
     /** zur Fehlersuche: ähnliche Spiele bei liveonsat je Spiel */
     val similar: Map<String, List<String>> = emptyMap(),
+    /** eigene Sender für die Ähnlichkeitssuche (Sender aus dem TV-Plan selbst auswählen) */
+    val names: Football.NameIndex? = null,
 )
 
 /**
@@ -110,6 +112,7 @@ fun FootballGuide(
                 similar = list.associate { m ->
                     m.id to de.aze.iptv.data.LiveOnSat.similar(m, los).map { "${it.home} v ${it.away} (${it.channels.size} Sender)" }
                 },
+                names = names,
                 diag = "Quellen – liveonsat: ${de.aze.iptv.data.LiveOnSat.lastStatus} · " +
                     "Programmzeitschrift: ${idx.items.size} deiner Sender mit Programm",
             )
@@ -214,6 +217,7 @@ fun FootballGuide(
                 listed = data?.listed?.get(p.id).orEmpty(),
                 similar = data?.similar?.get(p.id).orEmpty(),
                 current = app.current?.channel?.key,
+                findSimilar = { name -> data?.names?.let { Football.matchByNameLoose(name, it) }.orEmpty() },
                 onPlay = { nc ->
                     app.play(nc)
                     onWatch?.invoke("${p.home} – ${p.away}", data?.channels?.get(p.id).orEmpty().map { it.channel })
@@ -233,10 +237,19 @@ private fun MatchPopup(
     listed: List<de.aze.iptv.data.TvListings.Broadcast>,
     similar: List<String>,
     current: String?,
+    findSimilar: (String) -> List<de.aze.iptv.data.NumberedChannel>,
     onPlay: (de.aze.iptv.data.NumberedChannel) -> Unit,
     onClose: () -> Unit,
 ) {
     val first = remember(match.id) { FocusRequester() }
+    // Sender aus dem TV-Plan, zu dem gerade ähnliche eigene Sender gezeigt werden (Zurück = wieder zur Übersicht)
+    var pick by remember(match.id) { mutableStateOf<String?>(null) }
+    val pickFirst = remember { FocusRequester() }
+    BackHandler(enabled = pick != null) { pick = null }
+    LaunchedEffect(pick) {
+        withFrameNanos { }
+        runCatching { if (pick != null) pickFirst.requestFocus() else first.requestFocus() }
+    }
     LaunchedEffect(match.id) {
         withFrameNanos { }
         runCatching { first.requestFocus() }
@@ -256,21 +269,47 @@ private fun MatchPopup(
                 match.league + " · " + (if (match.live) "läuft (${match.status})" else time.format(Date(match.kickoff)) + " Uhr"),
                 color = Palette.TextMuted, fontSize = 13.sp,
             )
-            if (channels.isEmpty()) {
+            val picked = pick
+            if (picked != null) {
+                val similarOwn = remember(picked) { findSimilar(picked) }
+                Text("Ähnlich wie „$picked“ in deiner Liste:", color = Palette.TextSoft, fontSize = 14.sp)
+                if (similarOwn.isEmpty()) {
+                    Text("Nichts Ähnliches in deiner Senderliste gefunden.", color = Palette.TextMuted, fontSize = 13.sp)
+                    TvButton("Zurück", modifier = Modifier.focusRequester(pickFirst), onClick = { pick = null })
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        itemsIndexed(similarOwn) { i, nc ->
+                            Focusable(
+                                modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(pickFirst) else Modifier),
+                                onClick = { onPlay(nc) },
+                            ) { focused ->
+                                Row(
+                                    Modifier.fillMaxWidth()
+                                        .background(if (focused) Palette.Accent else Palette.PanelDark, RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text("${nc.number}", color = if (focused) Palette.OnAccent else Palette.Highlight, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(52.dp))
+                                    Text(nc.channel.name, color = if (focused) Palette.OnAccent else Palette.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if (channels.isEmpty() && listed.isEmpty()) {
                 Text(
-                    if (listed.isEmpty()) "Kein Sender gefunden – weder in deiner Programmzeitschrift noch im TV-Plan."
-                    else "Keiner dieser Sender ist in deiner Senderliste:",
+                    "Kein Sender gefunden – weder in deiner Programmzeitschrift noch im TV-Plan.",
                     color = Palette.TextSoft, fontSize = 14.sp,
                 )
-                if (listed.isEmpty() && similar.isNotEmpty()) {
+                if (similar.isNotEmpty()) {
                     Text("Bei liveonsat gefunden (Name passt nicht genau): " + similar.joinToString(" · "), color = Palette.TextMuted, fontSize = 12.sp)
-                }
-                if (listed.isNotEmpty()) {
-                    Text(listed.take(40).joinToString(", ") { it.channel }, color = Palette.Text, fontSize = 13.sp)
                 }
                 TvButton("Schließen", modifier = Modifier.focusRequester(first), onClick = onClose)
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (channels.isEmpty()) item {
+                        Text("Keiner dieser Sender wurde in deiner Senderliste sicher erkannt:", color = Palette.TextSoft, fontSize = 14.sp)
+                    }
                     itemsIndexed(channels) { i, mc ->
                         Focusable(
                             modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier),
@@ -305,9 +344,23 @@ private fun MatchPopup(
                     if (others.isNotEmpty()) {
                         item {
                             Text(
-                                "Laut liveonsat außerdem: " + others.take(40).joinToString(", ") { it.channel },
+                                "Laut liveonsat außerdem – OK zeigt ähnliche Sender aus deiner Liste:",
                                 color = Palette.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp),
                             )
+                        }
+                        itemsIndexed(others.take(40)) { i, b ->
+                            Focusable(
+                                modifier = Modifier.fillMaxWidth().then(if (channels.isEmpty() && i == 0) Modifier.focusRequester(first) else Modifier),
+                                onClick = { pick = b.channel },
+                            ) { focused ->
+                                Text(
+                                    b.channel,
+                                    color = if (focused) Palette.OnAccent else Palette.TextSoft, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.fillMaxWidth()
+                                        .background(if (focused) Palette.Accent else Palette.PanelDark.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                )
+                            }
                         }
                     }
                 }
