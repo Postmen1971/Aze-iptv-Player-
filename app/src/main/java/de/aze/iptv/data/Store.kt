@@ -76,6 +76,7 @@ class Store(context: Context) {
                 url = o.optString("url"),
                 user = o.optString("user"),
                 pass = o.optString("pass"),
+                enabled = o.optBoolean("enabled", true),
             )
         }
     }
@@ -86,7 +87,7 @@ class Store(context: Context) {
             arr.put(
                 JSONObject()
                     .put("id", it.id).put("name", it.name).put("type", it.type.name)
-                    .put("url", it.url).put("user", it.user).put("pass", it.pass)
+                    .put("url", it.url).put("user", it.user).put("pass", it.pass).put("enabled", it.enabled)
             )
         }
         prefs.edit().putString("sources", Secure.encrypt(arr.toString())).apply()

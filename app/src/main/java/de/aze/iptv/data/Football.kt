@@ -152,6 +152,39 @@ object Football {
 
     private val genericFootball = listOf("fussball", "football", "futbol", "canli mac", "live-fussball", "livefussball")
 
+    // Wettbewerbe, wie sie in Sendungstiteln stehen (vereinfacht geschrieben, siehe norm)
+    private val leagueAliases = mapOf(
+        "Bundesliga" to listOf("bundesliga"),
+        "2. Bundesliga" to listOf("2. bundesliga", "2 bundesliga", "zweite liga"),
+        "3. Liga" to listOf("3. liga", "3 liga"),
+        "DFB-Pokal" to listOf("dfb-pokal", "dfb pokal"),
+        "Süper Lig" to listOf("super lig", "superlig"),
+        "1. Lig" to listOf("1. lig", "1 lig"),
+        "Türkiye Kupası" to listOf("turkiye kupasi", "ziraat"),
+        "Premier League" to listOf("premier league"),
+        "LaLiga" to listOf("laliga", "la liga", "primera division"),
+        "Serie A" to listOf("serie a"),
+        "Ligue 1" to listOf("ligue 1"),
+        "Champions League" to listOf("champions league"),
+        "Europa League" to listOf("europa league"),
+        "Conference League" to listOf("conference league"),
+        "Eredivisie" to listOf("eredivisie"),
+        "Liga Portugal" to listOf("liga portugal", "primeira liga"),
+    )
+
+    /**
+     * Nennt der Sendungstitel einen ANDEREN Wettbewerb als den des Spiels?
+     * ("Fußball: Premier League" ist nicht Fenerbahçe – Göztepe aus der Süper Lig.)
+     */
+    fun namesOtherLeague(title: String, league: String): Boolean {
+        val own = leagueAliases[league].orEmpty()
+        val others = leagueAliases.filterKeys { it != league }.values.flatten()
+        // "2. bundesliga" enthält "bundesliga": der längere Name zählt
+        val ownHit = own.any { a -> title.contains(a) && others.none { o -> o.length > a.length && o.contains(a) && title.contains(o) } }
+        val otherHit = others.any { o -> title.contains(o) && own.none { a -> a.length > o.length && a.contains(o) && title.contains(a) } }
+        return otherHit && !ownHit
+    }
+
     private val footballWords = listOf("fussball", "football", "futbol", "liga", "lig ", "league", "cup", "kupa", "pokal", "mac", "canli")
 
     // ---- Sendernamen aus dem TV-Plan den eigenen Sendern zuordnen ----
@@ -168,17 +201,47 @@ object Football {
     private fun nameTokens(s: String): List<String> =
         norm(s).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in nameNoise }
 
-    /** Eigene Sender mit vorbereiteten Namen (einmal je Fenster). */
-    class NameIndex(val items: List<Pair<NumberedChannel, String>>)
+    /** Eigene Sender mit vorbereiteten Namen und Land (einmal je Fenster). */
+    class NameIndex(val items: List<Pair<NumberedChannel, String>>, val countries: List<String?> = emptyList())
 
     fun nameIndex(lineup: Lineup): NameIndex =
-        NameIndex(lineup.all.map { it to " " + nameTokens(it.channel.name).joinToString(" ") + " " })
+        NameIndex(
+            lineup.all.map { it to " " + nameTokens(it.channel.name).joinToString(" ") + " " },
+            lineup.all.map { Epg.countryOf(it.channel) },
+        )
 
-    /** Eigene Sender, deren Name zum Sender aus dem TV-Plan passt (z. B. "beIN Sports 1" → "TR: BEIN SPORTS 1 HD"). */
+    // Länder in Sendernamen von liveonsat (z. B. "Disney+ Norge", "Sky Sport Deutschland", "beIN Sports Türkiye")
+    private val listedCountryWords = mapOf(
+        "norge" to "no", "norway" to "no", "deutschland" to "de", "germany" to "de", "deutsch" to "de",
+        "turkiye" to "tr", "turkey" to "tr", "austria" to "at", "osterreich" to "at", "schweiz" to "ch", "swiss" to "ch",
+        "uk" to "uk", "ireland" to "uk", "italia" to "it", "espana" to "es", "france" to "fr", "belgium" to "be",
+        "polska" to "pl", "portugal" to "pt", "nederland" to "nl", "netherlands" to "nl", "danmark" to "dk", "denmark" to "dk",
+        "sverige" to "se", "suomi" to "fi", "bih" to "ba", "srbija" to "rs", "hrvatska" to "hr", "slovenija" to "si",
+        "hungary" to "hu", "romania" to "ro", "bulgaria" to "bg", "greece" to "gr", "hellas" to "gr", "cyprus" to "cy",
+        "czech" to "cz", "slovakia" to "sk", "albania" to "al", "kosovo" to "xk", "macedonia" to "mk", "baltic" to "baltic",
+    )
+
+    /** Land eines Senders laut liveonsat-Namen (null = nicht angegeben). */
+    fun listedCountry(listed: String): String? =
+        norm(listed).split(Regex("[^a-z0-9]+")).firstNotNullOfOrNull { listedCountryWords[it] }
+
+    /** Eigene Listen sind meist deutsch/türkisch: Sender ohne erkennbares Land gelten nur für diese Länder. */
+    private val homeCountries = setOf("de", "tr", "at", "ch")
+
+    /**
+     * Eigene Sender, deren Name zum Sender aus dem TV-Plan passt (z. B. "beIN Sports 1" → "TR: BEIN SPORTS 1 HD").
+     * Das Land muss passen: "Disney+ Norge" ist NICHT der türkische oder deutsche Disney-Sender.
+     */
     fun matchByName(listed: String, idx: NameIndex): List<NumberedChannel> {
         val t = nameTokens(listed)
         if (t.isEmpty()) return emptyList()
-        return idx.items.filter { (_, n) -> t.all { n.contains(" $it ") } }.map { it.first }.take(4)
+        val lc = listedCountry(listed)
+        return idx.items.indices.filter { i ->
+            val n = idx.items[i].second
+            if (!t.all { n.contains(" $it ") }) return@filter false
+            val own = idx.countries.getOrNull(i)
+            lc == null || own == lc || (own == null && lc in homeCountries)
+        }.map { idx.items[it].first }.take(4)
     }
 
     /** Vorbereitete Programmzeitschrift: je Sender die Sendungen des Tages mit vereinfachtem Titel. */
@@ -206,13 +269,14 @@ object Football {
                 val h1 = t1.any { t.contains(it) }
                 val h2 = t2.any { t.contains(it) }
                 val sure = h1 && h2
-                val likely = (h1 || h2) && footballWords.any { t.contains(it) }
+                val other = namesOtherLeague(t, m.league)
+                val likely = (h1 || h2) && footballWords.any { t.contains(it) } && !other
                 if (sure || likely) {
                     out.add(MatchChannel(nc, p, sure))
                     break
                 }
                 // Notlösung: zur Anstoßzeit läuft dort Fußball aus diesem Wettbewerb (ohne Mannschaftsnamen im Titel)
-                if (t.contains(leagueKey) || genericFootball.any { t.contains(it) }) {
+                if (!other && (t.contains(leagueKey) || genericFootball.any { t.contains(it) })) {
                     possible.add(MatchChannel(nc, p, false))
                     break
                 }

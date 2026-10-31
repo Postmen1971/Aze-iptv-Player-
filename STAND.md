@@ -183,6 +183,13 @@
 - Emulator-Test 6 (Lippensynchron 2000 + 1000 ms je Sender, Start-Parameter `aze_test_audio_delay`, `aze_test_channel_delay_url`/`aze_test_channel_delay` im qa-Build) prüft 40 s ohne Wächter-Neustart und laufende Bilder.
 - WICHTIG: Gegenprobe mit dem Stand OHNE Korrektur lief im Emulator ebenfalls flüssig – der Emulator (Software-Decoder) stellt dieses Standbild NICHT nach. Die Korrektur beruht auf Code-Analyse + Aziz' Beobachtung; Bestätigung nur auf SHIELD/Fire TV möglich (v1.0.96).
 
+## Playlists pausieren + Fußball-Zuordnung (nach v1.0.96)
+- Neu: Playlist „Pausieren“/„Einschalten“ (Einstellungen → Playlists). `PlaylistSource.enabled` (gespeichert, Standard an). Pausierte werden nicht geladen/aktualisiert, nicht angezeigt, keine EPG-/Film-Quelle; Zugangsdaten + letzte Liste (Datei) bleiben → Einschalten zeigt sie sofort, lädt nur neu, wenn keine Kopie da ist. `AppController.activeSources`, `setSourceEnabled()`.
+- Fußball „laut liveonsat“: Länder im liveonsat-Namen wurden beim Vergleich verworfen → „Disney+ Norge“ passte auf jeden Disney-Sender. Jetzt muss das Land passen (`Football.listedCountry` vs. `Epg.countryOf`; eigene Sender ohne Land nur für DE/TR/AT/CH). `Epg.countryOf` erkennt jetzt auch „(TR)“ / „[DE]“.
+- Fußball „vermutlich“ (EPG-Notlösung): Sendungen, die einen ANDEREN Wettbewerb nennen („Fußball: Premier League“ bei Süper-Lig-Spiel), zählen nicht mehr (`Football.namesOtherLeague`, 2. Bundesliga ≠ Bundesliga).
+- liveonsat: Jugend-/Frauen-Spiele derselben Vereine werden nicht mehr verwechselt.
+- Werkzeug `.github/workflows/liveonsat-check.yml` (nur von Hand): lädt liveonsat bei GitHub und zeigt den Abschnitt zu einer Mannschaft als Hinweis – zum Prüfen, was liveonsat wirklich auflistet.
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).

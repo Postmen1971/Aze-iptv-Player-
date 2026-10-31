@@ -32,6 +32,8 @@ data class PlaylistSource(
     val url: String,
     val user: String = "",
     val pass: String = "",
+    /** false = pausiert: wird nicht geladen und nicht angezeigt, bleibt aber gespeichert (samt letzter Liste) */
+    val enabled: Boolean = true,
 ) {
     fun m3uUrl(): String = when (type) {
         SourceType.M3U, SourceType.STALKER -> url.trim()

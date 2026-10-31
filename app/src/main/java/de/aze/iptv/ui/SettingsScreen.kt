@@ -327,7 +327,10 @@ private fun PlaylistSection(app: AppController) {
             var renaming by remember(src.id) { mutableStateOf(false) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(src.name, color = Palette.Text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (src.enabled) src.name else "${src.name} (pausiert)",
+                        color = if (src.enabled) Palette.Text else Palette.TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    )
                     Text(
                         when (src.type) {
                             SourceType.M3U -> "M3U-Link · "
@@ -345,6 +348,8 @@ private fun PlaylistSection(app: AppController) {
                     if (i > 0) TvButton("▲", onClick = { app.moveSource(src, -1) })
                     if (i < app.sources.size - 1) TvButton("▼", onClick = { app.moveSource(src, +1) })
                 }
+                // Pausieren: Liste wird nicht geladen, bleibt aber gespeichert und lässt sich jederzeit wieder einschalten
+                TvButton(if (src.enabled) "Pausieren" else "Einschalten", selected = !src.enabled, onClick = { app.setSourceEnabled(src, !src.enabled) })
                 TvButton("Umbenennen", onClick = { renaming = true })
                 TvButton("Löschen", danger = true, onClick = { app.removeSource(src) })
             }

@@ -147,6 +147,55 @@ class LogicTest {
         assertEquals("TR: S SPORT 2 FHD", Football.matchByName("S Sport 2 Türkiye HD", idx).single().channel.name)
     }
 
+    @Test fun football_listedCountryMustMatch() {
+        val own = M3uParser.parse(
+            """
+            #EXTM3U
+            #EXTINF:-1 group-title="TR | ULUSAL",(TR) 7-24 Disney+ 1
+            http://x/d1.ts
+            #EXTINF:-1 group-title="DE | KIDS",(DE) Disney Channel 4K+
+            http://x/d2.ts
+            #EXTINF:-1 group-title="TR | ULUSAL",(TR) 7-24 Konusanlar Disney
+            http://x/d3.ts
+            #EXTINF:-1 group-title="TR | SPOR",(TR) Bein Sports 1 4K ultra
+            http://x/b1.ts
+            #EXTINF:-1 group-title="DE | SPORT",DE: Sky Sport Bundesliga
+            http://x/s1.ts
+            """.trimIndent(),
+        )
+        val idx = Football.nameIndex(Numbering.build(own, emptyList()))
+        // Norwegischer Disney+ ist keiner der eigenen (türkischen/deutschen) Disney-Sender
+        assertTrue(Football.matchByName("Disney+ Norge (${'$'}/geo/R)", idx).isEmpty())
+        // passendes Land wird weiter gefunden
+        assertEquals("(TR) Bein Sports 1 4K ultra", Football.matchByName("beIN Sports Türkiye 1 HD", idx).single().channel.name)
+        assertEquals("DE: Sky Sport Bundesliga", Football.matchByName("Sky Sport Bundesliga Deutschland", idx).single().channel.name)
+        assertTrue(Football.matchByName("Sky Sport Bundesliga Österreich", idx).isEmpty())
+        // (TR)-Vorsatz wird als Land erkannt
+        assertEquals("tr", Epg.countryOf(own[0]))
+    }
+
+    @Test fun football_otherLeagueIsNotThisMatch() {
+        val kick = 1_700_000_000_000L
+        fun ch(n: String, id: String) = Channel(n, "Sport", null, "http://x/$id.ts", tvgId = id)
+        val chans = listOf(ch("DE: Sky Sport Mix", "mix"), ch("DE: Sky Sport Top Event", "top"), ch("TR: beIN Sports 1", "bein"), ch("DE: Sport Live", "live"))
+        val p = { t: String -> listOf(Programme(kick - 60 * 60_000, kick + 120 * 60_000, t)) }
+        val epg = Epg(
+            mapOf("mix" to p("Fußball: Premier League"), "top" to p("Fußball: Bundesliga"), "bein" to p("Trendyol Süper Lig"), "live" to p("Live-Fußball")),
+            emptyMap(),
+        )
+        val lu = Numbering.build(chans, emptyList())
+        val m = TodayMatch("3", "Süper Lig", "Fenerbahçe", "Göztepe", kick, "", null, false)
+        val found = Football.channelsFor(m, Football.index(epg, lu, kick - 3_600_000, kick + 3_600_000)).map { it.channel.channel.name }
+        assertFalse(found.contains("DE: Sky Sport Mix"))
+        assertFalse(found.contains("DE: Sky Sport Top Event"))
+        assertTrue(found.contains("TR: beIN Sports 1"))
+        assertTrue(found.contains("DE: Sport Live")) // allgemeiner Fußball ohne anderen Wettbewerb bleibt „vermutlich“
+        // 2. Bundesliga ist nicht Bundesliga (und umgekehrt)
+        assertTrue(Football.namesOtherLeague(Football.norm("Fußball: 2. Bundesliga"), "Bundesliga"))
+        assertFalse(Football.namesOtherLeague(Football.norm("Fußball: 2. Bundesliga"), "2. Bundesliga"))
+        assertTrue(Football.namesOtherLeague(Football.norm("Fußball: Bundesliga"), "2. Bundesliga"))
+    }
+
     @Test fun football_findsChannelInEpg() {
         val kick = 1_700_000_000_000L
         val c = Channel("beIN Sports 1", "Sport", null, "http://x/b1.ts", tvgId = "bein1")

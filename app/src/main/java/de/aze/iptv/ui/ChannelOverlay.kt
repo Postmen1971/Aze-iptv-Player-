@@ -80,7 +80,7 @@ fun ChannelOverlay(
     }
 
     val filter = app.playlistFilter
-    val multi = app.sources.size > 1
+    val multi = app.activeSources.size > 1
     val groups = app.lineup.groups.filter {
         (it.channels.isNotEmpty() || it.isFavorites) && (it.isFavorites || filter == null || it.sourceId == filter)
     }

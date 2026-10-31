@@ -103,7 +103,8 @@ class Epg(
             "uk" to "uk", "gb" to "uk", "en" to "uk", "nl" to "nl", "fr" to "fr", "it" to "it", "es" to "es", "pl" to "pl",
             "ru" to "ru", "ar" to "ar", "arab" to "ar", "ku" to "ku", "kurd" to "ku", "az" to "az", "aze" to "az",
         )
-        private val namePrefix = Regex("""^\s*\|?\s*([A-Za-zÜüÖöİ]{2,7})\s*[:|]""")
+        // „TR:“, „| TR |“, „(TR)“, „[DE]“
+        private val namePrefix = Regex("""^\s*[|(\[]?\s*([A-Za-zÜüÖöİ]{2,7})\s*[:|)\]]""")
         private val groupWords = Regex("""[A-Za-zÜüÖöİıçÇşŞğĞ]+""")
         private val idSuffix = Regex("""\.([a-z]{2})$""")
 

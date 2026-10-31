@@ -66,7 +66,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         private set
 
     /** EPG-Adressen aus den Playlists (Anbieter / url-tvg in der M3U) */
-    fun epgFromSources(): List<String> = runCatching { repo.epgUrls(sources) }.getOrDefault(emptyList())
+    fun epgFromSources(): List<String> = runCatching { repo.epgUrls(activeSources) }.getOrDefault(emptyList())
 
     fun addEpgUrl(url: String) {
         val u = url.trim()
@@ -181,6 +181,32 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     // Anbieter-M3U-Links werden automatisch zu Server + Login (siehe PlaylistSource.normalized)
     var sources by mutableStateOf(store.sources().map { it.normalized() })
         private set
+
+    /** Nur die eingeschalteten Playlists – pausierte werden weder geladen noch angezeigt. */
+    val activeSources: List<PlaylistSource> get() = sources.filter { it.enabled }
+
+    /**
+     * Playlist pausieren bzw. wieder einschalten. Beim Pausieren bleiben Zugangsdaten und die zuletzt geladene
+     * Liste auf dem Gerät – beim Einschalten ist sie sofort wieder da (und wird nur neu geladen, wenn nötig).
+     */
+    fun setSourceEnabled(source: PlaylistSource, on: Boolean) {
+        sources = sources.map { if (it.id == source.id) it.copy(enabled = on) else it }
+        store.saveSources(sources)
+        if (!on && playlistFilter == source.id) playlistFilter = null
+        scope.launch {
+            channels = repo.loadCached(activeSources)
+            updateStatus(emptyMap())
+            rebuild(restoreKey = current?.channel?.key).join()
+            if (!on) {
+                // lief gerade ein Sender dieser Playlist: auf den ersten Sender wechseln
+                if (current?.channel?.source == source.id) lineup.all.firstOrNull()?.let { play(it) }
+                message = "„${source.name}“ pausiert – wird nicht mehr geladen. Einschalten unter Einstellungen → Playlists."
+            } else {
+                message = "„${source.name}“ ist wieder eingeschaltet."
+                if (!repo.hasCache(listOf(source))) refreshNow()
+            }
+        }
+    }
     var favorites by mutableStateOf(store.favorites())
         private set
     // referentialEqualityPolicy: große Listen nicht bei jeder Zuweisung Element für Element vergleichen
@@ -479,7 +505,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         scope.launch {
             loading = true
             try {
-                channels = repo.loadCached(sources)
+                channels = repo.loadCached(activeSources)
                 rebuild(restoreKey = store.lastChannelKey).join()
                 updateStatus(emptyMap())
             } finally {
@@ -490,14 +516,15 @@ class AppController(context: Context, outerScope: CoroutineScope) {
                 refreshPending = false
                 refreshNow()
             }
-            else if (sources.isNotEmpty() && epgRepo.isStale(12)) refreshEpg()
+            else if (activeSources.isNotEmpty() && epgRepo.isStale(12)) refreshEpg()
         }
     }
 
     /** Beim Start: Liste neu laden, wenn das gewählte Intervall abgelaufen ist. */
     private fun needsRefresh(): Boolean {
-        if (sources.isEmpty()) return false
-        if (!repo.hasCache(sources)) return true
+        val active = activeSources
+        if (active.isEmpty()) return false
+        if (!repo.hasCache(active)) return true
         if (refreshHours <= 0) return false
         return System.currentTimeMillis() - lastRefresh >= refreshHours * 3_600_000L
     }
@@ -511,6 +538,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         sourceStatus = sources.associate { src ->
             val n = counts[src.id] ?: 0
             src.id to when {
+                !src.enabled -> "Pausiert – wird nicht geladen (Zugangsdaten und letzte Liste bleiben gespeichert)"
                 errors[src.id] != null -> "Fehler: ${errors[src.id]}" + if (n > 0) " (alte Liste mit $n Sendern bleibt)" else ""
                 n == 0 -> "Liste geladen, aber keine Live-Sender darin gefunden"
                 else -> "$n Sender geladen"
@@ -530,10 +558,11 @@ class AppController(context: Context, outerScope: CoroutineScope) {
             loading = true
             message = "Senderliste wird aktualisiert …"
             val errors = try {
-                val errs = repo.refresh(sources)
-                channels = repo.loadCached(sources)
+                val active = activeSources
+                val errs = repo.refresh(active)
+                channels = repo.loadCached(activeSources)
                 val now = System.currentTimeMillis()
-                if (errs.size < sources.size) {
+                if (errs.size < active.size) {
                     lastRefresh = now
                     store.lastRefresh = now
                 }
@@ -715,7 +744,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
 
     /** Playlists, die Filme & Serien haben können (Server + Login und M3U). */
     val vodSources: List<PlaylistSource>
-        get() = sources.filter { it.type == SourceType.XTREAM || it.type == SourceType.M3U }
+        get() = activeSources.filter { it.type == SourceType.XTREAM || it.type == SourceType.M3U }
 
     /** Filme & Serien einer Playlist. Bei M3U wird erkannt, ob ein Xtream-Anbieter dahintersteckt. */
     fun vodProvider(src: PlaylistSource): de.aze.iptv.data.VodProvider {
@@ -820,7 +849,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
 
     /** Schaltet die Senderliste weiter: Alle → Playlist 1 → Playlist 2 → … → Alle. */
     fun nextPlaylistFilter() {
-        val ids = listOf<String?>(null) + sources.map { it.id }
+        val ids = listOf<String?>(null) + activeSources.map { it.id }
         playlistFilter = ids[(ids.indexOf(playlistFilter) + 1) % ids.size]
     }
 
@@ -844,7 +873,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         sources = list
         store.saveSources(list)
         scope.launch {
-            channels = repo.loadCached(sources)
+            channels = repo.loadCached(activeSources)
             rebuild(restoreKey = current?.channel?.key)
         }
     }
@@ -866,7 +895,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         store.saveSources(sources)
         repo.delete(source)
         scope.launch {
-            channels = repo.loadCached(sources)
+            channels = repo.loadCached(activeSources)
             rebuild(restoreKey = current?.channel?.key)
         }
     }
