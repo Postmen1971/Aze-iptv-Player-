@@ -53,7 +53,10 @@ class Handler(BaseHTTPRequestHandler):
         name, behaviour = mode
         f = os.path.join(MEDIA, name)
         size = os.path.getsize(f)
-        rate = size / DURATION[name]  # Bytes pro Sekunde = Echtzeit
+        # Bytes pro Sekunde = Echtzeit. vstop hat nach 15 s nur noch Ton (wenige Bytes): mit der Rate des normalen
+        # Senders liefern, sonst kommt der Bild-Teil viel zu langsam (das wäre ein anderer Fall: „Anbieter zu langsam“)
+        ok = os.path.join(MEDIA, "ok.ts")
+        rate = os.path.getsize(ok) / DURATION["ok.ts"]
         self.send_response(200)
         self.send_header("Content-Type", "video/mp2t")
         self.end_headers()
