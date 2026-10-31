@@ -169,6 +169,13 @@
 - Grenze: echter Anbieter und Video-Chip von SHIELD/Fire TV sind nicht nachgebildet – Test am Fernseher bleibt letzter Schritt.
 - Zusätzlich vor jeder Version: unabhängige Code-Prüfung durch eine frische KI-Instanz (ohne Kenntnis der Änderungen).
 
+## v1.0.92 – nach unabhängiger Prüfung (erste Version, die den Emulator-Test bestanden hat)
+- Unabhängige KI-Prüfung fand u. a.: Wächter gab nach 3 Neustarts auf; Senderstart ohne Daten nicht erkannt; VLC ohne Hänger-Erkennung; „Umschalten“ (AFR/50 Hz) konnte bei Abbruch hängen bleiben (dann startet kein Sender mehr); Tasten gingen unter den Einstellungen an den Player; FpsProbe-Wettlauf; Film-Player ohne Speichergrenze und lief bei Home weiter; WebView-Anlegen ungesichert; lastChannel schrieb bei jedem Zappen die große verschlüsselte Datei.
+- Umgesetzt: Wächter gibt nie auf (Pausen 5/15/30/60 s), Start ohne Daten → nach 10 s + 8 s neu; `firstFrameSeen` statt Bildzähler (geht auch mit Tunneling); keine Neustarts bei unterdrücktem Ton (Alexa); kein Start im Hintergrund; AFR/50 Hz/Zurücksetzen immer anhalten → umschalten → warten → neu starten (try/finally); Bildfläche nach Frequenzwechsel neu (nur mit AFR); VLC-Wächter (8 s keine Zeit-Bewegung), `--http-reconnect` entfernt, Netzwerkfehler (2xxx) schieben Sender nicht mehr zu VLC; Lese-Zeitüberschreitung Live 10 s; Film-Player LoadControl + Pause bei ON_STOP; lastChannel in eigener Datei `aze_last`; WebView-Anlegen abgesichert.
+- Emulator-Ergebnis: tote Verbindung → Bild nach ~8 s Hänger wieder da; Bild steht/Ton läuft → nach ~6 s wieder da; Abbruch → 1 s; 20× Zappen stabil; normaler Sender ohne Fehl-Neustart.
+- Beobachtung: Liefert der Anbieter langsamer als Echtzeit (Daten kommen, aber zu wenig), puffert der Player lange – der Wächter greift bewusst nicht ein. Dann hilft nur größerer Puffer.
+- Noch offen aus der Prüfung: Lippensynchron mit positivem Versatz kann Bilder verwerfen (Start-Puffer an Versatz anpassen); EPG-Speicher bei sehr großen Listen (kompakter speichern); Store-Entschlüsselung beim Start auf dem Haupt-Thread.
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).
