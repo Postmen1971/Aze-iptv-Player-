@@ -176,6 +176,12 @@
 - Beobachtung: Liefert der Anbieter langsamer als Echtzeit (Daten kommen, aber zu wenig), puffert der Player lange – der Wächter greift bewusst nicht ein. Dann hilft nur größerer Puffer.
 - Noch offen aus der Prüfung: Lippensynchron mit positivem Versatz kann Bilder verwerfen (Start-Puffer an Versatz anpassen); EPG-Speicher bei sehr großen Listen (kompakter speichern); Store-Entschlüsselung beim Start auf dem Haupt-Thread.
 
+## Lippensynchron-Standbild behoben
+- Aziz bestätigt: Bild blieb stehen, wenn Lippensynchron > 0 (Ton später).
+- Ursache: Bild wird um den Versatz früher gezeigt (verschobene Ton-Uhr, AudioSync.kt), bei Live aber nur ~1,5 s Bild im Vorrat → Bilder fehlen/werden verworfen.
+- Lösung: PlaybackConfig.loadControl(audioLeadMs): Start-Vorrat = max(Stufe, Versatz + 2 s), Rebuffer = max(Stufe, Versatz + 3 s). Player wird je 0,5-s-Stufe des wirksamen Versatzes neu angelegt (kurzes Schwarz beim Ändern des Werts bzw. beim Wechsel auf Sender mit anderem Versatz). Umschalten dauert mit Versatz entsprechend länger.
+- Emulator-Test 6 (Lippensynchron +1500 ms, Start-Parameter `aze_test_audio_delay` im qa-Build) prüft 40 s ohne Wächter-Neustart und laufende Bilder.
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).
