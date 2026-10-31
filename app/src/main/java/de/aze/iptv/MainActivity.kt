@@ -48,6 +48,10 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.TEST_HOOKS) {
             // Lippensynchron-Wert für den Test setzen
             intent?.getIntExtra("aze_test_audio_delay", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE }?.let { app.updateAudioDelay(it) }
+            // zusätzlicher Versatz für einen Sender (Schlüssel = Adresse)
+            intent?.getStringExtra("aze_test_channel_delay_url")?.let { key ->
+                app.updateChannelDelay(key, intent.getIntExtra("aze_test_channel_delay", 0))
+            }
             intent?.getStringExtra("aze_test_playlist")?.let { url ->
                 if (app.sources.none { it.url == url }) {
                     app.addSource(de.aze.iptv.data.PlaylistSource(java.util.UUID.randomUUID().toString(), "Test", de.aze.iptv.data.SourceType.M3U, url))

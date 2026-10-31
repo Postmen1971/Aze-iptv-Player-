@@ -77,12 +77,12 @@ wait_for "FIRST_FRAME Test 1" $((n+1)) 60 && shot "test5-nach-zappen"
 sleep 20
 alive || fail "App nach dem Zappen nicht mehr da"
 
-log "== Test 6: Lippensynchron +1500 ms (Ton später) – Bild darf nicht stehen bleiben"
+log "== Test 6: Lippensynchron +3000 ms (2000 allgemein + 1000 Sender, Ton später) – Bild darf nicht stehen bleiben"
 adb shell am force-stop $PKG
 sleep 2
 w=$(count "WATCHDOG")
 n=$(count "FIRST_FRAME Test 1")
-adb shell am start -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/list.m3u" --ei aze_test_audio_delay 1500
+adb shell am start -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/list.m3u" --ei aze_test_audio_delay 2000 --es aze_test_channel_delay_url "http://10.0.2.2:8090/ok.ts" --ei aze_test_channel_delay 1000
 wait_for "FIRST_FRAME Test 1" $((n+1)) 90
 sleep 40
 w2=$(count "WATCHDOG")
@@ -93,7 +93,7 @@ moving=$(ticks | tail -10 | grep -cE 'img=([5-9]|[1-9][0-9])' || true)
 note "Zustand Test 6" "$(ticks | tail -25)"
 shot "test6-lippensynchron"
 adb shell am force-stop $PKG
-adb shell am start -n $PKG/.MainActivity --ei aze_test_audio_delay 0
+adb shell am start -n $PKG/.MainActivity --ei aze_test_audio_delay 0 --es aze_test_channel_delay_url "http://10.0.2.2:8090/ok.ts" --ei aze_test_channel_delay 0
 sleep 5
 
 log "== Absturz-Prüfung"
