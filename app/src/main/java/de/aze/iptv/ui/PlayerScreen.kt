@@ -111,9 +111,7 @@ fun PlayerScreen(
     val tunnel = app.tunneling
     // Ton-Bild-Versatz nur einbauen, wenn er auch genutzt wird (sonst exakt der Standard-Player)
     val syncUsed = app.audioDelay != 0 || app.audioDelays.isNotEmpty()
-    // „Ton später“ braucht mehr Bild im Vorrat (in 0,5-s-Stufen, damit der Player nicht bei jeder Kleinigkeit neu entsteht)
-    val audioLeadMs = ((app.effectiveDelay(app.current?.channel?.key).coerceAtLeast(0) + 499) / 500) * 500
-    val player = remember(level, tunnel, syncUsed, audioLeadMs) {
+    val player = remember(level, tunnel, syncUsed) {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(Http.USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
@@ -133,7 +131,7 @@ fun PlayerScreen(
             // wenn HDMI beim Umschalten der Bildwiederholrate kurz den Ton trennt – dann blieb das Bild stehen.
             .setHandleAudioBecomingNoisy(!de.aze.iptv.player.FrameRate.isTv(context))
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
-            .setLoadControl(PlaybackConfig.loadControl(context, level, audioLeadMs))
+            .setLoadControl(PlaybackConfig.loadControl(context, level))
             // Leitung von Anfang an gut einschätzen: schneller Start, aber gleich mit hoher Qualitätsstufe
             .setBandwidthMeter(
                 androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(context)

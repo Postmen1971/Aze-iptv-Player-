@@ -144,19 +144,3 @@ jobs:
           path: qa-out/
           retention-days: 14
 
-  release:
-    needs: [build, emulator-test]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: Aze-IPTV-Player-1.0.${{ github.run_number }}
-          path: out
-
-      - name: Release veröffentlichen
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: Aze-IPTV-Player 1.0.${{ github.run_number }}${{ needs.build.outputs.label }}
-          body: ${{ github.event.head_commit.message }}
-          files: out/*.apk
