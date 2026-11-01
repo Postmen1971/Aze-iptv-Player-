@@ -379,12 +379,41 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
 
     // Wächter je Bild (wie beim normalen Fernsehen): Bild steht 6 s oder 8 s keine neuen Daten → neu verbinden
     val frames = remember { java.util.concurrent.atomic.AtomicLong(0) }
+    // Messwerte zur Fehlersuche: verworfene Bilder, Decoder, Auflösung
+    val dropped = remember { java.util.concurrent.atomic.AtomicLong(0) }
+    var decoder by remember { mutableStateOf("?") }
+    var size by remember { mutableStateOf("?") }
+    /** Messzeile: bei Fehlersuche-Anzeige immer, sonst 20 s nach einem Hänger (zum Abfotografieren) */
+    var diag by remember { mutableStateOf<String?>(null) }
+    var hang by remember { mutableStateOf<String?>(null) }
+    var hangUntil by remember { mutableStateOf(0L) }
     DisposableEffect(player) {
         player.setVideoFrameMetadataListener { _, _, _, _ -> frames.incrementAndGet() }
-        onDispose { }
+        val analytics = object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onDroppedVideoFrames(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                droppedFrames: Int,
+                elapsedMs: Long,
+            ) { dropped.addAndGet(droppedFrames.toLong()) }
+
+            override fun onVideoDecoderInitialized(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                decoderName: String,
+                initializedTimestampMs: Long,
+                initializationDurationMs: Long,
+            ) { decoder = decoderName.removePrefix("OMX.").removePrefix("c2.") }
+
+            override fun onVideoSizeChanged(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                videoSize: androidx.media3.common.VideoSize,
+            ) { size = "${videoSize.width}x${videoSize.height}" }
+        }
+        player.addAnalyticsListener(analytics)
+        onDispose { player.removeAnalyticsListener(analytics) }
     }
     LaunchedEffect(player) {
-        var lastF = -1L; var lastBuf = -1L; var frozen = 0; var starved = 0; var stuck = 0; var started = false; var pause = 0
+        var lastF = -1L; var lastBuf = -1L; var lastPos = -1L; var lastDrop = 0L
+        var frozen = 0; var starved = 0; var stuck = 0; var started = false; var pause = 0
         while (true) {
             delay(1_000)
             val f = frames.get()
@@ -396,11 +425,32 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             // auch wenn noch Daten ankommen (Puffer füllt sich), aber 10 s kein neues Bild: hängt
             stuck = if (started && player.playbackState != Player.STATE_IDLE && f == lastF) stuck + 1 else 0
             starved = if (started && buffering && buf == lastBuf) starved + 1 else 0
-            lastF = f; lastBuf = buf
+            // Messzeile: Zustand · Bilder/s · Uhr läuft? · Daten kommen? · Vorrat · verworfen/s · Decoder · Auflösung
+            val pos = player.currentPosition
+            val d = dropped.get()
+            val st = when (player.playbackState) {
+                Player.STATE_READY -> if (player.isPlaying) "läuft" else "bereit"
+                Player.STATE_BUFFERING -> "puffert"
+                Player.STATE_IDLE -> "aus"
+                else -> "Ende"
+            }
+            val line = "$st · Bilder ${if (lastF < 0) 0 else f - lastF}/s · Uhr ${if (pos != lastPos) "läuft" else "steht"} · " +
+                "Daten ${if (buf != lastBuf) "kommen" else "keine"} · Vorrat %.1f s · verworfen +%d · %s · %s".format(
+                    (buf - pos).coerceAtLeast(0) / 1000f, d - lastDrop, decoder, size,
+                )
+            val now = System.currentTimeMillis()
+            diag = if (app.showDiag) line else null
+            if (now > hangUntil) hang = null
+            if (de.aze.iptv.BuildConfig.TEST_HOOKS) qaLog("MV_TICK $index $line")
+            lastF = f; lastBuf = buf; lastPos = pos; lastDrop = d
             if (pause > 0) { pause--; continue }
             if (frozen >= 6 || starved >= 8 || stuck >= 10) {
-                qaLog("MV_WATCHDOG $index ${if (frozen >= 6) "frozen" else if (starved >= 8) "starved" else "stuck"}")
-                status = "Bild hing – wird neu verbunden …"
+                val why = if (frozen >= 6) "Bild steht, Player „läuft“" else if (starved >= 8) "keine Daten mehr" else "kein neues Bild"
+                qaLog("MV_WATCHDOG $index $why | $line")
+                status = "Bild hing ($why) – wird neu verbunden …"
+                // Messwerte vom Moment des Hängers 20 s stehen lassen (zum Abfotografieren)
+                hang = "Beim Hänger: $line"
+                hangUntil = now + 20_000
                 frozen = 0; starved = 0; stuck = 0; pause = 12
                 player.stop()
                 // Anbieter gibt die alte Verbindung erst nach ein paar Sekunden frei – sonst zählt er eine zu viel
@@ -456,6 +506,14 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
         )
         status?.let {
             Text(it, color = Palette.TextMuted, fontSize = 13.sp, modifier = Modifier.align(Alignment.Center).padding(12.dp))
+        }
+        (hang ?: diag)?.let {
+            Text(
+                it, color = Color.White, fontSize = 11.sp,
+                modifier = Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.7f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            )
         }
     }
 }
