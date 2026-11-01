@@ -11,4 +11,11 @@ ffmpeg -loglevel error -y -f lavfi -i "testsrc2=size=640x360:rate=25" -f lavfi -
 # Bild hört nach 15 s auf, Ton läuft weiter (stehendes Bild)
 ffmpeg -loglevel error -y -f lavfi -i "testsrc2=size=640x360:rate=25:duration=15" -f lavfi -i "sine=frequency=660:sample_rate=48000:duration=150" \
   $V $A -f mpegts media/vstop.ts
+# Zeitsprung: 15 s normal, danach springt die BILD-Zeit um 60 s nach vorn, der Ton läuft normal weiter
+ffmpeg -loglevel error -y -f lavfi -i "testsrc2=size=640x360:rate=25" -f lavfi -i "sine=frequency=500:sample_rate=48000" \
+  -t 15 $V $A -f mpegts media/jA.ts
+ffmpeg -loglevel error -y -itsoffset 60 -f lavfi -i "testsrc2=size=640x360:rate=25" -f lavfi -i "sine=frequency=500:sample_rate=48000" \
+  -t 120 -fps_mode passthrough $V $A -output_ts_offset 15 -f mpegts media/jB.ts
+cat media/jA.ts media/jB.ts > media/jump.ts
+rm -f media/jA.ts media/jB.ts
 ls -la media

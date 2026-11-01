@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MEDIA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
-DURATION = {"ok.ts": 240.0, "vstop.ts": 150.0}
+DURATION = {"ok.ts": 240.0, "vstop.ts": 150.0, "jump.ts": 135.0}
 
 PLAYLIST = """#EXTM3U
 #EXTINF:-1 group-title="QA",Test 1 Normal
@@ -21,6 +21,8 @@ http://10.0.2.2:{p}/stall.ts
 http://10.0.2.2:{p}/vstop.ts
 #EXTINF:-1 group-title="QA",Test 4 Abbruch
 http://10.0.2.2:{p}/drop.ts
+#EXTINF:-1 group-title="QA",Test 5 Zeitsprung
+http://10.0.2.2:{p}/jump.ts
 """.format(p=PORT)
 
 
@@ -46,7 +48,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         mode = {"ok.ts": ("ok.ts", None), "stall.ts": ("ok.ts", "stall"),
-                "vstop.ts": ("vstop.ts", None), "drop.ts": ("ok.ts", "drop")}.get(path)
+                "vstop.ts": ("vstop.ts", None), "drop.ts": ("ok.ts", "drop"), "jump.ts": ("jump.ts", None)}.get(path)
         if mode is None:
             self.send_error(404)
             return

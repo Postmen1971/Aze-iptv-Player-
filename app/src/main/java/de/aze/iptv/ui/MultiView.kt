@@ -422,7 +422,7 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
     }
     LaunchedEffect(player) {
         var lastF = -1L; var lastBuf = -1L; var lastPos = -1L; var lastDrop = 0L
-        var frozen = 0; var starved = 0; var stuck = 0; var started = false; var pause = 0
+        var frozen = 0; var starved = 0; var stuck = 0; var jump = 0; var started = false; var pause = 0
         while (true) {
             delay(1_000)
             val f = frames.get()
@@ -437,6 +437,8 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             // Messzeile: Zustand · Bilder/s · Uhr läuft? · Daten kommen? · Vorrat · verworfen/s · Decoder · Auflösung
             val pos = player.currentPosition
             val d = dropped.get()
+            // Zeitsprung im Stream: Uhr (Ton) läuft, Vorrat da, aber kein Bild – Bilder „noch nicht dran“ → neu synchronisieren
+            jump = if (started && player.isPlaying && lastPos >= 0 && pos != lastPos && f == lastF && buf - pos > 1_000) jump + 1 else 0
             val st = when (player.playbackState) {
                 Player.STATE_READY -> if (player.isPlaying) "läuft" else "bereit"
                 Player.STATE_BUFFERING -> "puffert"
@@ -453,18 +455,20 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             if (de.aze.iptv.BuildConfig.TEST_HOOKS) qaLog("MV_TICK $index $line")
             lastF = f; lastBuf = buf; lastPos = pos; lastDrop = d
             if (pause > 0) { pause--; continue }
-            if (frozen >= 6 || starved >= 8 || stuck >= 10) {
-                val why = if (frozen >= 6) "Bild steht, Player „läuft“" else if (starved >= 8) "keine Daten mehr" else "kein neues Bild"
+            if (jump >= 3 || frozen >= 6 || starved >= 8 || stuck >= 10) {
+                val why = if (jump >= 3) "Zeitsprung im Stream" else if (frozen >= 6) "Bild steht, Player „läuft“" else if (starved >= 8) "keine Daten mehr" else "kein neues Bild"
                 qaLog("MV_WATCHDOG $index $why | $line")
                 status = "Bild hing ($why) – wird neu verbunden …"
                 // Messwerte vom Moment des Hängers 20 s stehen lassen (zum Abfotografieren)
                 hang = "Beim Hänger: $line"
                 hangUntil = now + 20_000
-                frozen = 0; starved = 0; stuck = 0; pause = 12
+                val wasJump = jump >= 3
+                frozen = 0; starved = 0; stuck = 0; jump = 0; pause = 12
                 player.stop()
                 // Anbieter gibt die alte Verbindung erst nach ein paar Sekunden frei – sonst zählt er eine zu viel
                 // und trennt dafür das ANDERE Bild (dann bleibt abwechselnd links/rechts das Bild stehen)
-                delay(2_500)
+                // Zeitsprung: Verbindung ist in Ordnung – sofort neu; sonst kurz warten, bis der Anbieter die alte freigibt
+                delay(if (wasJump) 200 else 2_500)
                 player.prepare()
             }
         }

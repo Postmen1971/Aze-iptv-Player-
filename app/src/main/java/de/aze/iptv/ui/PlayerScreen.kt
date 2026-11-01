@@ -225,6 +225,7 @@ fun PlayerScreen(
         var lastBuffered = -1L
         var frozen = 0
         var starved = 0
+        var jump = 0
         var healthy = 0
         var nextAllowed = 0L
         while (true) {
@@ -246,6 +247,10 @@ fun PlayerScreen(
             val sinceStart = if (preparedAt > 0) now - preparedAt else 0L
 
             frozen = if (!switching && ready && hasVideo && firstFrameSeen && !pictureMoving) frozen + 1 else 0
+            // Zeitsprung im Stream: Uhr/Ton läuft, Vorrat da, aber kein neues Bild (Bilder „noch nicht dran“) → nach 3 s neu
+            jump = if (!switching && !app.tunneling && player.isPlaying && hasVideo && firstFrameSeen &&
+                lastFrames >= 0 && f == lastFrames && lastPos >= 0 && pos != lastPos && buffered - pos > 1_000
+            ) jump + 1 else 0
             starved = if (!switching && buffering && buffered == lastBuffered && (firstFrameSeen || sinceStart >= 10_000)) starved + 1 else 0
             if (firstFrameSeen && pictureMoving && !buffering) healthy++ else if (!pictureMoving) healthy = 0
             if (healthy >= 60) { healthy = 0; watchdogRestarts = 0; nextAllowed = 0 }
@@ -277,10 +282,11 @@ fun PlayerScreen(
             lastFrames = f
             lastPos = pos
             lastBuffered = buffered
-            if ((frozen >= 6 || starved >= 8) && now >= nextAllowed) {
-                qaLog("WATCHDOG ${if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name}")
+            if ((jump >= 3 || frozen >= 6 || starved >= 8) && now >= nextAllowed) {
+                qaLog("WATCHDOG ${if (jump >= 3) "jump" else if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name}")
                 frozen = 0
                 starved = 0
+                jump = 0
                 healthy = 0
                 val pause = longArrayOf(5_000, 15_000, 30_000, 60_000)
                 nextAllowed = now + pause[minOf(watchdogRestarts, pause.size - 1)]
@@ -312,7 +318,8 @@ fun PlayerScreen(
         if (app.testMultiView && app.lineup.all.size >= 2) {
             app.testMultiView = false
             // letzter Sender der Liste (im Test: „Test 4 Abbruch“ – Server trennt nach 15 s)
-            mvSecond = app.lineup.all.lastOrNull { it.channel.key != app.current?.channel?.key }
+            mvSecond = app.lineup.all.firstOrNull { it.channel.name.contains("Abbruch") }
+                ?: app.lineup.all.lastOrNull { it.channel.key != app.current?.channel?.key }
             multiView = true
         }
     }

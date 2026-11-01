@@ -74,6 +74,16 @@ wait_for "ENDED Test 4" 1 40
 wait_for "FIRST_FRAME Test 4" 2 5 && shot "test4-wieder-da"
 [ "$(count "WATCHDOG")" -eq "$w" ] || fail "Nach Stream-Ende musste der Wächter eingreifen"
 
+log "== Test 4b: Zeitsprung im Stream (Bildzeit springt 60 s vor, Ton läuft weiter)"
+channel 5
+wait_for "FIRST_FRAME Test 5" 1 60
+# 15 s normal, dann Zeitsprung → spätestens nach ~3 s Erkennung neu synchronisieren, Bild wieder da
+wait_for "WATCHDOG jump Test 5" 1 35
+wait_for "FIRST_FRAME Test 5" 2 15 && shot "test4b-nach-zeitsprung"
+note "Zustand Test 4b" "$(ticks | tail -25)"
+channel 4
+sleep 3
+
 log "== Test 5: schnelles Zappen (20× hoch/runter), danach muss Test 1 laufen"
 for i in $(seq 1 10); do adb shell input keyevent KEYCODE_DPAD_UP; adb shell input keyevent KEYCODE_DPAD_DOWN; done
 sleep 3
