@@ -69,7 +69,33 @@ object Updater {
             File(context.getExternalFilesDir(null) ?: context.cacheDir, "update.apk")
         }
 
-    suspend fun download(context: Context, release: Release, onProgress: (Int) -> Unit): File =
+    /**
+     * Schon fertig geladene Update-Datei für genau dieses Release (Größe und Prüfsumme passen) – dann nicht
+     * noch einmal herunterladen, nur den Installer erneut öffnen.
+     */
+    suspend fun cached(context: Context, release: Release): File? = withContext(Dispatchers.IO) {
+        val f = apkFile(context)
+        if (!f.exists() || f.length() == 0L) return@withContext null
+        if (release.size > 0 && f.length() != release.size) return@withContext null
+        if (release.sha256.length == 64 && sha256(f) != release.sha256) return@withContext null
+        if (release.size <= 0 && release.sha256.length != 64) return@withContext null
+        f
+    }
+
+    private fun sha256(file: File): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                md.update(buf, 0, n)
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    suspend fun download(context: Context, release: Release, onProgress: (Int) -> Unit, onVerify: () -> Unit = {}): File =
         withContext(Dispatchers.IO) {
             val f = apkFile(context)
             f.parentFile?.mkdirs()
@@ -82,17 +108,8 @@ object Updater {
                     throw java.io.IOException("Download unvollständig (${part.length()} von ${release.size} Bytes)")
                 }
                 if (release.sha256.length == 64) {
-                    val md = java.security.MessageDigest.getInstance("SHA-256")
-                    part.inputStream().use { input ->
-                        val buf = ByteArray(64 * 1024)
-                        while (true) {
-                            val n = input.read(buf)
-                            if (n < 0) break
-                            md.update(buf, 0, n)
-                        }
-                    }
-                    val got = md.digest().joinToString("") { "%02x".format(it) }
-                    if (got != release.sha256) throw java.io.IOException("Prüfsumme stimmt nicht – Update verworfen")
+                    onVerify()
+                    if (sha256(part) != release.sha256) throw java.io.IOException("Prüfsumme stimmt nicht – Update verworfen")
                 }
                 f.delete()
                 if (!part.renameTo(f)) throw java.io.IOException("Update konnte nicht gespeichert werden")
@@ -120,10 +137,19 @@ object Updater {
         } else {
             Uri.fromFile(apk)
         }
-        val intent = Intent(Intent.ACTION_VIEW)
+        // INSTALL_PACKAGE: der Installer, den Android TV / Fire TV zuverlässig öffnet (ACTION_VIEW als Ersatz)
+        @Suppress("DEPRECATION")
+        val install = Intent(Intent.ACTION_INSTALL_PACKAGE)
             .setDataAndType(uri, "application/vnd.android.package-archive")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        val view = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(uri, "application/vnd.android.package-archive")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(install)
+        } catch (_: Exception) {
+            context.startActivity(view)
+        }
         return true
     }
 }

@@ -220,6 +220,10 @@
 ## Update-Hinweis
 - Beim Start (nach dem Startbildschirm, ca. 4 s) einmal `Updater.check()`; gibt es eine neuere Version, erscheint unten rechts ca. 3 s ein kleiner Hinweis „Update 1.0.x verfügbar · Einstellungen → App-Update“ (Logo + Text, kein Fenster, kein Fokus). Aziz: nur kurz einblenden, mehr nicht.
 
+## App-Update: Installation zuverlässiger
+- Aziz: Download bis 100 %, dann passiert nichts; erst nach erneutem Drücken (neuer Download) startet die Installation.
+- Jetzt: Anzeige „Download fertig – wird geprüft …“ während der SHA-256-Prüfung; fertige Datei wird behalten (`Updater.cached`) → erneutes Drücken öffnet nur den Installer („jetzt installieren“); Installer über ACTION_INSTALL_PACKAGE (Ersatz ACTION_VIEW); nach 3 s wird geprüft, ob die App in den Hintergrund ging – sonst einmal automatisch neu öffnen, danach klarer Hinweis; nach Erteilen von „Unbekannte Apps installieren“ geht es beim Zurückkommen automatisch weiter.
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).

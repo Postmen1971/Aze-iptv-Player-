@@ -978,9 +978,56 @@ private fun FavoritesSection(app: AppController) {
 private fun UpdateSection() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     var status by remember { mutableStateOf<String?>(null) }
     var release by remember { mutableStateOf<Release?>(null) }
     var busy by remember { mutableStateOf(false) }
+    /** fertig geladene Datei – „Installieren“ öffnet dann nur noch den Installer */
+    var apk by remember { mutableStateOf<java.io.File?>(null) }
+    /** wartet auf die Erlaubnis „Unbekannte Apps installieren“ – geht danach von selbst weiter */
+    var waitingPermission by remember { mutableStateOf(false) }
+
+    /**
+     * Installer öffnen und prüfen, ob er wirklich erscheint (die App geht dann in den Hintergrund).
+     * Kommt er nicht, wird es einmal automatisch wiederholt.
+     */
+    suspend fun openInstaller(file: java.io.File) {
+        repeat(2) { attempt ->
+            status = if (attempt == 0) "Installation wird geöffnet …" else "Installer erneut öffnen …"
+            val ok = runCatching { Updater.install(context, file) }.getOrElse {
+                status = "Installer konnte nicht geöffnet werden: ${it.message}"
+                return
+            }
+            if (!ok) {
+                waitingPermission = true
+                status = "Bitte „Unbekannte Apps installieren“ für Aze-IPTV-Player erlauben – danach geht es automatisch weiter."
+                return
+            }
+            delay(3_000)
+            // Ist der Installer da, ist die App nicht mehr im Vordergrund
+            if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+                status = "Installation gestartet."
+                return
+            }
+        }
+        status = "Der Installer hat sich nicht geöffnet. Bitte noch einmal auf „Installieren“ drücken (die Datei ist schon geladen)."
+    }
+
+    // Zurück aus den Android-Einstellungen mit erteilter Erlaubnis: Installation automatisch fortsetzen
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME && waitingPermission) {
+                val canInstall = android.os.Build.VERSION.SDK_INT < 26 || context.packageManager.canRequestPackageInstalls()
+                val file = apk
+                if (canInstall && file != null) {
+                    waitingPermission = false
+                    scope.launch { busy = true; try { openInstaller(file) } finally { busy = false } }
+                }
+            }
+        }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
 
     Section("App-Update") {
         Text("Installiert: Version ${BuildConfig.VERSION_NAME}", color = Palette.TextSoft, fontSize = 14.sp)
@@ -992,6 +1039,7 @@ private fun UpdateSection() {
                 scope.launch {
                     try {
                         release = Updater.check()
+                        apk = release?.let { Updater.cached(context, it) }
                         status = release?.let { "Neue Version ${it.versionName} verfügbar." } ?: "Die App ist aktuell."
                     } catch (e: Exception) {
                         status = "Update-Prüfung fehlgeschlagen: ${e.message}"
@@ -1000,20 +1048,27 @@ private fun UpdateSection() {
                 }
             })
             release?.let { rel ->
-                TvButton("Version ${rel.versionName} installieren", onClick = {
-                    if (busy) return@TvButton
-                    busy = true
-                    scope.launch {
-                        try {
-                            val apk = Updater.download(context, rel) { p -> status = "Lade herunter … $p %" }
-                            status = if (Updater.install(context, apk)) "Installation gestartet."
-                            else "Bitte erlauben, dass Aze-IPTV-Player Apps installieren darf, dann erneut auf Installieren drücken."
-                        } catch (e: Exception) {
-                            status = "Download fehlgeschlagen: ${e.message}"
+                TvButton(
+                    if (apk != null) "Version ${rel.versionName} jetzt installieren" else "Version ${rel.versionName} installieren",
+                    selected = true,
+                    onClick = {
+                        if (busy) return@TvButton
+                        busy = true
+                        scope.launch {
+                            try {
+                                val file = apk ?: Updater.download(
+                                    context, rel,
+                                    onProgress = { p -> status = "Lade herunter … $p %" },
+                                    onVerify = { status = "Download fertig – wird geprüft …" },
+                                ).also { apk = it }
+                                openInstaller(file)
+                            } catch (e: Exception) {
+                                status = "Download fehlgeschlagen: ${e.message}"
+                            }
+                            busy = false
                         }
-                        busy = false
-                    }
-                })
+                    },
+                )
             }
         }
         status?.let { Text(it, color = Palette.TextMuted, fontSize = 13.sp) }
