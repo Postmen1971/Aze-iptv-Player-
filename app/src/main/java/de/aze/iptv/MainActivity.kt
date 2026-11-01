@@ -11,6 +11,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.core.view.WindowCompat
@@ -148,6 +152,36 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         Screen.SETTINGS -> CoverLayer { SettingsScreen(app, onClose = { screen = Screen.PLAYER }) }
+                    }
+                    // Kurzer Hinweis auf ein neues Update: einmal je Start, ca. 6 s unten rechts, ohne Fenster/Tastendruck
+                    var updateHint by remember { mutableStateOf<String?>(null) }
+                    androidx.compose.runtime.LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(4_000)
+                        while (splash) kotlinx.coroutines.delay(500)
+                        val rel = runCatching { de.aze.iptv.update.Updater.check() }.getOrNull() ?: return@LaunchedEffect
+                        updateHint = rel.versionName
+                        kotlinx.coroutines.delay(6_000)
+                        updateHint = null
+                    }
+                    androidx.compose.animation.AnimatedVisibility(
+                        visible = updateHint != null,
+                        enter = androidx.compose.animation.fadeIn(),
+                        exit = androidx.compose.animation.fadeOut(),
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(28.dp),
+                    ) {
+                        androidx.compose.foundation.layout.Row(
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
+                            modifier = Modifier
+                                .background(Palette.Ground.copy(alpha = 0.88f), androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                        ) {
+                            de.aze.iptv.ui.AzeLogo(20.dp)
+                            androidx.compose.material3.Text(
+                                "Update ${updateHint.orEmpty()} verfügbar · Einstellungen → App-Update",
+                                color = Palette.TextSoft, fontSize = 13.sp,
+                            )
+                        }
                     }
                     if (splash && screen == Screen.PLAYER) CoverLayer {
                         de.aze.iptv.ui.SplashScreen(

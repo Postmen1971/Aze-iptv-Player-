@@ -217,6 +217,9 @@
 - Dialog verallgemeinert: `HideListDialog(title, hint, entries: List<HideEntry>, onApply)`; `HideGroupsDialog` nutzt ihn für Live-TV.
 - Kategorienliste im gleichen Schriftstil wie Gruppen/Sender (15 sp normal, Zahlen 13 sp gedämpft, aktive leicht blau).
 
+## Update-Hinweis
+- Beim Start (nach dem Startbildschirm, ca. 4 s) einmal `Updater.check()`; gibt es eine neuere Version, erscheint unten rechts ca. 6 s ein kleiner Hinweis „Update 1.0.x verfügbar · Einstellungen → App-Update“ (Logo + Text, kein Fenster, kein Fokus). Aziz: nur kurz einblenden, mehr nicht.
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).
