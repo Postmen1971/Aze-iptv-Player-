@@ -71,8 +71,6 @@ fun ChannelOverlay(
     // Zurück: Senderliste → Gruppen → App beenden.
     var showGroups by remember { mutableStateOf(startInGroups) }
     var showMenu by remember { mutableStateOf(false) }
-    var hideDialog by remember { mutableStateOf(false) }
-    if (hideDialog) HideGroupsDialog(app, onClose = { hideDialog = false })
     BackHandler {
         when {
             showMenu -> showMenu = false
@@ -165,27 +163,6 @@ fun ChannelOverlay(
                         if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { showMenu = true; true } else false
                     },
                 ) {
-                    // Oben: Gruppen ein-/ausblenden (gut zu finden, auch bei sehr vielen Gruppen)
-                    item {
-                        Focusable(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), onClick = { hideDialog = true }) { focused ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(34.dp)
-                                    .background(if (focused) Palette.GroupSelect else Palette.GroupBlue.copy(alpha = 0f), RoundedCornerShape(7.dp))
-                                    .padding(horizontal = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                LineIconView(LineIcon.EYE_OFF, if (focused) Palette.OnAccent else Palette.GroupSoft, 18.dp)
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    "Gruppen ausblenden …",
-                                    color = if (focused) Palette.OnAccent else Palette.GroupSoft,
-                                    fontSize = 14.sp, maxLines = 1,
-                                )
-                            }
-                        }
-                    }
                     itemsIndexed(groups) { i, g ->
                         Focusable(
                             modifier = Modifier
@@ -200,8 +177,6 @@ fun ChannelOverlay(
                                 groupIndex = i
                                 showGroups = false
                             },
-                            // OK lang auf einer Gruppe: Gruppen ein-/ausblenden
-                            onLongClick = { hideDialog = true },
                         ) { focused ->
                             Row(
                                 modifier = Modifier

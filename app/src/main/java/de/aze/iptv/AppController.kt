@@ -797,6 +797,9 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         }
     }
 
+    /** Nur Test-Build: Multi-View beim Start öffnen. */
+    var testMultiView = false
+
     /** Der zuletzt geschaute Sender (für OK = zurückspringen). */
     private var previousKey: String? = null
 

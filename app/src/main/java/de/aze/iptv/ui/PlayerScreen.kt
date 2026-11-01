@@ -304,6 +304,17 @@ fun PlayerScreen(
     var tool by remember { mutableStateOf(0) }
     // „Fußball heute“: Liste der gefundenen Sender rechts, bleibt beim Durchschalten offen
     var matchZap by remember { mutableStateOf<Pair<String, List<NumberedChannel>>?>(null) }
+    // Multi-View: mehrere Sender gleichzeitig (der normale Player pausiert so lange)
+    var multiView by remember { mutableStateOf(false) }
+    var mvSecond by remember { mutableStateOf<NumberedChannel?>(null) }
+    // Nur im Test-Build: Multi-View direkt mit zwei Sendern öffnen
+    LaunchedEffect(app.lineup) {
+        if (app.testMultiView && app.lineup.all.size >= 2) {
+            app.testMultiView = false
+            mvSecond = app.lineup.all.firstOrNull { it.channel.key != app.current?.channel?.key }
+            multiView = true
+        }
+    }
     // Senderliste direkt in der Gruppenübersicht öffnen (Taste mit Aktion „Gruppen“)
     var overlayGroups by remember { mutableStateOf(false) }
     // Tablet/Handy: Leiste mit großen Knöpfen (Tippen ins Bild zeigt/versteckt sie)
@@ -331,7 +342,7 @@ fun PlayerScreen(
         }
     }
     // Zurück beim Fernsehen: erst die Senderliste zeigen (weiter: Gruppen, dann App beenden)
-    androidx.activity.compose.BackHandler(enabled = active && !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) { overlay = true }
+    androidx.activity.compose.BackHandler(enabled = active && !multiView && !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) { overlay = true }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
@@ -470,8 +481,14 @@ fun PlayerScreen(
             zapInfo = false
         }
     }
-    LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick, restartTick) {
+    LaunchedEffect(currentKey, player, resumeTick, useVlc, relinkTick, restartTick, multiView) {
         val ch = app.current?.channel ?: return@LaunchedEffect
+        // Multi-View offen: eigener Player je Bild – der normale Player gibt Decoder und Verbindung frei
+        if (multiView) {
+            retryJob?.cancel()
+            player.stop()
+            return@LaunchedEffect
+        }
         retryJob?.cancel()
         if (startedKey != ch.key) retries = 0
         startedKey = ch.key
@@ -563,8 +580,8 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(active, overlay, quickMenu, search, teletext, football, matchZap, tool) {
-        if (active && !overlay && !quickMenu && !search && !football && matchZap == null && tool == 0) {
+    LaunchedEffect(active, overlay, quickMenu, search, teletext, football, matchZap, tool, multiView) {
+        if (active && !multiView && !overlay && !quickMenu && !search && !football && matchZap == null && tool == 0) {
             withFrameNanos { }
             runCatching { focus.requestFocus() }
         }
@@ -613,7 +630,7 @@ fun PlayerScreen(
             .focusRequester(focus)
             .onKeyEvent { e ->
                 // Einstellungen/PIN liegen darüber: keine Tasten an den Player (sonst unsichtbares Umschalten)
-                if (!active) return@onKeyEvent false
+                if (!active || multiView) return@onKeyEvent false
                 val code = e.nativeKeyEvent.keyCode
                 // Videotext offen: alle Tasten gehen an den Videotext.
                 if (teletext) {
@@ -759,7 +776,9 @@ fun PlayerScreen(
             else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
         val ytUrl = app.current?.channel?.url?.takeIf { YouTube.isYouTube(it) }
-        if (ytUrl != null) {
+        if (multiView) {
+            // Multi-View zeigt eigene Bilder – hier kein zweiter Player (YouTube/VLC)
+        } else if (ytUrl != null) {
             // Im Hintergrund wird der YouTube-Player entfernt, damit kein Ton weiterläuft.
             // Gleiche WebView für alle YouTube-Sender (kein key) – das Umschalten geht so deutlich schneller
             if (!inBackground && !app.youtubeExternal) {
@@ -985,6 +1004,11 @@ fun PlayerScreen(
                     else TrackHelper.nextAudio(player)?.language?.let { app.updateAudioLanguage(it) }
                     tracksVersion++
                 },
+                QuickItem("Multi-View", "2–4 Sender") {
+                    quickMenu = false
+                    mvSecond = null
+                    multiView = true
+                },
                 QuickItem("Lippensynchron", msLabel(app.channelDelay(curCh?.key))) {
                     quickMenu = false
                     if (curCh != null) tool = 1
@@ -1031,6 +1055,19 @@ fun PlayerScreen(
                 },
             )
             QuickMenu(items = items, onClose = { quickMenu = false })
+        }
+
+        if (multiView) {
+            MultiViewScreen(
+                app = app,
+                start = app.current,
+                startSecond = mvSecond,
+                onExit = { ch ->
+                    multiView = false
+                    // Sender des gewählten Bildes läuft im Vollbild weiter
+                    if (ch != null && ch.channel.key != app.current?.channel?.key) app.play(ch) else restartTick++
+                },
+            )
         }
     }
 }

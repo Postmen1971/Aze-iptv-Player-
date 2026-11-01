@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
                     de.aze.iptv.ui.qaLog("CACHE_CLEARED")
                 }
             }
+            if (intent?.getBooleanExtra("aze_test_multiview", false) == true) app.testMultiView = true
             // Lippensynchron-Wert für den Test setzen
             intent?.getIntExtra("aze_test_audio_delay", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE }?.let { app.updateAudioDelay(it) }
             // zusätzlicher Versatz für einen Sender (Schlüssel = Adresse)

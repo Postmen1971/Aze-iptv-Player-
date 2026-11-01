@@ -224,6 +224,13 @@
 - Aziz: Download bis 100 %, dann passiert nichts; erst nach erneutem Drücken (neuer Download) startet die Installation.
 - Jetzt: Anzeige „Download fertig – wird geprüft …“ während der SHA-256-Prüfung; fertige Datei wird behalten (`Updater.cached`) → erneutes Drücken öffnet nur den Installer („jetzt installieren“); Installer über ACTION_INSTALL_PACKAGE (Ersatz ACTION_VIEW); nach 3 s wird geprüft, ob die App in den Hintergrund ging – sonst einmal automatisch neu öffnen, danach klarer Hinweis; nach Erteilen von „Unbekannte Apps installieren“ geht es beim Zurückkommen automatisch weiter.
 
+## Multi-View (mehrere Sender gleichzeitig)
+- Aziz: Ausblenden NUR in den Einstellungen (PIN-geschützt) → Einträge „… ausblenden“ und OK lang in Gruppen-/Kategorienliste entfernt.
+- Neu `ui/MultiView.kt`: Schnellmenü (OK lang) → „Multi-View“. Anordnungen: Nebeneinander (2), Bild im Bild (2, kleines Bild als TextureView), 4 Bilder. Je Bild eigener ExoPlayer, Ton nur im gewählten Bild (blauer Rahmen).
+- Bedienung: ◀ ▶ Bild wählen, ▲ ▼/CH± umschalten im Bild, Ziffern Direktwahl, OK = Senderauswahl (Gruppen → Sender), OK lang/Menü = Anordnung wechseln, Zurück = Ende, Sender des gewählten Bildes läuft im Vollbild weiter. Normaler Player gestoppt, solange Multi-View offen. YouTube geht im Multi-View nicht.
+- Anbieter muss mehrere gleichzeitige Verbindungen erlauben (sonst Hinweis „Anbieter lehnt ab (403) …“ im Bild).
+- Emulator-Test 8 (`aze_test_multiview`): zwei Bilder bekommen Bild, Anordnung wechseln, Zurück – kein Absturz. Log-Kennungen MV_FIRST_FRAME/MV_ERROR.
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).

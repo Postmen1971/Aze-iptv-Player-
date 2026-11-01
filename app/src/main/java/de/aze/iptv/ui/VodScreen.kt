@@ -207,21 +207,6 @@ private fun Browse(
     val catList = remember(allCats, hiddenVod, sourceId, series) {
         allCats.filterNot { app.isVodHidden(sourceId, series, it.id) }
     }
-    var hideDialog by remember { mutableStateOf(false) }
-    if (hideDialog) {
-        HideListDialog(
-            title = "$kind: Kategorien ausblenden",
-            hint = "Haken = Kategorie wird bei $kind nicht angezeigt",
-            entries = allCats.map { c ->
-                HideEntry(c.id, c.name, counts[c.id]?.let { "$it" } ?: "", app.isVodHidden(sourceId, series, c.id))
-            },
-            onApply = { ids ->
-                app.setVodHidden(sourceId, series, allCats.map { it.id }, ids)
-                selected = 0
-            },
-            onClose = { hideDialog = false },
-        )
-    }
     LaunchedEffect(api, series, selected, cats, catList) {
         val c = catList.getOrNull(selected) ?: return@LaunchedEffect
         items = null
@@ -301,31 +286,10 @@ private fun Browse(
                     api.sourceInfo().takeIf { it.isNotBlank() }?.let { Text("Quelle: $it", color = Palette.TextMuted, fontSize = 11.sp) }
                 }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    // Oben: Kategorien ein-/ausblenden (gut zu finden, auch bei sehr vielen Kategorien)
-                    if (allCats.isNotEmpty()) item {
-                        Focusable(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), onClick = { hideDialog = true }) { focused ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(if (focused) Palette.Accent else Color.Transparent, RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                LineIconView(LineIcon.EYE_OFF, if (focused) Palette.OnAccent else Palette.TextMuted, 18.dp)
-                                Text(
-                                    "  Kategorien ausblenden …",
-                                    color = if (focused) Palette.OnAccent else Palette.TextMuted,
-                                    fontSize = 14.sp, maxLines = 1,
-                                )
-                            }
-                        }
-                    }
                     itemsIndexed(catList) { i, c ->
                         Focusable(
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(catFocus) else Modifier),
                             onClick = { selected = i; query = null },
-                            // OK lang: Kategorien ein-/ausblenden
-                            onLongClick = { hideDialog = true },
                             // Nur beim Wechsel der Kategorie die Suche beenden (nicht wenn der Fokus nach der Suche zurückkommt)
                             onFocus = { if (i != selected) { selected = i; query = null } },
                         ) { focused ->

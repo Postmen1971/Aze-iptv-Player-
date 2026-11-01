@@ -109,6 +109,22 @@ alive || fail "App nach dem Leeren des Zwischenspeichers nicht mehr da"
 [ "$(count FIRST_FRAME)" -gt "$n" ] || fail "Nach dem Leeren kein Bild"
 shot "test7-nach-leeren"
 
+log "== Test 8: Multi-View mit zwei Sendern gleichzeitig"
+adb shell am force-stop $PKG
+sleep 2
+adb logcat -c
+adb shell am start -W -n $PKG/.MainActivity --ez aze_test_multiview true
+wait_for "MV_FIRST_FRAME 0" 1 90
+wait_for "MV_FIRST_FRAME 1" 1 60
+adb shell input keyevent KEYCODE_DPAD_RIGHT
+adb shell input keyevent KEYCODE_MENU
+sleep 10
+alive || fail "App nach Multi-View nicht mehr da"
+shot "test8-multiview"
+adb shell input keyevent KEYCODE_BACK
+sleep 3
+alive || fail "App nach Verlassen von Multi-View nicht mehr da"
+
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
 if adb logcat -d -b crash | grep -q "$PKG"; then fail "Absturz im Protokoll gefunden"; fi
