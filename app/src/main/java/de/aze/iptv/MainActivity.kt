@@ -153,14 +153,14 @@ class MainActivity : ComponentActivity() {
                         }
                         Screen.SETTINGS -> CoverLayer { SettingsScreen(app, onClose = { screen = Screen.PLAYER }) }
                     }
-                    // Kurzer Hinweis auf ein neues Update: einmal je Start, ca. 6 s unten rechts, ohne Fenster/Tastendruck
+                    // Kurzer Hinweis auf ein neues Update: einmal je Start, ca. 3 s unten rechts, ohne Fenster/Tastendruck
                     var updateHint by remember { mutableStateOf<String?>(null) }
                     androidx.compose.runtime.LaunchedEffect(Unit) {
                         kotlinx.coroutines.delay(4_000)
                         while (splash) kotlinx.coroutines.delay(500)
                         val rel = runCatching { de.aze.iptv.update.Updater.check() }.getOrNull() ?: return@LaunchedEffect
                         updateHint = rel.versionName
-                        kotlinx.coroutines.delay(6_000)
+                        kotlinx.coroutines.delay(3_000)
                         updateHint = null
                     }
                     androidx.compose.animation.AnimatedVisibility(
