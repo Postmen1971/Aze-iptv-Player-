@@ -25,7 +25,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -275,6 +274,7 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>("Lädt …") }
+    val activeNow by androidx.compose.runtime.rememberUpdatedState(active)
     val player = remember {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(Http.USER_AGENT)
@@ -289,7 +289,16 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             .apply { playWhenReady = true }
     }
     // Ton nur im gewählten Bild
-    SideEffect { player.volume = if (active) 1f else 0f }
+    // Ton NUR im gewählten Bild – die anderen bekommen gar keine Tonspur (nicht nur leise):
+    // Das Bild richtet sich nach der Ton-Uhr. Ein stummes Bild öffnete trotzdem einen eigenen Tonausgang; bei
+    // Dolby-Durchleitung (Soundbar/AV-Receiver über HDMI) gibt es nur EINEN – das zweite Bild wartete ewig → Standbild.
+    // Ohne Tonspur läuft das Bild mit eigener Uhr weiter.
+    LaunchedEffect(active) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, !active)
+            .build()
+        qaLog("MV_AUDIO $index ${if (active) "an" else "aus"}")
+    }
 
     DisposableEffect(player) {
         var retries = 0
@@ -331,7 +340,7 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
         onDispose { }
     }
     LaunchedEffect(player) {
-        var lastF = -1L; var lastBuf = -1L; var frozen = 0; var starved = 0; var started = false; var pause = 0
+        var lastF = -1L; var lastBuf = -1L; var frozen = 0; var starved = 0; var stuck = 0; var started = false; var pause = 0
         while (true) {
             delay(1_000)
             val f = frames.get()
@@ -340,13 +349,15 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             val ready = player.playbackState == Player.STATE_READY && player.videoFormat != null
             val buffering = player.playbackState == Player.STATE_BUFFERING
             frozen = if (started && ready && f == lastF) frozen + 1 else 0
+            // auch wenn noch Daten ankommen (Puffer füllt sich), aber 10 s kein neues Bild: hängt
+            stuck = if (started && player.playbackState != Player.STATE_IDLE && f == lastF) stuck + 1 else 0
             starved = if (started && buffering && buf == lastBuf) starved + 1 else 0
             lastF = f; lastBuf = buf
             if (pause > 0) { pause--; continue }
-            if (frozen >= 6 || starved >= 8) {
-                qaLog("MV_WATCHDOG $index ${if (frozen >= 6) "frozen" else "starved"}")
+            if (frozen >= 6 || starved >= 8 || stuck >= 10) {
+                qaLog("MV_WATCHDOG $index ${if (frozen >= 6) "frozen" else if (starved >= 8) "starved" else "stuck"}")
                 status = "Bild hing – wird neu verbunden …"
-                frozen = 0; starved = 0; pause = 10
+                frozen = 0; starved = 0; stuck = 0; pause = 10
                 player.stop()
                 player.prepare()
             }
@@ -368,6 +379,7 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setPreferredAudioLanguage(app.audioLanguage)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, !activeNow)
             .build()
         player.setMediaItem(b.build())
         player.prepare()

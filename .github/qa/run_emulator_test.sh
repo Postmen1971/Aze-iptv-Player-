@@ -131,6 +131,11 @@ adb shell input keyevent KEYCODE_DPAD_CENTER
 # ▼▼ in der Senderliste: dritter Sender der Gruppe („Test 3“) muss gewählt werden – prüft, dass die Pfeiltasten in der Liste wirken
 wait_for "MV_FIRST_FRAME 1 Test 3" 1 40 || fail "Multi-View-Senderauswahl: Pfeiltasten wirken nicht (falscher Sender gewählt)"
 shot "test8-nach-auswahl"
+# Das Bild OHNE Ton (Bild 1, nachdem Bild 2 gewählt ist) muss weiterlaufen – kein Wächter-Neustart in 40 s
+w=$(count "MV_WATCHDOG 0")
+sleep 40
+[ "$(count "MV_WATCHDOG 0")" -eq "$w" ] || fail "Multi-View: Bild ohne Ton blieb stehen (Wächter musste neu starten)"
+[ "$(count "MV_AUDIO 0 aus")" -ge 1 ] || fail "Multi-View: Bild 1 hat seine Tonspur nicht abgegeben"
 adb shell input keyevent KEYCODE_MENU
 sleep 10
 alive || fail "App nach Multi-View nicht mehr da"
