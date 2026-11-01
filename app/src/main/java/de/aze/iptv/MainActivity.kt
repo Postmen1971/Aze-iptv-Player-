@@ -104,6 +104,20 @@ class MainActivity : ComponentActivity() {
                 var screen by remember { mutableStateOf(if (!app.hasAnySource) Screen.SETTINGS else Screen.PLAYER) }
                 var vodSeries by remember { mutableStateOf(false) }
                 val openSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS }
+                // Startbildschirm mit Logo, solange die Senderliste beim Start noch lädt (mind. 1,2 s, höchstens 25 s)
+                var splash by remember { mutableStateOf(app.hasAnySource) }
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    if (!splash) return@LaunchedEffect
+                    val start = System.currentTimeMillis()
+                    kotlinx.coroutines.delay(1_200)
+                    while (System.currentTimeMillis() - start < 25_000 && (app.loading || app.lineup.all.isEmpty()) && app.hasAnySource) {
+                        kotlinx.coroutines.delay(150)
+                        if (!app.loading && app.lineup.all.isNotEmpty()) break
+                        // keine Kopie und Laden fehlgeschlagen: nicht ewig warten
+                        if (!app.loading && System.currentTimeMillis() - start > 3_000) break
+                    }
+                    splash = false
+                }
                 androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
                     // Live-TV bleibt unter PIN und Einstellungen bestehen: kein Abbau/Neuaufbau des Players,
                     // beim Zurückkommen ist das Bild sofort da. Nur Filme & Serien (eigener Player) ersetzen ihn.
@@ -115,7 +129,7 @@ class MainActivity : ComponentActivity() {
                                 vodSeries = series
                                 screen = Screen.VOD
                             },
-                            active = screen == Screen.PLAYER,
+                            active = screen == Screen.PLAYER && !splash,
                         )
                     }
                     when (screen) {
@@ -134,6 +148,12 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         Screen.SETTINGS -> CoverLayer { SettingsScreen(app, onClose = { screen = Screen.PLAYER }) }
+                    }
+                    if (splash && screen == Screen.PLAYER) CoverLayer {
+                        de.aze.iptv.ui.SplashScreen(
+                            status = if (app.loading) "Senderliste wird geladen …" else "Gleich geht's los …",
+                            version = BuildConfig.VERSION_NAME,
+                        )
                     }
                 }
             }

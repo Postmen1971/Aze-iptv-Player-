@@ -136,7 +136,7 @@ object Palette {
     )
     /** Gruppenübersicht: leicht im Akzentton */
     val GroupBrush get() = Brush.verticalGradient(
-        listOf(lerp(scheme.panel, scheme.highlight, 0.12f).copy(alpha = 0.97f), scheme.panelDark.copy(alpha = 0.97f)),
+        listOf(scheme.panelDark.copy(alpha = 0.94f), scheme.panelDark.copy(alpha = 0.94f)),
     )
     /** Fokus: heller Verlauf */
     val FocusBrush get() = Brush.verticalGradient(listOf(scheme.accent, lerp(scheme.accent, scheme.highlight, 0.22f)))

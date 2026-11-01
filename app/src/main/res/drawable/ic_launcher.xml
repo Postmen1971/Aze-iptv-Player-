@@ -1,19 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- App-Symbol „Orbit“: Kreis mit schräger Umlaufbahn, Satellit und Abspielzeichen -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="48dp"
     android:height="48dp"
-    android:viewportWidth="48"
-    android:viewportHeight="48">
+    android:viewportWidth="120"
+    android:viewportHeight="120">
     <path
-        android:fillColor="#C8102E"
-        android:pathData="M10,4h28a6,6 0 0 1 6,6v28a6,6 0 0 1 -6,6h-28a6,6 0 0 1 -6,-6v-28a6,6 0 0 1 6,-6z" />
+        android:fillColor="#07152B"
+        android:pathData="M24,0h72a24,24 0 0 1 24,24v72a24,24 0 0 1 -24,24h-72a24,24 0 0 1 -24,-24v-72a24,24 0 0 1 24,-24z" />
     <path
-        android:fillColor="#FFD400"
-        android:pathData="M12,14h24a2,2 0 0 1 2,2v14a2,2 0 0 1 -2,2h-24a2,2 0 0 1 -2,-2v-14a2,2 0 0 1 2,-2z" />
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:fillColor="#00000000"
+        android:pathData="M60,28a32,32 0 1 0 0.01,0z" />
+    <group android:rotation="-24" android:pivotX="60" android:pivotY="60">
+        <path
+            android:strokeColor="#4FA3FF"
+            android:strokeWidth="4"
+            android:fillColor="#00000000"
+            android:pathData="M15,60a45,16 0 1 0 90,0a45,16 0 1 0 -90,0z" />
+    </group>
     <path
-        android:fillColor="#C8102E"
-        android:pathData="M21,18l8,5 -8,5z" />
+        android:fillColor="#4FA3FF"
+        android:pathData="M101,37.7a4,4 0 1 0 0.01,0z" />
     <path
-        android:fillColor="#FFD400"
-        android:pathData="M18,35h12v2h-12z" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M53,47L74,60L53,73z" />
 </vector>

@@ -201,6 +201,14 @@
 - Senderliste → Gruppenübersicht: unten „Gruppen ausblenden …“ oder OK lang auf einer Gruppe → Dialog mit Haken (Haken = ausgeblendet), OK · Alle auswählen · Abbrechen. Mindestens eine Gruppe muss sichtbar bleiben. `ui/HideGroupsDialog.kt`, `AppController.setHiddenGroups()` (Gruppen pausierter Playlists behalten ihre Einstellung).
 - Design-Entwürfe (claude.ai-Artifact „Aze-IPTV Design & Logo“): 4 Logos (A Play-A, B Zapp-Z, C Signal, D Orbit), Startbildschirm mit Logo + dünnem Ladebalken, Seitenmenü mit dünnen Linien-Symbolen (Suchen, TV, Filme, Serien, Fußball heute, Playlist, Einstellungen), Gruppen-Ausblenden-Dialog. Schrift im Entwurf Manrope. Aziz wählt Logo/Richtung – danach App-weit umsetzen (ruhig, dünn, einheitlich, nicht „klotzig“).
 
+## Design „Orbit“ (von Aziz gewählt: Logo D)
+- `ui/Brand.kt`: `AzeLogo` (Kreis + schräge Umlaufbahn + Satellit + Abspielzeichen, gezeichnet, folgt dem Farbschema), `AzeWordmark` („AZE“ dünn, gesperrt), `LineIconView`/`LineIcon` (dünne Linien-Symbole 1,6 im 24er-Raster), `SplashScreen`, `SectionLabel`.
+- Startbildschirm (MainActivity): Logo + dünner laufender Balken, solange die Senderliste beim Start lädt (mind. 1,2 s, max. 25 s); Player darunter erst danach bedienbar.
+- Seitenmenü (`SideMenu`, auch in Filme/Serien): Logo oben, Symbole + Text, Fokus = helle Pille, Einstellungen/App beenden unten.
+- Gruppenliste: „GRUPPEN“-Kopf, ruhiger Hintergrund, aktive Gruppe leicht im Akzentton.
+- App-Symbol und TV-Banner neu (Orbit-Logo auf #07152B, Schriftzug als dünne Linien).
+- Nächste Schritte Design: Senderliste, Einstellungen, Schnellmenü, Filme/Serien im gleichen Stil angleichen.
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).

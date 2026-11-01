@@ -155,7 +155,7 @@ fun ChannelOverlay(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             if (showGroups) {
-                Text("Gruppen", color = Palette.GroupSoft, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 4.dp))
+                SectionLabel("Gruppen", modifier = Modifier.padding(start = 10.dp, top = 14.dp, bottom = 10.dp))
                 val gState = rememberLazyListState(initialFirstVisibleItemIndex = (groupIndex - 5).coerceAtLeast(0))
                 val gFirst = remember { FocusRequester() }
                 LazyColumn(
@@ -185,16 +185,19 @@ fun ChannelOverlay(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(34.dp)
-                                    .background(if (focused) Palette.GroupSelect else if (i == groupIndex) Palette.GroupActive else Palette.GroupBlue.copy(alpha = 0f), RoundedCornerShape(7.dp))
+                                    .height(38.dp)
+                                    .background(
+                                        if (focused) Palette.GroupSelect else if (i == groupIndex) Palette.Highlight.copy(alpha = 0.16f) else Palette.GroupBlue.copy(alpha = 0f),
+                                        RoundedCornerShape(10.dp),
+                                    )
                                     .padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         (if (g.isFavorites) "★ " else "") + g.name,
-                                        color = if (focused) Palette.OnAccent else Palette.Text,
-                                        fontSize = 15.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (focused) Palette.OnAccent else if (i == groupIndex) Palette.Text else Palette.TextSoft,
+                                        fontSize = 15.sp, fontWeight = if (focused || i == groupIndex) FontWeight.SemiBold else FontWeight.Normal,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
                                 }
@@ -213,6 +216,8 @@ fun ChannelOverlay(
                                     .padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                LineIconView(LineIcon.EYE_OFF, if (focused) Palette.OnAccent else Palette.GroupSoft, 18.dp)
+                                Spacer(Modifier.width(10.dp))
                                 Text(
                                     "Gruppen ausblenden …",
                                     color = if (focused) Palette.OnAccent else Palette.GroupSoft,
@@ -416,57 +421,65 @@ internal fun SideMenu(
         withFrameNanos { }
         runCatching { first.requestFocus() }
     }
+    // Einträge mit dünnen Linien-Symbolen (ruhiges Design „Orbit“)
     val entries = buildList {
-        add("TV" to onTv)
-        add("Filme" to { onVod(false) })
-        add("Serien" to { onVod(true) })
-        add("Suchen" to onSearch)
-        if (onFootball != null) add("Fußball heute" to onFootball)
-        if (multi) add("Playlist: $playlistLabel" to onPlaylist)
-        add("Einstellungen" to onSettings)
+        add(Triple("TV", LineIcon.TV, onTv))
+        add(Triple("Filme", LineIcon.MOVIE, { onVod(false) }))
+        add(Triple("Serien", LineIcon.SERIES, { onVod(true) }))
+        add(Triple("Suchen", LineIcon.SEARCH, onSearch))
+        if (onFootball != null) add(Triple("Fußball heute", LineIcon.FOOTBALL, onFootball))
+        if (multi) add(Triple("Playlist: $playlistLabel", LineIcon.PLAYLIST, onPlaylist))
     }
     Column(
         modifier = Modifier
             .fillMaxHeight()
-            .width(170.dp)
-            .background(Palette.overlayBrush(0.96f))
-            .padding(horizontal = 8.dp, vertical = 16.dp)
+            .width(236.dp)
+            .background(Palette.Ground.copy(alpha = 0.96f))
+            .padding(start = 18.dp, end = 14.dp, top = 26.dp, bottom = 18.dp)
             .onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onRight(); true } else false
             },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        // Logo oben
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(start = 10.dp, bottom = 26.dp),
+        ) {
+            AzeLogo(28.dp)
+            AzeWordmark(18.sp)
+        }
+
         @Composable
-        fun entry(label: String, action: () -> Unit, isFirst: Boolean = false, danger: Boolean = false) {
+        fun entry(label: String, icon: LineIcon, action: () -> Unit, isFirst: Boolean = false, danger: Boolean = false) {
             Focusable(
                 modifier = Modifier.fillMaxWidth().then(if (isFirst) Modifier.focusRequester(first) else Modifier),
                 onClick = action,
             ) { focused ->
-                Text(
-                    label,
-                    color = if (focused) Palette.OnAccent else if (danger) Palette.Live else Palette.Text,
-                    fontSize = 16.sp,
-                    fontWeight = if (focused) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                val fg = if (focused) Palette.OnAccent else if (danger) Palette.Live.copy(alpha = 0.85f) else Palette.TextSoft
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(
-                            if (focused) Modifier.background(Palette.FocusBrush, RoundedCornerShape(10.dp))
-                            else Modifier,
-                        )
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                )
+                        .height(42.dp)
+                        .then(if (focused) Modifier.background(Palette.Accent, RoundedCornerShape(12.dp)) else Modifier)
+                        .padding(horizontal = 12.dp),
+                ) {
+                    LineIconView(icon, fg, 20.dp)
+                    Text(
+                        label, color = fg, fontSize = 15.sp,
+                        fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
-        entries.forEachIndexed { i, (label, action) ->
-            // Eine Zeile Abstand vor „Einstellungen“
-            if (label == "Einstellungen") Spacer(Modifier.height(18.dp))
-            entry(label, action, isFirst = i == 0)
-        }
-        // „App beenden“ ganz unten, gut sichtbar
-        if (onQuit != null) {
-            Spacer(Modifier.weight(1f))
-            entry("App beenden", onQuit, danger = true)
-        }
+        entries.forEachIndexed { i, (label, icon, action) -> entry(label, icon, action, isFirst = i == 0) }
+        Spacer(Modifier.weight(1f))
+        entry("Einstellungen", LineIcon.SETTINGS, onSettings)
+        // „App beenden“ ganz unten
+        if (onQuit != null) entry("App beenden", LineIcon.EXIT, onQuit, danger = true)
     }
 }
