@@ -111,15 +111,15 @@ fun HideListDialog(
                                 .padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            // Name nimmt den Platz, Zusatz und Kästchen stehen immer rechts bündig untereinander
                             Text(
                                 g.name, color = if (on) Palette.TextMuted else Palette.Text, fontSize = 15.sp,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
                             )
-                            Text(
-                                if (g.detail.isNotEmpty()) "  ${g.detail}" else "",
-                                color = Palette.TextMuted, fontSize = 12.sp, maxLines = 1,
-                                modifier = Modifier.weight(1f),
-                            )
+                            if (g.detail.isNotEmpty()) Text(
+                                g.detail, color = Palette.TextMuted, fontSize = 12.sp, maxLines = 1,
+                                modifier = Modifier.padding(start = 10.dp, end = 12.dp),
+                            ) else Box(Modifier.width(12.dp))
                             // Kästchen mit Haken
                             Box(
                                 Modifier

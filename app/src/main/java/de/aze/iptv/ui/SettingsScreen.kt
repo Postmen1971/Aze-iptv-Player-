@@ -163,8 +163,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 }
                 "YouTube Live" -> YouTubeSection(app)
                 "Senderliste" -> {
-                    ListEditSection(onEditList = { editingList = true })
-                    HideSection(app)
+                    ListEditSection(app, onEditList = { editingList = true })
                     RefreshSection(app)
                     PlaybackSection(app, onEditList = { editingList = true }, part = 1)
                     FavoritesSection(app)
@@ -753,16 +752,14 @@ private fun AppearanceSection(app: AppController) {
     }
 }
 
-/** Ausblenden: Live-TV-Gruppen sowie Film- und Serien-Kategorien (je Playlist). */
+/** Knöpfe „Filme-/Serien-Kategorien ausblenden“ (je Playlist) samt Dialog – im Abschnitt „Senderliste bearbeiten“. */
 @Composable
-private fun HideSection(app: AppController) {
+private fun VodHideButtons(app: AppController) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var liveDialog by remember { mutableStateOf(false) }
     // geladene Kategorien für den Dialog: Playlist, Serien?, Kategorien
     var vod by remember { mutableStateOf<Triple<de.aze.iptv.data.PlaylistSource, Boolean, List<de.aze.iptv.data.VodCategory>>?>(null) }
     var loading by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    if (liveDialog) HideGroupsDialog(app, onClose = { liveDialog = false })
     vod?.let { (src, series, cats) ->
         val kind = if (series) "Serien" else "Filme"
         HideListDialog(
@@ -789,32 +786,28 @@ private fun HideSection(app: AppController) {
             if (cats.isNotEmpty()) vod = Triple(src, series, cats)
         }
     }
-    Section("Ausblenden") {
-        Text(
-            "Gruppen und Kategorien ausblenden, die du nicht brauchst. Geht auch direkt in den Listen: ganz oben „… ausblenden“ oder OK lang.",
-            color = Palette.TextMuted, fontSize = 13.sp,
-        )
-        TvButton("Live-TV: Gruppen ausblenden", onClick = { liveDialog = true })
-        val sources = app.vodSources
-        sources.forEach { src ->
-            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TvButton("Filme: Kategorien ausblenden" + if (sources.size > 1) " (${src.name})" else "", onClick = { open(src, false) })
-                TvButton("Serien: Kategorien ausblenden" + if (sources.size > 1) " (${src.name})" else "", onClick = { open(src, true) })
-            }
+    val sources = app.vodSources
+    sources.forEach { src ->
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            val suffix = if (sources.size > 1) " (${src.name})" else ""
+            TvButton("Filme-Kategorien ausblenden$suffix", selected = true, onClick = { open(src, false) })
+            TvButton("Serien-Kategorien ausblenden$suffix", selected = true, onClick = { open(src, true) })
         }
-        loading?.let { Text(it, color = Palette.TextMuted, fontSize = 13.sp) }
     }
+    loading?.let { Text(it, color = Palette.TextMuted, fontSize = 13.sp) }
 }
 
 /** Senderliste bearbeiten – gut sichtbar ganz oben unter „Senderliste“. */
 @Composable
-private fun ListEditSection(onEditList: () -> Unit) {
+private fun ListEditSection(app: AppController, onEditList: () -> Unit) {
     Section("Senderliste bearbeiten") {
         Text(
-            "Gruppen und Sender sortieren, umbenennen, ein- und ausblenden – direkt hier am Fernseher.",
+            "Gruppen und Sender sortieren, umbenennen, ein- und ausblenden – direkt hier am Fernseher. " +
+                "Bei Filmen und Serien Kategorien ausblenden, die du nicht brauchst.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         TvButton("Senderliste bearbeiten öffnen", selected = true, onClick = onEditList)
+        VodHideButtons(app)
     }
 }
 
