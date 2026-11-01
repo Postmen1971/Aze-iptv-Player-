@@ -71,6 +71,8 @@ fun ChannelOverlay(
     // Zurück: Senderliste → Gruppen → App beenden.
     var showGroups by remember { mutableStateOf(startInGroups) }
     var showMenu by remember { mutableStateOf(false) }
+    var hideDialog by remember { mutableStateOf(false) }
+    if (hideDialog) HideGroupsDialog(app, onClose = { hideDialog = false })
     BackHandler {
         when {
             showMenu -> showMenu = false
@@ -177,6 +179,8 @@ fun ChannelOverlay(
                                 groupIndex = i
                                 showGroups = false
                             },
+                            // OK lang auf einer Gruppe: Gruppen ein-/ausblenden
+                            onLongClick = { hideDialog = true },
                         ) { focused ->
                             Row(
                                 modifier = Modifier
@@ -195,6 +199,25 @@ fun ChannelOverlay(
                                     )
                                 }
                                 Text(g.range, color = if (focused) Palette.OnAccent else Palette.GroupSoft, fontSize = 11.sp)
+                            }
+                        }
+                    }
+                    // Unten: Gruppen ein-/ausblenden (wie beim IBO Player)
+                    item {
+                        Focusable(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), onClick = { hideDialog = true }) { focused ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(34.dp)
+                                    .background(if (focused) Palette.GroupSelect else Palette.GroupBlue.copy(alpha = 0f), RoundedCornerShape(7.dp))
+                                    .padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "Gruppen ausblenden …",
+                                    color = if (focused) Palette.OnAccent else Palette.GroupSoft,
+                                    fontSize = 14.sp, maxLines = 1,
+                                )
                             }
                         }
                     }

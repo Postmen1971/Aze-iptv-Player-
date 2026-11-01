@@ -287,6 +287,15 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         saveLayout(layout.copy(groupOrder = keys))
     }
 
+    /**
+     * Ausgeblendete Gruppen auf einmal setzen (Dialog „Gruppen ausblenden“). Gruppen, die gerade nicht in der Liste
+     * sind (z. B. aus pausierten Playlists), behalten ihre Einstellung.
+     */
+    fun setHiddenGroups(hidden: Set<String>) {
+        val shown = editGroups.map { it.key }.toSet()
+        saveLayout(layout.copy(hiddenGroups = (layout.hiddenGroups - shown) + hidden.intersect(shown)))
+    }
+
     fun toggleGroupHidden(key: String) {
         val h = layout.hiddenGroups
         saveLayout(layout.copy(hiddenGroups = if (key in h) h - key else h + key))

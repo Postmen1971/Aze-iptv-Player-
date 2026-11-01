@@ -197,6 +197,10 @@
 - Jetzt: suspend im Hintergrund (Dispatchers.IO), Bilder-Ablage leert Coil selbst, Web-Anzeige-Ordner bleiben; Knopf zeigt „Wird geleert …“.
 - Emulator-Test 7 (Start-Parameter `aze_test_clear_cache`): Leeren während ein Sender läuft, App muss weiterlaufen.
 
+## Gruppen ausblenden (Dialog wie IBO Player) + Design-Entwürfe
+- Senderliste → Gruppenübersicht: unten „Gruppen ausblenden …“ oder OK lang auf einer Gruppe → Dialog mit Haken (Haken = ausgeblendet), OK · Alle auswählen · Abbrechen. Mindestens eine Gruppe muss sichtbar bleiben. `ui/HideGroupsDialog.kt`, `AppController.setHiddenGroups()` (Gruppen pausierter Playlists behalten ihre Einstellung).
+- Design-Entwürfe (claude.ai-Artifact „Aze-IPTV Design & Logo“): 4 Logos (A Play-A, B Zapp-Z, C Signal, D Orbit), Startbildschirm mit Logo + dünnem Ladebalken, Seitenmenü mit dünnen Linien-Symbolen (Suchen, TV, Filme, Serien, Fußball heute, Playlist, Einstellungen), Gruppen-Ausblenden-Dialog. Schrift im Entwurf Manrope. Aziz wählt Logo/Richtung – danach App-weit umsetzen (ruhig, dünn, einheitlich, nicht „klotzig“).
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).
