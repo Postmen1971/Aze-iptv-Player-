@@ -238,6 +238,8 @@
 - Jetzt: Multi-View fragt bei Server + Login `player_api.php` → user_info.max_connections/active_cons und zeigt es an (Log MV_CONNECTIONS); Bilder starten nacheinander (1,2 s + 1,2 s je Bild); Wächter wartet 2,5 s zwischen stop und prepare, danach 12 s Ruhe; Puffer je Bild max. 20 MB.
 - Sendername: bei „Nebeneinander“ ÜBER dem Bild im freien Bereich; bei Bild-im-Bild/4 Bilder nur 4 s nach dem Umschalten im Bild.
 - Senderauswahl: ◀ in der Senderliste = zurück zu den Gruppen.
+- Multi-View-Bilder: max. 720p (kleines Bild-im-Bild 480p) über setMaxVideoSize – wirkt nur bei HLS mit mehreren Stufen.
+- Aziz: Multi-View läuft bei TiviMate auf demselben Gerät/Abo sauber → Verbindungsgrenze allein ist NICHT die Ursache; Hauptverdacht jetzt Puffer-Speicher (vorher bis 64 MB je Player) und überlappende Verbindungen.
 - Neues Farbschema „Stadion“ (Grüntöne nach Aziz' Foto), wählbar unter Bedienung → Aussehen.
 
 ## Für einen neuen Chat

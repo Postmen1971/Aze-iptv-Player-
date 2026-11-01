@@ -427,6 +427,10 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             .setPreferredAudioLanguage(app.audioLanguage)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, !activeNow)
+            // Kleine Bilder brauchen keine volle Auflösung: bei Sendern mit mehreren Qualitätsstufen (HLS)
+            // höchstens 720p, das kleine Bild bei „Bild im Bild“ höchstens 480p. (.ts-Streams haben nur eine Stufe.)
+            .setMaxVideoSize(if (texture) 854 else 1280, if (texture) 480 else 720)
+            .setForceHighestSupportedBitrate(false)
             .build()
         player.setMediaItem(b.build())
         // nacheinander starten: erst muss der normale Player seine Verbindung freigegeben haben, dann ein Bild nach dem anderen
