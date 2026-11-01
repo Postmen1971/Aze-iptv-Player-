@@ -165,6 +165,27 @@ fun ChannelOverlay(
                         if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { showMenu = true; true } else false
                     },
                 ) {
+                    // Oben: Gruppen ein-/ausblenden (gut zu finden, auch bei sehr vielen Gruppen)
+                    item {
+                        Focusable(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), onClick = { hideDialog = true }) { focused ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(34.dp)
+                                    .background(if (focused) Palette.GroupSelect else Palette.GroupBlue.copy(alpha = 0f), RoundedCornerShape(7.dp))
+                                    .padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                LineIconView(LineIcon.EYE_OFF, if (focused) Palette.OnAccent else Palette.GroupSoft, 18.dp)
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    "Gruppen ausblenden …",
+                                    color = if (focused) Palette.OnAccent else Palette.GroupSoft,
+                                    fontSize = 14.sp, maxLines = 1,
+                                )
+                            }
+                        }
+                    }
                     itemsIndexed(groups) { i, g ->
                         Focusable(
                             modifier = Modifier
@@ -202,27 +223,6 @@ fun ChannelOverlay(
                                     )
                                 }
                                 Text(g.range, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 13.sp)
-                            }
-                        }
-                    }
-                    // Unten: Gruppen ein-/ausblenden (wie beim IBO Player)
-                    item {
-                        Focusable(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), onClick = { hideDialog = true }) { focused ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(34.dp)
-                                    .background(if (focused) Palette.GroupSelect else Palette.GroupBlue.copy(alpha = 0f), RoundedCornerShape(7.dp))
-                                    .padding(horizontal = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                LineIconView(LineIcon.EYE_OFF, if (focused) Palette.OnAccent else Palette.GroupSoft, 18.dp)
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    "Gruppen ausblenden …",
-                                    color = if (focused) Palette.OnAccent else Palette.GroupSoft,
-                                    fontSize = 14.sp, maxLines = 1,
-                                )
                             }
                         }
                     }

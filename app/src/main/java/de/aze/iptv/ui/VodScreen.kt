@@ -301,6 +301,25 @@ private fun Browse(
                     api.sourceInfo().takeIf { it.isNotBlank() }?.let { Text("Quelle: $it", color = Palette.TextMuted, fontSize = 11.sp) }
                 }
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    // Oben: Kategorien ein-/ausblenden (gut zu finden, auch bei sehr vielen Kategorien)
+                    if (allCats.isNotEmpty()) item {
+                        Focusable(modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), onClick = { hideDialog = true }) { focused ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(if (focused) Palette.Accent else Color.Transparent, RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                LineIconView(LineIcon.EYE_OFF, if (focused) Palette.OnAccent else Palette.TextMuted, 18.dp)
+                                Text(
+                                    "  Kategorien ausblenden …",
+                                    color = if (focused) Palette.OnAccent else Palette.TextMuted,
+                                    fontSize = 14.sp, maxLines = 1,
+                                )
+                            }
+                        }
+                    }
                     itemsIndexed(catList) { i, c ->
                         Focusable(
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(catFocus) else Modifier),
@@ -341,25 +360,6 @@ private fun Browse(
                                         modifier = Modifier.padding(start = 6.dp),
                                     )
                                 }
-                            }
-                        }
-                    }
-                    // Unten: Kategorien ein-/ausblenden (wie bei den Live-TV-Gruppen)
-                    if (allCats.isNotEmpty()) item {
-                        Focusable(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), onClick = { hideDialog = true }) { focused ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(if (focused) Palette.Accent else Color.Transparent, RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                LineIconView(LineIcon.EYE_OFF, if (focused) Palette.OnAccent else Palette.TextMuted, 18.dp)
-                                Text(
-                                    "  Kategorien ausblenden …",
-                                    color = if (focused) Palette.OnAccent else Palette.TextMuted,
-                                    fontSize = 14.sp, maxLines = 1,
-                                )
                             }
                         }
                     }

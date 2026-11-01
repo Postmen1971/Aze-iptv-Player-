@@ -212,7 +212,7 @@
 - Nächste Schritte Design: Schnellmenü, Filme/Serien, Abschnitts-Kästen der Einstellungen im gleichen Stil angleichen.
 
 ## Filme/Serien: Kategorien ausblenden
-- Wie bei Live-TV: in der Kategorienliste unten „Kategorien ausblenden …“ oder OK lang auf einer Kategorie → Dialog mit Haken. Getrennt je Playlist und Filme/Serien.
+- Wie bei Live-TV: in der Kategorienliste GANZ OBEN „Kategorien ausblenden …“ (vorher unten – Aziz fand es nicht), zusätzlich Einstellungen → Senderliste → „Ausblenden“ (Live-TV-Gruppen, Filme, Serien je Playlist) oder OK lang auf einer Kategorie → Dialog mit Haken. Getrennt je Playlist und Filme/Serien.
 - Gespeichert in Store.vodHidden ("playlistId|m|katId" bzw. "|s|"), `AppController.setVodHidden/isVodHidden`.
 - Dialog verallgemeinert: `HideListDialog(title, hint, entries: List<HideEntry>, onApply)`; `HideGroupsDialog` nutzt ihn für Live-TV.
 - Kategorienliste im gleichen Schriftstil wie Gruppen/Sender (15 sp normal, Zahlen 13 sp gedämpft, aktive leicht blau).

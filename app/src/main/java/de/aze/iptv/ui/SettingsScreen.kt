@@ -164,6 +164,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 "YouTube Live" -> YouTubeSection(app)
                 "Senderliste" -> {
                     ListEditSection(onEditList = { editingList = true })
+                    HideSection(app)
                     RefreshSection(app)
                     PlaybackSection(app, onEditList = { editingList = true }, part = 1)
                     FavoritesSection(app)
@@ -749,6 +750,59 @@ private fun AppearanceSection(app: AppController) {
                 TvButton(name, selected = app.textColorIndex == i, onClick = { app.updateTextColor(i) })
             }
         }
+    }
+}
+
+/** Ausblenden: Live-TV-Gruppen sowie Film- und Serien-Kategorien (je Playlist). */
+@Composable
+private fun HideSection(app: AppController) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var liveDialog by remember { mutableStateOf(false) }
+    // geladene Kategorien für den Dialog: Playlist, Serien?, Kategorien
+    var vod by remember { mutableStateOf<Triple<de.aze.iptv.data.PlaylistSource, Boolean, List<de.aze.iptv.data.VodCategory>>?>(null) }
+    var loading by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    if (liveDialog) HideGroupsDialog(app, onClose = { liveDialog = false })
+    vod?.let { (src, series, cats) ->
+        val kind = if (series) "Serien" else "Filme"
+        HideListDialog(
+            title = "$kind: Kategorien ausblenden",
+            hint = "Haken = Kategorie wird bei $kind nicht angezeigt",
+            entries = cats.map { c -> HideEntry(c.id, c.name, "", app.isVodHidden(src.id, series, c.id)) },
+            onApply = { ids -> app.setVodHidden(src.id, series, cats.map { it.id }, ids) },
+            onClose = { vod = null },
+        )
+    }
+    fun open(src: de.aze.iptv.data.PlaylistSource, series: Boolean) {
+        if (busy) return
+        busy = true
+        loading = "Kategorien werden geladen …"
+        scope.launch {
+            val cats = runCatching {
+                val p = app.vodProvider(src)
+                if (series) p.seriesCategories() else p.movieCategories()
+            }.getOrDefault(emptyList()).let { l ->
+                if (app.adultFilter) l.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.name) } else l
+            }
+            busy = false
+            loading = if (cats.isEmpty()) "Keine ${if (series) "Serien" else "Filme"} in „${src.name}“ gefunden." else null
+            if (cats.isNotEmpty()) vod = Triple(src, series, cats)
+        }
+    }
+    Section("Ausblenden") {
+        Text(
+            "Gruppen und Kategorien ausblenden, die du nicht brauchst. Geht auch direkt in den Listen: ganz oben „… ausblenden“ oder OK lang.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        TvButton("Live-TV: Gruppen ausblenden", onClick = { liveDialog = true })
+        val sources = app.vodSources
+        sources.forEach { src ->
+            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton("Filme: Kategorien ausblenden" + if (sources.size > 1) " (${src.name})" else "", onClick = { open(src, false) })
+                TvButton("Serien: Kategorien ausblenden" + if (sources.size > 1) " (${src.name})" else "", onClick = { open(src, true) })
+            }
+        }
+        loading?.let { Text(it, color = Palette.TextMuted, fontSize = 13.sp) }
     }
 }
 
