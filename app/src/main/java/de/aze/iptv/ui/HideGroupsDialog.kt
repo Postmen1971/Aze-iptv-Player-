@@ -34,14 +34,37 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import de.aze.iptv.AppController
 
-/**
- * Gruppen der Senderliste ein-/ausblenden (wie beim IBO Player): Liste mit Haken, unten OK · Alle auswählen · Abbrechen.
- * Haken = Gruppe wird NICHT angezeigt. Erst OK übernimmt die Auswahl.
- */
+/** Ein Eintrag im Ausblenden-Dialog. */
+class HideEntry(val key: String, val name: String, val detail: String, val hidden: Boolean)
+
+/** Gruppen der Senderliste ein-/ausblenden (Live-TV). */
 @Composable
 fun HideGroupsDialog(app: AppController, onClose: () -> Unit) {
-    val all = app.editGroups
     val multi = app.activeSources.size > 1
+    HideListDialog(
+        title = "Gruppen ausblenden",
+        hint = "Haken = Gruppe wird in der Senderliste nicht angezeigt",
+        entries = app.editGroups.map { g ->
+            HideEntry(g.key, g.name, "${g.channels.size} Sender" + if (multi && g.sourceName != null) " · ${g.sourceName}" else "", g.hidden)
+        },
+        onApply = { app.setHiddenGroups(it) },
+        onClose = onClose,
+    )
+}
+
+/**
+ * Liste mit Haken zum Ausblenden (wie beim IBO Player): unten OK · Alle auswählen · Abbrechen.
+ * Haken = wird NICHT angezeigt. Erst OK übernimmt die Auswahl. Für Live-TV-Gruppen und Film-/Serien-Kategorien.
+ */
+@Composable
+fun HideListDialog(
+    title: String,
+    hint: String,
+    entries: List<HideEntry>,
+    onApply: (Set<String>) -> Unit,
+    onClose: () -> Unit,
+) {
+    val all = entries
     var hidden by remember { mutableStateOf(all.filter { it.hidden }.map { it.key }.toSet()) }
     var warn by remember { mutableStateOf(false) }
     val first = remember { FocusRequester() }
@@ -60,9 +83,9 @@ fun HideGroupsDialog(app: AppController, onClose: () -> Unit) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Gruppen ausblenden", color = Palette.Text, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
+                Text(title, color = Palette.Text, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
                 Text(
-                    if (warn) "Mindestens eine Gruppe muss sichtbar bleiben." else "Haken = Gruppe wird in der Senderliste nicht angezeigt",
+                    if (warn) "Mindestens ein Eintrag muss sichtbar bleiben." else hint,
                     color = if (warn) Palette.Live else Palette.TextMuted, fontSize = 13.sp,
                 )
             }
@@ -93,7 +116,7 @@ fun HideGroupsDialog(app: AppController, onClose: () -> Unit) {
                                 maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
                             )
                             Text(
-                                "  ${g.channels.size} Sender" + if (multi && g.sourceName != null) " · ${g.sourceName}" else "",
+                                if (g.detail.isNotEmpty()) "  ${g.detail}" else "",
                                 color = Palette.TextMuted, fontSize = 12.sp, maxLines = 1,
                                 modifier = Modifier.weight(1f),
                             )
@@ -122,7 +145,7 @@ fun HideGroupsDialog(app: AppController, onClose: () -> Unit) {
                     if (all.isNotEmpty() && all.all { it.key in hidden }) {
                         warn = true
                     } else {
-                        app.setHiddenGroups(hidden)
+                        onApply(hidden)
                         onClose()
                     }
                 })

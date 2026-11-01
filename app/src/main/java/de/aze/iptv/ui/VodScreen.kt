@@ -199,10 +199,30 @@ private fun Browse(
     }
     // Erwachsenen-Filter: solche Kategorien gar nicht erst zeigen
     val adultOff = app.adultFilter
-    val catList = remember(cats, adultOff) {
+    val allCats = remember(cats, adultOff) {
         cats.orEmpty().let { l -> if (adultOff) l.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.name) } else l }
     }
-    LaunchedEffect(api, series, selected, cats) {
+    // Vom Nutzer ausgeblendete Kategorien (Dialog „Kategorien ausblenden“)
+    val hiddenVod = app.vodHidden
+    val catList = remember(allCats, hiddenVod, sourceId, series) {
+        allCats.filterNot { app.isVodHidden(sourceId, series, it.id) }
+    }
+    var hideDialog by remember { mutableStateOf(false) }
+    if (hideDialog) {
+        HideListDialog(
+            title = "$kind: Kategorien ausblenden",
+            hint = "Haken = Kategorie wird bei $kind nicht angezeigt",
+            entries = allCats.map { c ->
+                HideEntry(c.id, c.name, counts[c.id]?.let { "$it" } ?: "", app.isVodHidden(sourceId, series, c.id))
+            },
+            onApply = { ids ->
+                app.setVodHidden(sourceId, series, allCats.map { it.id }, ids)
+                selected = 0
+            },
+            onClose = { hideDialog = false },
+        )
+    }
+    LaunchedEffect(api, series, selected, cats, catList) {
         val c = catList.getOrNull(selected) ?: return@LaunchedEffect
         items = null
         delay(250) // erst laden, wenn man kurz auf einer Kategorie stehen bleibt
@@ -285,6 +305,8 @@ private fun Browse(
                         Focusable(
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(catFocus) else Modifier),
                             onClick = { selected = i; query = null },
+                            // OK lang: Kategorien ein-/ausblenden
+                            onLongClick = { hideDialog = true },
                             // Nur beim Wechsel der Kategorie die Suche beenden (nicht wenn der Fokus nach der Suche zurückkommt)
                             onFocus = { if (i != selected) { selected = i; query = null } },
                         ) { focused ->
@@ -295,19 +317,19 @@ private fun Browse(
                                     .background(
                                         when {
                                             focused -> Palette.Accent
-                                            i == selected -> Palette.Raised
+                                            i == selected -> Palette.Highlight.copy(alpha = 0.16f)
                                             else -> Color.Transparent
                                         },
-                                        RoundedCornerShape(6.dp),
+                                        RoundedCornerShape(10.dp),
                                     )
-                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
                                     c.name,
-                                    color = if (focused) Palette.OnAccent else Palette.Text,
-                                    fontSize = 14.sp,
-                                    fontWeight = if (focused || i == selected) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (focused) Palette.OnAccent else Palette.TextSoft,
+                                    fontSize = 15.sp,
+                                    fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -315,10 +337,29 @@ private fun Browse(
                                     Text(
                                         "$count",
                                         color = if (focused) Palette.OnAccent else Palette.TextMuted,
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
                                         modifier = Modifier.padding(start = 6.dp),
                                     )
                                 }
+                            }
+                        }
+                    }
+                    // Unten: Kategorien ein-/ausblenden (wie bei den Live-TV-Gruppen)
+                    if (allCats.isNotEmpty()) item {
+                        Focusable(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), onClick = { hideDialog = true }) { focused ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(if (focused) Palette.Accent else Color.Transparent, RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                LineIconView(LineIcon.EYE_OFF, if (focused) Palette.OnAccent else Palette.TextMuted, 18.dp)
+                                Text(
+                                    "  Kategorien ausblenden …",
+                                    color = if (focused) Palette.OnAccent else Palette.TextMuted,
+                                    fontSize = 14.sp, maxLines = 1,
+                                )
                             }
                         }
                     }

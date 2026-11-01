@@ -198,6 +198,14 @@ class Store(context: Context) {
         get() = prefs.getBoolean("pinEnabled", true)
         set(v) = prefs.edit().putBoolean("pinEnabled", v).apply()
 
+    /** Ausgeblendete Film-/Serien-Kategorien: Einträge "playlistId|m|kategorieId" bzw. "|s|" für Serien. */
+    var vodHidden: Set<String>
+        get() = runCatching {
+            val a = JSONArray(prefs.getString("vodHidden", "[]"))
+            (0 until a.length()).map { a.getString(it) }.toSet()
+        }.getOrDefault(emptySet())
+        set(v) = prefs.edit().putString("vodHidden", JSONArray(v.toList()).toString()).apply()
+
     /** Optional: Schlüssel für omdbapi.com, um IMDb-Bewertungen anzuzeigen. */
     var omdbKey: String
         get() = Secure.decrypt(prefs.getString("omdbKey", "")) ?: ""

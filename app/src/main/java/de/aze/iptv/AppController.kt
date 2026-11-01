@@ -296,6 +296,21 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         saveLayout(layout.copy(hiddenGroups = (layout.hiddenGroups - shown) + hidden.intersect(shown)))
     }
 
+    // ---- Filme & Serien: Kategorien ausblenden ----
+    var vodHidden by mutableStateOf(store.vodHidden)
+        private set
+
+    private fun vodKey(sourceId: String, series: Boolean, catId: String) = "$sourceId|${if (series) "s" else "m"}|$catId"
+
+    fun isVodHidden(sourceId: String, series: Boolean, catId: String): Boolean = vodKey(sourceId, series, catId) in vodHidden
+
+    /** Ausgeblendete Kategorien einer Playlist (Filme ODER Serien) auf einmal setzen. */
+    fun setVodHidden(sourceId: String, series: Boolean, allIds: Collection<String>, hiddenIds: Set<String>) {
+        val all = allIds.map { vodKey(sourceId, series, it) }.toSet()
+        vodHidden = (vodHidden - all) + hiddenIds.map { vodKey(sourceId, series, it) }
+        store.vodHidden = vodHidden
+    }
+
     fun toggleGroupHidden(key: String) {
         val h = layout.hiddenGroups
         saveLayout(layout.copy(hiddenGroups = if (key in h) h - key else h + key))

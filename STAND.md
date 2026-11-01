@@ -211,6 +211,12 @@
 - Einstellungen: linke Leiste scrollt (auf Aziz' TV waren „Über“/„Erweitert“ abgeschnitten), Stil wie Seitenmenü mit Logo. Farbschema + Schriftfarbe jetzt unter Bedienung → „Aussehen“. „Senderliste bearbeiten“ eigener, gut sichtbarer Abschnitt oben unter Senderliste.
 - Nächste Schritte Design: Schnellmenü, Filme/Serien, Abschnitts-Kästen der Einstellungen im gleichen Stil angleichen.
 
+## Filme/Serien: Kategorien ausblenden
+- Wie bei Live-TV: in der Kategorienliste unten „Kategorien ausblenden …“ oder OK lang auf einer Kategorie → Dialog mit Haken. Getrennt je Playlist und Filme/Serien.
+- Gespeichert in Store.vodHidden ("playlistId|m|katId" bzw. "|s|"), `AppController.setVodHidden/isVodHidden`.
+- Dialog verallgemeinert: `HideListDialog(title, hint, entries: List<HideEntry>, onApply)`; `HideGroupsDialog` nutzt ihn für Live-TV.
+- Kategorienliste im gleichen Schriftstil wie Gruppen/Sender (15 sp normal, Zahlen 13 sp gedämpft, aktive leicht blau).
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).
