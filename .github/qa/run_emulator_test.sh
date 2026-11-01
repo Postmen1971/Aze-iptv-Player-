@@ -66,9 +66,13 @@ wait_for "FIRST_FRAME Test 3" 2 30 && shot "test3-wieder-da"
 note "Zustand Test 3" "$(ticks | tail -45)"
 
 log "== Test 4: Server trennt die Verbindung"
+w=$(count "WATCHDOG")
 channel 4
 wait_for "FIRST_FRAME Test 4" 1 60
-wait_for "FIRST_FRAME Test 4" 2 60 && shot "test4-wieder-da"
+wait_for "ENDED Test 4" 1 40
+# nach dem Ende muss das Bild innerhalb von 5 s zurück sein – ohne Wächter
+wait_for "FIRST_FRAME Test 4" 2 5 && shot "test4-wieder-da"
+[ "$(count "WATCHDOG")" -eq "$w" ] || fail "Nach Stream-Ende musste der Wächter eingreifen"
 
 log "== Test 5: schnelles Zappen (20× hoch/runter), danach muss Test 1 laufen"
 for i in $(seq 1 10); do adb shell input keyevent KEYCODE_DPAD_UP; adb shell input keyevent KEYCODE_DPAD_DOWN; done

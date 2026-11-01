@@ -382,9 +382,10 @@ fun PlayerScreen(
                 if (state == Player.STATE_ENDED && player.currentMediaItem != null) {
                     qaLog("ENDED ${app.current?.channel?.name}")
                     retryJob?.cancel()
+                    // Anbieter hat den Stream beendet: nach 0,3 s neu verbinden (stop + prepare, wie im Multi-View)
                     retryJob = scope.launch {
-                        delay(1_000)
-                        player.seekToDefaultPosition()
+                        delay(300)
+                        player.stop()
                         player.prepare()
                     }
                 }
