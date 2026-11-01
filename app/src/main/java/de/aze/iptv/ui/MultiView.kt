@@ -42,6 +42,8 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -142,7 +144,18 @@ fun MultiViewScreen(
             runCatching { focus.requestFocus() }
         }
     }
-    LaunchedEffect(Unit) { show("Multi-View · ◀ ▶ Bild wählen · OK Sender · Menü Anordnung") }
+    LaunchedEffect(Unit) {
+        show("Multi-View · ◀ ▶ Bild wählen · OK Sender · Menü Anordnung")
+        // Wie viele gleichzeitige Verbindungen erlaubt das Abo? (Server + Login) – wichtigste Ursache für Standbilder
+        val info = runCatching { app.connectionInfo(start?.channel) }.getOrNull() ?: return@LaunchedEffect
+        delay(2_800)
+        val (max, used) = info
+        toast = if (max < 2) "Dein Abo erlaubt nur $max Verbindung – Multi-View braucht mindestens 2. Bilder werden sich gegenseitig unterbrechen."
+        else "Dein Abo erlaubt $max gleichzeitige Verbindungen (gerade belegt: $used)."
+        qaLog("MV_CONNECTIONS max=$max used=$used")
+        delay(6_000)
+        toast = null
+    }
 
     Box(
         Modifier
@@ -187,7 +200,23 @@ fun MultiViewScreen(
     ) {
         @Composable
         fun slot(i: Int, modifier: Modifier, texture: Boolean = false) {
-            MvSlot(app, i, slots[i], active = i == active, texture = texture, modifier = modifier)
+            MvSlot(app, i, slots[i], active = i == active, texture = texture, labelInside = true, modifier = modifier)
+        }
+
+        /** Nebeneinander: Sendername ÜBER dem Bild im freien Bereich, nicht im Bild. */
+        @Composable
+        fun slotWithTitle(i: Int, modifier: Modifier) {
+            Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val ch = slots[i]
+                Text(
+                    ch?.let { "${it.number}  ${it.channel.name}" } ?: "Bild ${i + 1}",
+                    color = if (i == active) Palette.Text else Palette.TextMuted,
+                    fontSize = 15.sp, fontWeight = if (i == active) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+                MvSlot(app, i, ch, active = i == active, texture = false, labelInside = false, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+            }
         }
         when (layout) {
             MvLayout.SIDE -> Row(
@@ -195,8 +224,8 @@ fun MultiViewScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                slot(0, Modifier.weight(1f).aspectRatio(16f / 9f))
-                slot(1, Modifier.weight(1f).aspectRatio(16f / 9f))
+                slotWithTitle(0, Modifier.weight(1f))
+                slotWithTitle(1, Modifier.weight(1f))
             }
             MvLayout.PIP -> Box(Modifier.fillMaxSize()) {
                 slot(0, Modifier.fillMaxSize())
@@ -241,7 +270,22 @@ fun MultiViewScreen(
 /** Ein Bild im Multi-View: eigener Player, Ton nur im gewählten Bild. */
 @OptIn(UnstableApi::class)
 @Composable
-private fun MvSlot(app: AppController, index: Int, channel: NumberedChannel?, active: Boolean, texture: Boolean, modifier: Modifier) {
+private fun MvSlot(
+    app: AppController,
+    index: Int,
+    channel: NumberedChannel?,
+    active: Boolean,
+    texture: Boolean,
+    labelInside: Boolean,
+    modifier: Modifier,
+) {
+    // Name im Bild (nur wo kein freier Platz ist): nach dem Umschalten kurz zeigen, dann ausblenden
+    var showLabel by remember { mutableStateOf(true) }
+    LaunchedEffect(channel?.channel?.key) {
+        showLabel = true
+        delay(4_000)
+        showLabel = false
+    }
     Box(
         modifier
             .background(Color.Black, RoundedCornerShape(6.dp))
@@ -258,7 +302,7 @@ private fun MvSlot(app: AppController, index: Int, channel: NumberedChannel?, ac
         } else {
             key(channel.channel.key) { MvVideo(app, index, channel, active, texture) }
         }
-        if (channel != null) Text(
+        if (channel != null && labelInside && showLabel) Text(
             "${channel.number}  ${channel.channel.name}",
             color = Palette.Text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
@@ -284,7 +328,7 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
         ExoPlayer.Builder(context)
             .setRenderersFactory(DefaultRenderersFactory(context).setEnableDecoderFallback(true))
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
-            .setLoadControl(PlaybackConfig.loadControl(context, app.bufferLevel))
+            .setLoadControl(PlaybackConfig.loadControl(context, app.bufferLevel, maxBytes = 20 * 1024 * 1024))
             .build()
             .apply { playWhenReady = true }
     }
@@ -357,8 +401,11 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             if (frozen >= 6 || starved >= 8 || stuck >= 10) {
                 qaLog("MV_WATCHDOG $index ${if (frozen >= 6) "frozen" else if (starved >= 8) "starved" else "stuck"}")
                 status = "Bild hing – wird neu verbunden …"
-                frozen = 0; starved = 0; stuck = 0; pause = 10
+                frozen = 0; starved = 0; stuck = 0; pause = 12
                 player.stop()
+                // Anbieter gibt die alte Verbindung erst nach ein paar Sekunden frei – sonst zählt er eine zu viel
+                // und trennt dafür das ANDERE Bild (dann bleibt abwechselnd links/rechts das Bild stehen)
+                delay(2_500)
                 player.prepare()
             }
         }
@@ -382,6 +429,8 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, !activeNow)
             .build()
         player.setMediaItem(b.build())
+        // nacheinander starten: erst muss der normale Player seine Verbindung freigegeben haben, dann ein Bild nach dem anderen
+        delay(1_200L + index * 1_200L)
         player.prepare()
     }
 
@@ -456,7 +505,13 @@ private fun MvPicker(
                 }
             } else {
                 val list = groups.getOrNull(g)?.channels.orEmpty()
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                // ◀ in der Senderliste: zurück zu den Gruppen (wie Zurück)
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                    modifier = Modifier.onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && e.key == androidx.compose.ui.input.key.Key.DirectionLeft) { group = null; true } else false
+                    },
+                ) {
                     itemsIndexed(list, key = { _, nc -> nc.channel.key }) { i, nc ->
                         PickRow(
                             text = nc.channel.name, left = "${nc.number}",

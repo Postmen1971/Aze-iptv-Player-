@@ -233,6 +233,13 @@
 - Aziz (1.0.113): das Bild OHNE Ton friert nach einer Weile ein, das gewählte läuft. Ursache (Analyse): Video folgt der Ton-Uhr; das stumme Bild (volume 0) öffnete trotzdem einen Tonausgang – bei Dolby-Durchleitung zur Soundbar gibt es nur einen → Ton-Uhr steht → Standbild. Lösung: inaktive Bilder ohne Tonspur (setTrackTypeDisabled AUDIO), Ton wandert mit der Auswahl; Wächter zusätzlich „10 s kein neues Bild, egal welcher Zustand“. Emulator stellt das nicht nach (kein HDMI-Passthrough) – Bestätigung nur auf SHIELD.
 - Emulator-Test 8 (`aze_test_multiview`): zwei Bilder bekommen Bild, Anordnung wechseln, Zurück – kein Absturz. Log-Kennungen MV_FIRST_FRAME/MV_ERROR.
 
+## Multi-View: Standbild abwechselnd links/rechts (Analyse 2) + Feinschliff
+- Aziz (1.0.114): mal links, mal rechts bleibt ein Bild stehen, Wächter holt es nach ~6 s zurück. Vermutung: Verbindungsgrenze des Anbieters – beim Neuverbinden ist die alte Verbindung noch offen → Anbieter trennt das ANDERE Bild (Ping-Pong); beim Start ebenso mit der noch offenen Verbindung des normalen Players.
+- Jetzt: Multi-View fragt bei Server + Login `player_api.php` → user_info.max_connections/active_cons und zeigt es an (Log MV_CONNECTIONS); Bilder starten nacheinander (1,2 s + 1,2 s je Bild); Wächter wartet 2,5 s zwischen stop und prepare, danach 12 s Ruhe; Puffer je Bild max. 20 MB.
+- Sendername: bei „Nebeneinander“ ÜBER dem Bild im freien Bereich; bei Bild-im-Bild/4 Bilder nur 4 s nach dem Umschalten im Bild.
+- Senderauswahl: ◀ in der Senderliste = zurück zu den Gruppen.
+- Neues Farbschema „Stadion“ (Grüntöne nach Aziz' Foto), wählbar unter Bedienung → Aussehen.
+
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).
 - Download: https://github.com/Postmen1971/Aze-iptv-Player-/releases/latest/download/Aze-IPTV-Player-armeabi-v7a.apk (SHIELD: arm64-v8a geht auch).

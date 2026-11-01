@@ -75,14 +75,14 @@ object PlaybackConfig {
      * Start-Vorrat fehlten die Bilder → Bild blieb stehen, Ton lief weiter. Darum wächst der Start-Vorrat mit.
      */
     @OptIn(UnstableApi::class)
-    fun loadControl(context: Context, level: BufferLevel, audioLeadMs: Int = 0): LoadControl {
+    fun loadControl(context: Context, level: BufferLevel, audioLeadMs: Int = 0, maxBytes: Int? = null): LoadControl {
         val lead = audioLeadMs.coerceIn(0, 5_000)
         val start = if (lead > 0) maxOf(level.startMs, lead + 2_000) else level.startMs
         val rebuffer = if (lead > 0) maxOf(level.rebufferMs, lead + 3_000) else level.rebufferMs
         val min = maxOf(level.minMs, rebuffer)
         return DefaultLoadControl.Builder()
             .setBufferDurationsMs(min, maxOf(level.maxMs, min), start, rebuffer)
-            .setTargetBufferBytes(bufferBytes(context))
+            .setTargetBufferBytes(maxBytes?.let { minOf(it, bufferBytes(context)) } ?: bufferBytes(context))
             .setPrioritizeTimeOverSizeThresholds(false)
             .build()
     }

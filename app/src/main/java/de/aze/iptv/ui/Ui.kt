@@ -93,6 +93,14 @@ val Schemes = listOf(
         text = Color(0xFFFFFFFF), textSoft = Color(0xFFCCCCCC), textMuted = Color(0xFF8C8C8C),
         accent = Color(0xFFF2F2F2), onAccent = Color(0xFF0A0A0A), highlight = Color(0xFFE50914),
     ),
+    // „Stadion“: Grüntöne wie im Fußball-Studio (dunkelgrün, sattes Grün, hellgrüne Akzente) – Wunsch von Aziz
+    ColorScheme(
+        "Stadion",
+        ground = Color(0xFF061A0E), panel = Color(0xFF0D2B18), panelDark = Color(0xFF082012),
+        raised = Color(0xFF17492A), line = Color(0xFF22633A),
+        text = Color(0xFFF2FBF4), textSoft = Color(0xFFCBE9D3), textMuted = Color(0xFF8DB99B),
+        accent = Color(0xFFDFF7E5), onAccent = Color(0xFF061A0E), highlight = Color(0xFF5BE36B),
+    ),
 )
 
 /** Wählbare Schriftfarben (null = wie im Farbschema). */

@@ -797,6 +797,22 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         }
     }
 
+    /**
+     * Gleichzeitige Verbindungen laut Anbieter (nur Server + Login): (erlaubt, gerade belegt) oder null.
+     * Für Multi-View: jedes Bild ist eine eigene Verbindung.
+     */
+    suspend fun connectionInfo(ch: Channel?): Pair<Int, Int>? = withContext(Dispatchers.IO) {
+        val src = ch?.let { c -> sources.firstOrNull { it.id == c.source } } ?: return@withContext null
+        if (src.type != SourceType.XTREAM) return@withContext null
+        val raw = src.url.trim().trimEnd('/')
+        val base = if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "http://$raw"
+        val api = "$base/player_api.php?username=${java.net.URLEncoder.encode(src.user.trim(), "UTF-8")}&password=${java.net.URLEncoder.encode(src.pass, "UTF-8")}"
+        val info = org.json.JSONObject(de.aze.iptv.data.Http.text(api)).optJSONObject("user_info") ?: return@withContext null
+        val max = info.optString("max_connections").toIntOrNull() ?: return@withContext null
+        val used = info.optString("active_cons").toIntOrNull() ?: 0
+        max to used
+    }
+
     /** Nur Test-Build: Multi-View beim Start öffnen. */
     var testMultiView = false
 
