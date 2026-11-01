@@ -354,7 +354,16 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             }
 
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) scope.launch { delay(1_000); player.prepare() }
+                // Anbieter beendet Live-Streams ab und zu von sich aus („Ende“). Sofort neu verbinden.
+                // (prepare() allein wirkt im Zustand „Ende“ NICHT – erst stop(), dann prepare(): Ursache der Standbilder)
+                if (state == Player.STATE_ENDED) {
+                    qaLog("MV_ENDED $index")
+                    scope.launch {
+                        delay(300)
+                        player.stop()
+                        player.prepare()
+                    }
+                }
             }
 
             override fun onPlayerError(error: PlaybackException) {

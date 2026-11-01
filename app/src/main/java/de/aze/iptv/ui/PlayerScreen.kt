@@ -311,7 +311,8 @@ fun PlayerScreen(
     LaunchedEffect(app.lineup) {
         if (app.testMultiView && app.lineup.all.size >= 2) {
             app.testMultiView = false
-            mvSecond = app.lineup.all.firstOrNull { it.channel.key != app.current?.channel?.key }
+            // letzter Sender der Liste (im Test: „Test 4 Abbruch“ – Server trennt nach 15 s)
+            mvSecond = app.lineup.all.lastOrNull { it.channel.key != app.current?.channel?.key }
             multiView = true
         }
     }

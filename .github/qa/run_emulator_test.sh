@@ -116,6 +116,10 @@ adb logcat -c
 adb shell am start -W -n $PKG/.MainActivity --ez aze_test_multiview true
 wait_for "MV_FIRST_FRAME 0" 1 90
 wait_for "MV_FIRST_FRAME 1" 1 60
+# Bild 2 = „Test 4 Abbruch“: Server beendet den Stream nach 15 s → Bild muss sich OHNE Wächter selbst erholen
+wait_for "MV_ENDED 1" 1 40
+wait_for "MV_FIRST_FRAME 1 Test 4" 2 15
+[ "$(count "MV_WATCHDOG 1")" -eq 0 ] || fail "Multi-View: nach Stream-Ende musste der Wächter eingreifen (Neuverbindung zu langsam)"
 # Bild 2 wählen und über die Senderauswahl (OK → Gruppe → Sender) einen anderen Sender setzen
 adb shell input keyevent KEYCODE_DPAD_RIGHT
 sleep 1
