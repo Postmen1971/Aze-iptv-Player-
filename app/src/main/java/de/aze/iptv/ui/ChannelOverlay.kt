@@ -196,12 +196,12 @@ fun ChannelOverlay(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         (if (g.isFavorites) "★ " else "") + g.name,
-                                        color = if (focused) Palette.OnAccent else if (i == groupIndex) Palette.Text else Palette.TextSoft,
-                                        fontSize = 15.sp, fontWeight = if (focused || i == groupIndex) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (focused) Palette.OnAccent else Palette.TextSoft,
+                                        fontSize = 15.sp, fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                                     )
                                 }
-                                Text(g.range, color = if (focused) Palette.OnAccent else Palette.GroupSoft, fontSize = 11.sp)
+                                Text(g.range, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 13.sp)
                             }
                         }
                     }
@@ -253,7 +253,7 @@ fun ChannelOverlay(
                     Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             (if (group.isFavorites) "★ " else "") + group.name,
-                            color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                            color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         if (multi && filter == null && group.sourceName != null) {
@@ -319,25 +319,27 @@ fun ChannelOverlay(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(if (prog != null) 40.dp else 34.dp)
-                                        .background(if (focused) Palette.Accent else Palette.PanelDark.copy(alpha = 0f), RoundedCornerShape(7.dp))
-                                        .then(if (playing && !focused) Modifier.border(1.5.dp, Palette.Highlight, RoundedCornerShape(7.dp)) else Modifier)
+                                        .height(if (prog != null) 44.dp else 38.dp)
+                                        .background(
+                                            if (focused) Palette.Accent else if (playing) Palette.Highlight.copy(alpha = 0.16f) else Palette.PanelDark.copy(alpha = 0f),
+                                            RoundedCornerShape(10.dp),
+                                        )
                                         .padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
                                         "${nc.number}",
-                                        color = if (focused) Palette.OnAccent else if (playing) Palette.Highlight else Palette.TextSoft,
-                                        fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                                        color = if (focused) Palette.OnAccent else if (playing) Palette.Highlight else Palette.TextMuted,
+                                        fontSize = 13.sp, fontWeight = FontWeight.Normal,
                                         textAlign = TextAlign.End, modifier = Modifier.width(38.dp),
                                     )
                                     Spacer(Modifier.width(10.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             nc.channel.name,
-                                            color = if (focused) Palette.OnAccent else Palette.Text,
+                                            color = if (focused) Palette.OnAccent else Palette.TextSoft,
                                             fontSize = 15.sp,
-                                            fontWeight = if (focused || playing) FontWeight.Bold else FontWeight.Normal,
+                                            fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,
                                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                                         )
                                         // Laufende Sendung (EPG) klein darunter, mit dünnem Fortschrittsbalken

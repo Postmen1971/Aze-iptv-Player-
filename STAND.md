@@ -207,7 +207,9 @@
 - Seitenmenü (`SideMenu`, auch in Filme/Serien): Logo oben, Symbole + Text, Fokus = helle Pille, Einstellungen/App beenden unten.
 - Gruppenliste: „GRUPPEN“-Kopf, ruhiger Hintergrund, aktive Gruppe leicht im Akzentton.
 - App-Symbol und TV-Banner neu (Orbit-Logo auf #07152B, Schriftzug als dünne Linien).
-- Nächste Schritte Design: Senderliste, Einstellungen, Schnellmenü, Filme/Serien im gleichen Stil angleichen.
+- Schrift einheitlich wie Seitenmenü: Gruppen und Sender 15 sp normal (Fokus halbfett), Nummern/Bereiche 13 sp gedämpft; laufender Sender leicht blau hinterlegt statt Rahmen.
+- Einstellungen: linke Leiste scrollt (auf Aziz' TV waren „Über“/„Erweitert“ abgeschnitten), Stil wie Seitenmenü mit Logo. Farbschema + Schriftfarbe jetzt unter Bedienung → „Aussehen“. „Senderliste bearbeiten“ eigener, gut sichtbarer Abschnitt oben unter Senderliste.
+- Nächste Schritte Design: Schnellmenü, Filme/Serien, Abschnitts-Kästen der Einstellungen im gleichen Stil angleichen.
 
 ## Für einen neuen Chat
 - Code: https://github.com/Postmen1971/Aze-iptv-Player- (main). Jeder Push baut per GitHub Actions v1.0.<Lauf> inkl. Tests (app/src/test/LogicTest.kt) und veröffentlicht 5 APKs (armeabi-v7a, arm64-v8a, x86, x86_64, universal).

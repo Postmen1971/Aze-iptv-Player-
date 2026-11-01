@@ -114,20 +114,29 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
 
     // Kompakt: links die Bereiche, rechts nur der gewählte Bereich.
     Row(modifier = Modifier.fillMaxSize().background(Palette.ScreenBrush)) {
+        // Linke Leiste scrollt mit (auf manchen Fernsehern passten nicht alle Bereiche auf den Bildschirm)
         Column(
             modifier = Modifier
-                .width(210.dp)
+                .width(220.dp)
                 .fillMaxHeight()
-                .background(Palette.PanelBrush)
-                .padding(horizontal = 8.dp, vertical = 14.dp),
+                .background(Palette.Ground.copy(alpha = 0.96f))
+                .verticalScroll(rememberScrollState())
+                .padding(start = 14.dp, end = 12.dp, top = 22.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text("Einstellungen", color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.padding(start = 10.dp, bottom = 16.dp),
+            ) {
+                AzeLogo(24.dp)
+                Text("Einstellungen", color = Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+            }
             CategoryItem("← Fernsehen", selected = false, modifier = Modifier.focusRequester(firstFocus), onFocus = {}, onClick = onClose)
             cats.forEachIndexed { i, name ->
                 CategoryItem(name, selected = i == cat, onFocus = { cat = i }, onClick = { cat = i })
             }
-            Spacer(Modifier.weight(1f))
+            Spacer(Modifier.height(14.dp))
             CategoryItem(
                 if (app.expertMode) "Erweitert: an" else "Erweitert: aus",
                 selected = app.expertMode, onFocus = {},
@@ -153,11 +162,15 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 }
                 "YouTube Live" -> YouTubeSection(app)
                 "Senderliste" -> {
+                    ListEditSection(onEditList = { editingList = true })
                     RefreshSection(app)
                     PlaybackSection(app, onEditList = { editingList = true }, part = 1)
                     FavoritesSection(app)
                 }
-                "Bedienung" -> ControlsSection(app)
+                "Bedienung" -> {
+                    ControlsSection(app)
+                    AppearanceSection(app)
+                }
                 "Wiedergabe" -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
                 "Programm (EPG)" -> EpgSection(app)
                 "Netzwerk" -> NetworkSection(app)
@@ -211,16 +224,21 @@ private fun CategoryItem(
     onClick: () -> Unit,
 ) {
     Focusable(modifier = modifier.fillMaxWidth(), onClick = onClick, onFocus = onFocus) { focused ->
+        // Gleicher Stil wie das Seitenmenü: ruhige Schrift, Fokus = helle Pille, gewählter Bereich leicht im Akzentton
         Text(
             label,
-            color = if (focused) Palette.OnAccent else if (selected) Palette.Accent else Palette.Text,
-            fontSize = 14.sp,
-            fontWeight = if (focused || selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (focused) Palette.OnAccent else if (selected) Palette.Text else Palette.TextSoft,
+            fontSize = 15.sp,
+            fontWeight = if (focused || selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             modifier = Modifier
                 .fillMaxWidth()
-                .background(if (focused) Palette.Accent else Palette.PanelDark.copy(alpha = 0f), RoundedCornerShape(7.dp))
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .background(
+                    if (focused) Palette.Accent else if (selected) Palette.Highlight.copy(alpha = 0.16f) else Palette.PanelDark.copy(alpha = 0f),
+                    RoundedCornerShape(12.dp),
+                )
+                .padding(horizontal = 12.dp, vertical = 9.dp),
         )
     }
 }
@@ -714,9 +732,11 @@ private fun YouTubeSection(app: AppController) {
     }
 }
 
+/** Aussehen (unter „Bedienung“): Farbschema und Schriftfarbe. */
 @Composable
-private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: Int = 0) {
-    if (part != 2) Section("Farbschema") {
+private fun AppearanceSection(app: AppController) {
+    Section("Aussehen") {
+        Text("Farbschema", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Schemes.forEachIndexed { i, sc ->
                 TvButton(sc.name, selected = app.schemeIndex == i, onClick = { app.updateScheme(i) })
@@ -728,8 +748,23 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
                 TvButton(name, selected = app.textColorIndex == i, onClick = { app.updateTextColor(i) })
             }
         }
-        TvButton("Senderliste bearbeiten (Gruppen und Sender sortieren, ausblenden)", onClick = onEditList)
     }
+}
+
+/** Senderliste bearbeiten – gut sichtbar ganz oben unter „Senderliste“. */
+@Composable
+private fun ListEditSection(onEditList: () -> Unit) {
+    Section("Senderliste bearbeiten") {
+        Text(
+            "Gruppen und Sender sortieren, umbenennen, ein- und ausblenden – direkt hier am Fernseher.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        TvButton("Senderliste bearbeiten öffnen", selected = true, onClick = onEditList)
+    }
+}
+
+@Composable
+private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: Int = 0) {
     if (part != 2) WebEditSection(app)
     if (part != 2) Section("Filme: IMDb-Bewertung") {
         Text(
