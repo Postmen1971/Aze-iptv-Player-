@@ -822,6 +822,7 @@ fun PlayerScreen(
                     setShutterBackgroundColor(android.graphics.Color.BLACK)
                     setKeepContentOnPlayerReset(false)
                     isFocusable = false
+                    descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 }
             },
             update = { view ->

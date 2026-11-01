@@ -229,6 +229,7 @@
 - Neu `ui/MultiView.kt`: Schnellmenü (OK lang) → „Multi-View“. Anordnungen: Nebeneinander (2), Bild im Bild (2, kleines Bild als TextureView), 4 Bilder. Je Bild eigener ExoPlayer, Ton nur im gewählten Bild (blauer Rahmen).
 - Bedienung: ◀ ▶ Bild wählen, ▲ ▼/CH± umschalten im Bild, Ziffern Direktwahl, OK = Senderauswahl (Gruppen → Sender), OK lang/Menü = Anordnung wechseln, Zurück = Ende, Sender des gewählten Bildes läuft im Vollbild weiter. Normaler Player gestoppt, solange Multi-View offen. YouTube geht im Multi-View nicht.
 - Anbieter muss mehrere gleichzeitige Verbindungen erlauben (sonst Hinweis „Anbieter lehnt ab (403) …“ im Bild).
+- Aziz (1.0.111): ein Bild blieb stehen; Senderauswahl wirkte eingefroren (kein Eintrag markiert = Fokus nicht in der Liste). Behoben: Fokus wird bis zu 30× nachgefordert und bei Tasten am Rand zurückgeholt; PlayerViews blockieren Fokus (FOCUS_BLOCK_DESCENDANTS, auch im normalen Player); Wächter je Bild (6 s Standbild / 8 s ohne Daten → stop+prepare, danach 10 s Pause).
 - Emulator-Test 8 (`aze_test_multiview`): zwei Bilder bekommen Bild, Anordnung wechseln, Zurück – kein Absturz. Log-Kennungen MV_FIRST_FRAME/MV_ERROR.
 
 ## Für einen neuen Chat

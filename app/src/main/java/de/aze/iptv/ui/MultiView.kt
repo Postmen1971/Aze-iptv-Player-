@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
@@ -102,6 +103,7 @@ fun MultiViewScreen(
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
     var okLong by remember { mutableStateOf(false) }
+    var pickerFocusTick by remember { mutableIntStateOf(0) }
     val focus = remember { FocusRequester() }
 
     fun show(msg: String) {
@@ -148,7 +150,8 @@ fun MultiViewScreen(
             .background(Color.Black)
             .focusRequester(focus)
             .onKeyEvent { e ->
-                if (picker) return@onKeyEvent false
+                // Liste offen, Taste kommt trotzdem hier an: Liste hat den Fokus verloren – zurückholen
+                if (picker) { pickerFocusTick++; return@onKeyEvent true }
                 val code = e.nativeKeyEvent.keyCode
                 val isOk = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
                     code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
@@ -224,6 +227,7 @@ fun MultiViewScreen(
         if (picker) {
             MvPicker(
                 app = app,
+                focusTick = pickerFocusTick,
                 title = "Sender für Bild ${active + 1}",
                 onPick = { nc -> slots[active] = nc; picker = false },
                 onClose = { picker = false },
@@ -317,6 +321,35 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
         }
     }
 
+    // Wächter je Bild (wie beim normalen Fernsehen): Bild steht 6 s oder 8 s keine neuen Daten → neu verbinden
+    val frames = remember { java.util.concurrent.atomic.AtomicLong(0) }
+    DisposableEffect(player) {
+        player.setVideoFrameMetadataListener { _, _, _, _ -> frames.incrementAndGet() }
+        onDispose { }
+    }
+    LaunchedEffect(player) {
+        var lastF = -1L; var lastBuf = -1L; var frozen = 0; var starved = 0; var started = false; var pause = 0
+        while (true) {
+            delay(1_000)
+            val f = frames.get()
+            val buf = player.bufferedPosition
+            if (f > 0) started = true
+            val ready = player.playbackState == Player.STATE_READY && player.videoFormat != null
+            val buffering = player.playbackState == Player.STATE_BUFFERING
+            frozen = if (started && ready && f == lastF) frozen + 1 else 0
+            starved = if (started && buffering && buf == lastBuf) starved + 1 else 0
+            lastF = f; lastBuf = buf
+            if (pause > 0) { pause--; continue }
+            if (frozen >= 6 || starved >= 8) {
+                qaLog("MV_WATCHDOG $index ${if (frozen >= 6) "frozen" else "starved"}")
+                status = "Bild hing – wird neu verbunden …"
+                frozen = 0; starved = 0; pause = 10
+                player.stop()
+                player.prepare()
+            }
+        }
+    }
+
     LaunchedEffect(player) {
         val url = try {
             app.resolveStreamUrl(channel.channel.url)
@@ -345,6 +378,8 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
                     useController = false
                     setShutterBackgroundColor(android.graphics.Color.BLACK)
                     isFocusable = false
+                    // Bildfläche nimmt nie den Fokus (sonst gehen Tasten der Fernbedienung ins Leere)
+                    descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             },
@@ -359,18 +394,25 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
 
 /** Senderauswahl für ein Bild: links Gruppen, OK öffnet die Sender der Gruppe; Zurück = Gruppen bzw. schließen. */
 @Composable
-private fun MvPicker(app: AppController, title: String, onPick: (NumberedChannel) -> Unit, onClose: () -> Unit) {
+private fun MvPicker(app: AppController, focusTick: Int, title: String, onPick: (NumberedChannel) -> Unit, onClose: () -> Unit) {
     val groups = app.lineup.groups.filter { it.channels.isNotEmpty() }
     var group by remember { mutableStateOf<Int?>(null) }
     BackHandler { if (group != null) group = null else onClose() }
     val first = remember(group) { FocusRequester() }
-    LaunchedEffect(group) {
-        withFrameNanos { }
-        runCatching { first.requestFocus() }
+    var hasFocus by remember { mutableStateOf(false) }
+    // Fokus sicher in die Liste holen (sonst landen die Tasten nirgends und die Liste wirkt eingefroren)
+    LaunchedEffect(group, focusTick) {
+        repeat(30) {
+            withFrameNanos { }
+            runCatching { first.requestFocus() }
+            withFrameNanos { }
+            if (hasFocus) return@LaunchedEffect
+        }
     }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))) {
         Column(
             Modifier
+                .onFocusChanged { hasFocus = it.hasFocus }
                 .fillMaxHeight()
                 .width(340.dp)
                 .background(Palette.Ground.copy(alpha = 0.96f))

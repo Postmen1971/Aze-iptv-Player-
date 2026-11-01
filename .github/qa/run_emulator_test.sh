@@ -116,7 +116,20 @@ adb logcat -c
 adb shell am start -W -n $PKG/.MainActivity --ez aze_test_multiview true
 wait_for "MV_FIRST_FRAME 0" 1 90
 wait_for "MV_FIRST_FRAME 1" 1 60
+# Bild 2 wählen und über die Senderauswahl (OK → Gruppe → Sender) einen anderen Sender setzen
 adb shell input keyevent KEYCODE_DPAD_RIGHT
+sleep 1
+n=$(count "MV_FIRST_FRAME 1")
+adb shell input keyevent KEYCODE_DPAD_CENTER
+sleep 2
+adb shell input keyevent KEYCODE_DPAD_CENTER
+sleep 2
+adb shell input keyevent KEYCODE_DPAD_DOWN
+adb shell input keyevent KEYCODE_DPAD_DOWN
+sleep 1
+adb shell input keyevent KEYCODE_DPAD_CENTER
+wait_for "MV_FIRST_FRAME 1" $((n+1)) 40 || log "Senderauswahl im Multi-View hat nicht reagiert (Fokus?)"
+shot "test8-nach-auswahl"
 adb shell input keyevent KEYCODE_MENU
 sleep 10
 alive || fail "App nach Multi-View nicht mehr da"
