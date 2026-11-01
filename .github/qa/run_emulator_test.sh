@@ -22,10 +22,12 @@ note() { local t="$1"; shift; local m; m=$(printf '%s' "$*" | tail -c 30000 | se
 
 # wartet, bis $1 mindestens $2-mal im Protokoll steht (max. $3 s)
 wait_for() {
-  local pat="$1" n="$2" t="$3" i=0
+  local pat="$1" n="$2" t="$3" i=0 dead=0
   while [ $i -lt "$t" ]; do
     [ "$(count "$pat")" -ge "$n" ] && { log "ok: '$pat' ($n×) nach ${i}s"; return 0; }
-    alive || { fail "App läuft nicht mehr (Absturz?) beim Warten auf '$pat'"; return 1; }
+    # erst nach 3 Sekunden ohne laufende App als Absturz werten (direkt nach dem Start ist sie evtl. noch nicht da)
+    if alive; then dead=0; else dead=$((dead+1)); fi
+    [ "$dead" -ge 3 ] && { fail "App läuft nicht mehr (Absturz?) beim Warten auf '$pat'"; return 1; }
     sleep 1; i=$((i+1))
   done
   fail "'$pat' kam nicht ${n}× innerhalb ${t}s"
@@ -39,7 +41,7 @@ channel() {  # Sender per Zifferntaste wählen
 log "Installiere $APK"
 adb install -r "$APK" || { echo "::error::Installation fehlgeschlagen"; exit 1; }
 adb logcat -c
-adb shell am start -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/list.m3u"
+adb shell am start -W -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/list.m3u"
 
 log "== Test 1: normaler Sender startet und läuft ruhig"
 wait_for "FIRST_FRAME Test 1" 1 120 && shot "test1-bild"
@@ -82,7 +84,7 @@ adb shell am force-stop $PKG
 sleep 2
 w=$(count "WATCHDOG")
 n=$(count "FIRST_FRAME Test 1")
-adb shell am start -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/list.m3u" --ei aze_test_audio_delay 2000 --es aze_test_channel_delay_url "http://10.0.2.2:8090/ok.ts" --ei aze_test_channel_delay 1000
+adb shell am start -W -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/list.m3u" --ei aze_test_audio_delay 2000 --es aze_test_channel_delay_url "http://10.0.2.2:8090/ok.ts" --ei aze_test_channel_delay 1000
 wait_for "FIRST_FRAME Test 1" $((n+1)) 90
 sleep 40
 w2=$(count "WATCHDOG")
@@ -93,14 +95,14 @@ moving=$(ticks | tail -10 | grep -cE 'img=([5-9]|[1-9][0-9])' || true)
 note "Zustand Test 6" "$(ticks | tail -25)"
 shot "test6-lippensynchron"
 adb shell am force-stop $PKG
-adb shell am start -n $PKG/.MainActivity --ei aze_test_audio_delay 0 --es aze_test_channel_delay_url "http://10.0.2.2:8090/ok.ts" --ei aze_test_channel_delay 0
+adb shell am start -W -n $PKG/.MainActivity --ei aze_test_audio_delay 0 --es aze_test_channel_delay_url "http://10.0.2.2:8090/ok.ts" --ei aze_test_channel_delay 0
 sleep 5
 
 log "== Test 7: Zwischenspeicher leeren, während ein Sender läuft"
 adb shell am force-stop $PKG
 sleep 2
 n=$(count "FIRST_FRAME")
-adb shell am start -n $PKG/.MainActivity --ez aze_test_clear_cache true
+adb shell am start -W -n $PKG/.MainActivity --ez aze_test_clear_cache true
 wait_for "CACHE_CLEARED" 1 60
 sleep 15
 alive || fail "App nach dem Leeren des Zwischenspeichers nicht mehr da"
