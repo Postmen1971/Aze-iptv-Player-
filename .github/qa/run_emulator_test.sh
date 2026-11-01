@@ -128,7 +128,8 @@ adb shell input keyevent KEYCODE_DPAD_DOWN
 adb shell input keyevent KEYCODE_DPAD_DOWN
 sleep 1
 adb shell input keyevent KEYCODE_DPAD_CENTER
-wait_for "MV_FIRST_FRAME 1" $((n+1)) 40 || log "Senderauswahl im Multi-View hat nicht reagiert (Fokus?)"
+# ▼▼ in der Senderliste: dritter Sender der Gruppe („Test 3“) muss gewählt werden – prüft, dass die Pfeiltasten in der Liste wirken
+wait_for "MV_FIRST_FRAME 1 Test 3" 1 40 || fail "Multi-View-Senderauswahl: Pfeiltasten wirken nicht (falscher Sender gewählt)"
 shot "test8-nach-auswahl"
 adb shell input keyevent KEYCODE_MENU
 sleep 10

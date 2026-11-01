@@ -104,6 +104,7 @@ fun MultiViewScreen(
     var toast by remember { mutableStateOf<String?>(null) }
     var okLong by remember { mutableStateOf(false) }
     var pickerFocusTick by remember { mutableIntStateOf(0) }
+    var pickerHasFocus by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
 
     fun show(msg: String) {
@@ -150,8 +151,9 @@ fun MultiViewScreen(
             .background(Color.Black)
             .focusRequester(focus)
             .onKeyEvent { e ->
-                // Liste offen, Taste kommt trotzdem hier an: Liste hat den Fokus verloren – zurückholen
-                if (picker) { pickerFocusTick++; return@onKeyEvent true }
+                // Liste offen: Tasten gehören der Liste (▲ ▼ bewegen dort den Fokus – NICHT abfangen).
+                // Nur wenn die Liste gar keinen Fokus hat, ihn zurückholen.
+                if (picker) { if (!pickerHasFocus) pickerFocusTick++; return@onKeyEvent false }
                 val code = e.nativeKeyEvent.keyCode
                 val isOk = code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER ||
                     code == AndroidKeyEvent.KEYCODE_NUMPAD_ENTER
@@ -228,6 +230,7 @@ fun MultiViewScreen(
             MvPicker(
                 app = app,
                 focusTick = pickerFocusTick,
+                onFocus = { pickerHasFocus = it },
                 title = "Sender für Bild ${active + 1}",
                 onPick = { nc -> slots[active] = nc; picker = false },
                 onClose = { picker = false },
@@ -394,7 +397,14 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
 
 /** Senderauswahl für ein Bild: links Gruppen, OK öffnet die Sender der Gruppe; Zurück = Gruppen bzw. schließen. */
 @Composable
-private fun MvPicker(app: AppController, focusTick: Int, title: String, onPick: (NumberedChannel) -> Unit, onClose: () -> Unit) {
+private fun MvPicker(
+    app: AppController,
+    focusTick: Int,
+    title: String,
+    onPick: (NumberedChannel) -> Unit,
+    onClose: () -> Unit,
+    onFocus: (Boolean) -> Unit = {},
+) {
     val groups = app.lineup.groups.filter { it.channels.isNotEmpty() }
     var group by remember { mutableStateOf<Int?>(null) }
     BackHandler { if (group != null) group = null else onClose() }
@@ -412,7 +422,7 @@ private fun MvPicker(app: AppController, focusTick: Int, title: String, onPick: 
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))) {
         Column(
             Modifier
-                .onFocusChanged { hasFocus = it.hasFocus }
+                .onFocusChanged { hasFocus = it.hasFocus; onFocus(it.hasFocus) }
                 .fillMaxHeight()
                 .width(340.dp)
                 .background(Palette.Ground.copy(alpha = 0.96f))
