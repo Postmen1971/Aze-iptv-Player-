@@ -93,6 +93,9 @@ fun FootballGuide(
             // Erste Quelle für Sender: liveonsat.com (wie das Enigma2-Plugin FootOnSat)
             val los = runCatching { de.aze.iptv.data.LiveOnSat.today() }.getOrDefault(emptyList())
             val names = Football.nameIndex(lineup)
+            // Gemeinschaftsliste (von anderen Geräten gelernt) – höchstens alle 12 h aus dem Internet
+            app.refreshCommunity()
+            val community = app.community
             val learned = app.losLearned
             val byKey = if (learned.isEmpty()) emptyMap() else lineup.all.associateBy { it.channel.key }
             val dayStart = Calendar.getInstance().apply {
@@ -112,7 +115,8 @@ fun FootballGuide(
                     val fromPlan = listed[m.id].orEmpty().flatMap { b ->
                         // selbst bestätigte Zuordnung hat Vorrang vor der automatischen Erkennung
                         val own = learned[b.channel.lowercase()]?.let { byKey[it] }
-                        (if (own != null) listOf(own) else Football.matchByName(b.channel, names))
+                        val shared = community[b.channel.lowercase()].orEmpty().flatMap { Football.byOwnName(it, names) }.distinct()
+                        (if (own != null) listOf(own) else if (shared.isNotEmpty()) shared else Football.matchByName(b.channel, names))
                             .map { MatchChannel(it, null, true, b.channel) }
                     }
                     m.id to (fromPlan + fromEpg).distinctBy { it.channel.channel.key }
@@ -148,6 +152,12 @@ fun FootballGuide(
             match = z,
             listed = data?.listed?.get(z.id).orEmpty().map { it.channel },
             findSimilar = { name -> data?.names?.let { Football.matchByNameLoose(name, it) }.orEmpty() },
+            // was andere Geräte zu diesem liveonsat-Sender gelernt haben
+            findShared = { name ->
+                val idx = data?.names
+                if (idx == null) emptyList()
+                else app.community[name.lowercase()].orEmpty().flatMap { Football.byOwnName(it, idx) }.distinctBy { it.channel.key }
+            },
             onBack = { zap = null },
             onFull = { list ->
                 onWatch?.invoke("${z.home} – ${z.away}", list)
@@ -488,6 +498,7 @@ private fun ListingZap(
     match: TodayMatch,
     listed: List<String>,
     findSimilar: (String) -> List<de.aze.iptv.data.NumberedChannel>,
+    findShared: (String) -> List<de.aze.iptv.data.NumberedChannel>,
     onBack: () -> Unit,
     onFull: (List<de.aze.iptv.data.NumberedChannel>) -> Unit,
 ) {
@@ -503,10 +514,14 @@ private fun ListingZap(
     }
     val name = listed.getOrNull(sel)
     val learnedKey = name?.let { app.losLearned[it.lowercase()] }
+    // ✓ = von anderen Geräten bestätigt (Gemeinschaftsliste)
+    val shared = remember(name) { if (name == null) emptyList() else findShared(name) }
+    val sharedKeys = remember(shared) { shared.map { it.channel.key }.toSet() }
     val candidates = remember(name, learnedKey) {
         if (name == null) emptyList() else {
             val own = learnedKey?.let { k -> app.lineup.all.firstOrNull { it.channel.key == k } }
-            (listOfNotNull(own) + findSimilar(name)).distinctBy { it.channel.key }
+            // Reihenfolge: selbst gemerkt ★, von anderen bestätigt ✓, dann ähnliche Namen
+            (listOfNotNull(own) + shared + findSimilar(name)).distinctBy { it.channel.key }
         }
     }
     Box(Modifier.fillMaxSize()) {
@@ -544,7 +559,7 @@ private fun ListingZap(
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Text("In deiner Liste", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("▲▼ ausprobieren · OK auf laufendem Sender = Vollbild & merken", color = Palette.TextMuted, fontSize = 11.sp)
+                Text("▲▼ ausprobieren · OK auf laufendem Sender = Vollbild & merken · ★ gemerkt · ✓ von anderen bestätigt", color = Palette.TextMuted, fontSize = 11.sp)
                 if (candidates.isEmpty()) {
                     Text("Nichts Ähnliches gefunden.", color = Palette.TextMuted, fontSize = 13.sp)
                 }
@@ -556,7 +571,7 @@ private fun ListingZap(
                             onClick = {
                                 job?.cancel()
                                 if (playing) {
-                                    if (name != null) app.learnLos(name, nc.channel.key)
+                                    if (name != null) app.learnLos(name, nc)
                                     onFull(candidates)
                                 } else app.play(nc)
                             },
@@ -576,6 +591,7 @@ private fun ListingZap(
                                 Text("${nc.number}", color = if (focused) fg else Palette.Highlight, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(46.dp))
                                 Text(nc.channel.name, color = fg, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                                 if (nc.channel.key == learnedKey) Text("★", color = if (focused) fg else Palette.Highlight, fontSize = 13.sp)
+                                else if (nc.channel.key in sharedKeys) Text("✓", color = if (focused) fg else Palette.Highlight, fontSize = 13.sp)
                                 if (playing) Text(" ▶", color = if (focused) fg else Palette.Highlight, fontSize = 13.sp)
                             }
                         }

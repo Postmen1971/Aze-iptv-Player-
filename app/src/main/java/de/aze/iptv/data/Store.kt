@@ -259,6 +259,21 @@ class Store(context: Context) {
         prefs.edit().putString("losLearned", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
     }
 
+    /** Dazu der Sendername (zum Teilen – auf anderen Geräten hat der Sender einen anderen Schlüssel) */
+    fun losLearnedNames(): Map<String, String> = jsonMap(Secure.decrypt(prefs.getString("losLearnedNames", "")) ?: "") { o, k -> o.getString(k) }
+
+    fun saveLosLearnedNames(m: Map<String, String>) {
+        prefs.edit().putString("losLearnedNames", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
+    }
+
+    /** Zwischengespeicherte Gemeinschaftsliste (öffentlich, darum unverschlüsselt) und Zeitpunkt des Abrufs */
+    var communityJson: String
+        get() = prefs.getString("communityJson", "") ?: ""
+        set(v) = prefs.edit().putString("communityJson", v).apply()
+    var communityAt: Long
+        get() = prefs.getLong("communityAt", 0L)
+        set(v) = prefs.edit().putLong("communityAt", v).apply()
+
     private fun <T> jsonMap(json: String, get: (JSONObject, String) -> T): Map<String, T> =
         if (json.isBlank()) emptyMap() else runCatching {
             val o = JSONObject(json)

@@ -1114,6 +1114,7 @@ private fun AboutSection(app: AppController) {
         }
     }
     HangLogSection(app)
+    LearnedChannelsSection(app)
     Section("Über") {
         Text(
             "Aze-IPTV-Player ist ein Player und liefert selbst keine Sender oder Inhalte. " +
@@ -1282,3 +1283,45 @@ private fun hangHeader(app: AppController): String =
         "Puffer: ${app.bufferLevel.label} · Player: ${app.playerEngine.label} · Tunneling: ${app.tunneling} · " +
         "Frequenz: ${if (app.afr50) "50 Hz" else if (app.afr) "je Sender" else "nie"} (Wartezeit ${app.afrDelay} s) · " +
         "Ton-Versatz: ${app.audioDelay} ms"
+
+/** Fußball: selbst gemerkte Sender (liveonsat → eigener Sender) teilen, damit alle Geräte davon lernen */
+@Composable
+private fun LearnedChannelsSection(app: AppController) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var link by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    Section("Fußball: gelernte Sender") {
+        Text(
+            "Was du bei „Fußball heute → TV-Plan durchgehen“ mit OK bestätigst, merkt sich die App. " +
+                "„Teilen“ legt deine Zuordnungen als Text ab (nur liveonsat-Sendernamen und deine Sendernamen) und zeigt einen Link – " +
+                "schick ihn Claude. Geprüft kommen sie in die Gemeinschaftsliste, die sich alle Geräte automatisch holen.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Text(
+            "Selbst gemerkt: ${app.losLearned.size} · aus der Gemeinschaftsliste: ${app.community.size}",
+            color = Palette.TextSoft, fontSize = 14.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton(if (busy) "Lädt hoch …" else "Teilen & Link zeigen", onClick = {
+                if (busy || app.losLearned.isEmpty()) {
+                    if (app.losLearned.isEmpty()) app.message = "Noch nichts gemerkt."
+                    return@TvButton
+                }
+                busy = true
+                link = null
+                val text = app.losShareText()
+                scope.launch {
+                    try {
+                        link = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.HangLog.uploadText(text) }
+                    } catch (e: Exception) {
+                        app.message = "Teilen hat nicht geklappt: ${e.message ?: "keine Verbindung"}"
+                    } finally {
+                        busy = false
+                    }
+                }
+            })
+            TvButton("Alle vergessen", onClick = { app.forgetLos(); link = null })
+        }
+        link?.let { Text("Link: $it", color = Palette.Highlight, fontSize = 26.sp, fontWeight = FontWeight.Bold) }
+    }
+}

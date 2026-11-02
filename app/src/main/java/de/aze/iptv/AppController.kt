@@ -157,9 +157,49 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     var losLearned by mutableStateOf(store.losLearned())
         private set
 
-    fun learnLos(listed: String, channelKey: String) {
-        losLearned = losLearned + (listed.lowercase() to channelKey)
+    private var losLearnedNames = store.losLearnedNames()
+
+    fun learnLos(listed: String, nc: de.aze.iptv.data.NumberedChannel) {
+        val k = listed.lowercase()
+        losLearned = losLearned + (k to nc.channel.key)
         store.saveLosLearned(losLearned)
+        // Originalschreibweise von liveonsat als Schlüssel fürs Teilen, Wert = eigener Sendername
+        losLearnedNames = losLearnedNames.filterKeys { it.lowercase() != k } + (listed to nc.channel.name)
+        store.saveLosLearnedNames(losLearnedNames)
+    }
+
+    fun forgetLos() {
+        losLearned = emptyMap()
+        losLearnedNames = emptyMap()
+        store.saveLosLearned(emptyMap())
+        store.saveLosLearnedNames(emptyMap())
+    }
+
+    /** Gelernte Zuordnungen als Text zum Teilen: liveonsat-Sender → eigener Sendername */
+    fun losShareText(): String {
+        val byKey = lineup.all.associateBy { it.channel.key }
+        val names = losLearned.mapNotNull { (listed, key) ->
+            val orig = losLearnedNames.keys.firstOrNull { it.lowercase() == listed } ?: listed
+            val name = losLearnedNames[orig] ?: byKey[key]?.channel?.name ?: return@mapNotNull null
+            orig to name
+        }.toMap()
+        return org.json.JSONObject(mapOf("app" to "Aze-IPTV-Player ${de.aze.iptv.BuildConfig.VERSION_NAME}", "map" to org.json.JSONObject(names as Map<*, *>)) as Map<*, *>).toString(2)
+    }
+
+    /** Gemeinschaftsliste: liveonsat-Sender (klein) → passende Sendernamen anderer Geräte */
+    var community by mutableStateOf(de.aze.iptv.data.Community.parse(store.communityJson))
+        private set
+
+    /** Höchstens alle 12 h neu laden; ohne Internet bleibt die zuletzt geladene Liste. Nur im Hintergrund aufrufen. */
+    fun refreshCommunity() {
+        if (System.currentTimeMillis() - store.communityAt < 12 * 3_600_000L && community.isNotEmpty()) return
+        runCatching {
+            val json = de.aze.iptv.data.Community.fetch()
+            val parsed = de.aze.iptv.data.Community.parse(json)
+            store.communityJson = json
+            store.communityAt = System.currentTimeMillis()
+            community = parsed
+        }
     }
 
     /** Zusätzlicher Versatz je Sender */

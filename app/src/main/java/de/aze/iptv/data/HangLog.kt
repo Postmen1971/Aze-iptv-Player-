@@ -62,8 +62,11 @@ object HangLog {
      * Lädt Kopfzeilen + Protokoll als Text auf paste.rs hoch und gibt den Link zurück.
      * Läuft blockierend – nur aus dem Hintergrund aufrufen.
      */
-    fun upload(header: String): String {
-        val body = (header + "\n\n" + read()).toByteArray(Charsets.UTF_8)
+    fun upload(header: String): String = uploadText(header + "\n\n" + read())
+
+    /** Beliebigen Text auf paste.rs ablegen, Rückgabe = Link. Blockierend – nur im Hintergrund. */
+    fun uploadText(text: String): String {
+        val body = text.toByteArray(Charsets.UTF_8)
         val c = URL("https://paste.rs/").openConnection() as HttpURLConnection
         try {
             c.requestMethod = "POST"

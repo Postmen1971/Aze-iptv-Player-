@@ -108,6 +108,11 @@
 ## Fußball: TV-Plan mit Vorschau (1.0.124)
 - Im Spiel-Fenster „📺 TV-Plan durchgehen – mit Vorschau“: links Sender laut liveonsat, daneben ähnliche eigene Sender (matchByNameLoose). Verweilen 0,7 s / OK = Sender läuft klein oben rechts (normaler Player wird verkleinert, keine 2. Verbindung). OK auf laufendem Sender = Vollbild + MatchZapPanel rechts, Zuordnung wird gemerkt (Store `losLearned`, verschlüsselt; ★). Gemerkte Zuordnung hat bei der automatischen Erkennung Vorrang.
 
+## Gemeinschaftsliste „gelernte Sender“ (1.0.125)
+- Bestätigte Zuordnung speichert jetzt auch den Sendernamen (`losLearnedNames`). Einstellungen → „Fußball: gelernte Sender“ → „Teilen & Link zeigen“ (paste.rs, JSON {liveonsat-Name: eigener Sendername}) / „Alle vergessen“.
+- Aziz schickt den Link → Claude prüft und trägt in `community/liveonsat.json` ein (Format: {"map": {"liveonsat name klein": ["Sendername", …]}}). Die App lädt die Datei (raw.githubusercontent, höchstens alle 12 h, Zwischenspeicher) und findet die Sender per Namen (`Football.byOwnName`).
+- Vorrang: selbst gemerkt ★ > Gemeinschaft ✓ > automatische Erkennung.
+
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
 2. **SkorText-Update direkt im Player:** Beim Öffnen von SkorText prüfen, ob es auf GitHub eine neuere Version gibt, und die Seiten selbst nachladen (ohne neuen Player-Build). Der Update-Knopf in SkorText soll das auch auslösen (im Player derzeit ohne Funktion, `SkorBridge.installApk` ist leer).

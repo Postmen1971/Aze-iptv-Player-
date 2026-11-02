@@ -204,6 +204,19 @@ object Football {
     private fun nameTokens(s: String): List<String> =
         norm(s).split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in nameNoise }.map { tokenAlias[it] ?: it }
 
+    /**
+     * Eigene Sender zu einem Sendernamen aus der Gemeinschaftsliste (Name eines anderen Geräts/Anbieters):
+     * erst genau gleiche Wörter, sonst alle Wörter enthalten.
+     */
+    fun byOwnName(name: String, idx: NameIndex, limit: Int = 3): List<NumberedChannel> {
+        val t = nameTokens(name)
+        if (t.isEmpty()) return emptyList()
+        val exact = " " + t.joinToString(" ") + " "
+        val same = idx.items.filter { it.second == exact }.map { it.first }
+        if (same.isNotEmpty()) return same.take(limit)
+        return idx.items.filter { (_, n) -> t.all { n.contains(" $it ") } }.map { it.first }.take(limit)
+    }
+
     /** Eigene Sender mit vorbereiteten Namen und Land (einmal je Fenster). */
     class NameIndex(val items: List<Pair<NumberedChannel, String>>, val countries: List<String?> = emptyList())
 
