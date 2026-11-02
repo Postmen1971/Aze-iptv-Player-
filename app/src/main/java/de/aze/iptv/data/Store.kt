@@ -252,6 +252,13 @@ class Store(context: Context) {
         prefs.edit().putString("audioDelays", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
     }
 
+    /** Selbst bestätigte Zuordnung: Sender laut liveonsat (klein geschrieben) → eigener Sender (Schlüssel) */
+    fun losLearned(): Map<String, String> = jsonMap(Secure.decrypt(prefs.getString("losLearned", "")) ?: "") { o, k -> o.getString(k) }
+
+    fun saveLosLearned(m: Map<String, String>) {
+        prefs.edit().putString("losLearned", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
+    }
+
     private fun <T> jsonMap(json: String, get: (JSONObject, String) -> T): Map<String, T> =
         if (json.isBlank()) emptyMap() else runCatching {
             val o = JSONObject(json)

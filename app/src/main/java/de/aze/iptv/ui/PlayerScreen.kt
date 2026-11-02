@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -353,6 +354,8 @@ fun PlayerScreen(
     // Fußball-Videotext (SkorText) als Ebene über dem Programm
     var teletext by remember { mutableStateOf(false) }
     var football by remember { mutableStateOf(false) }
+    /** Fußball: TV-Plan mit Vorschau offen → Bild klein oben rechts */
+    var footballPreview by remember { mutableStateOf(false) }
     // 1 = Ton-Bild-Synchron für den Sender, 2 = EPG zuordnen
     var tool by remember { mutableStateOf(0) }
     // „Fußball heute“: Liste der gefundenen Sender rechts, bleibt beim Durchschalten offen
@@ -832,7 +835,9 @@ fun PlayerScreen(
         val portrait = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
             android.content.res.Configuration.ORIENTATION_PORTRAIT
         val aspect = app.aspectMode.let { if (portrait && (it == AspectMode.STRETCH || it == AspectMode.ZOOM)) AspectMode.FIT else it }
-        val videoModifier = if (aspect.ratio != null) {
+        val preview = football && footballPreview
+        val previewModifier = Modifier.align(Alignment.TopEnd).padding(top = 24.dp, end = 24.dp).width(360.dp).aspectRatio(16f / 9f)
+        val videoModifier = if (preview) previewModifier else if (aspect.ratio != null) {
             Modifier.align(Alignment.Center).aspectRatio(aspect.ratio)
         } else {
             Modifier.fillMaxSize()
@@ -843,6 +848,8 @@ fun PlayerScreen(
             else -> AspectRatioFrameLayout.RESIZE_MODE_FILL
         }
         val ytUrl = app.current?.channel?.url?.takeIf { YouTube.isYouTube(it) }
+        // Vorschau: Rest des Bildschirms ruhig dunkel
+        if (preview) Box(Modifier.fillMaxSize().background(Palette.Ground))
         if (multiView) {
             // Multi-View zeigt eigene Bilder – hier kein zweiter Player (YouTube/VLC)
         } else if (ytUrl != null) {
@@ -867,6 +874,7 @@ fun PlayerScreen(
                         handle = vlcHandle,
                         audioDelayMs = syncMs,
                         onFirstFrame = { noPicture = false },
+                        modifier = if (preview) previewModifier else Modifier.fillMaxSize(),
                         onError = {
                             noPicture = true
                             // Portal-Link abgelaufen? Neuen anfordern.
@@ -875,7 +883,6 @@ fun PlayerScreen(
                                 scope.launch { delay(3_000); relinkTick++ }
                             }
                         },
-                        modifier = Modifier.fillMaxSize(),
                     )
                 }
             }
@@ -925,7 +932,7 @@ fun PlayerScreen(
             digits.isNotEmpty() -> { { Text(digits, color = Palette.Highlight, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             notFound != null -> { { Text(notFound ?: "", color = Palette.Live, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             ytError != null && !overlay && !search -> { { Text(ytError ?: "", color = Palette.Live, fontSize = 22.sp, fontWeight = FontWeight.Bold) } }
-            cur != null && !overlay && !search && !teletext && matchZap == null && tool == 0 &&
+            cur != null && !overlay && !search && !teletext && !football && matchZap == null && tool == 0 &&
                 when (app.nameDisplay) { 0 -> noPicture; 1 -> zapInfo || noPicture; else -> false } -> {
                 {
                     Column {
@@ -1013,6 +1020,7 @@ fun PlayerScreen(
             FootballGuide(
                 app = app, onClose = { football = false },
                 onWatch = { title, list -> matchZap = title to list },
+                onPreview = { footballPreview = it },
             )
         }
 

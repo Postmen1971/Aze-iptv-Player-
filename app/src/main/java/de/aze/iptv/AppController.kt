@@ -153,6 +153,15 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     /** Versatz für alle Sender (ms, positiv = Ton später) */
     var audioDelay by mutableStateOf(store.audioDelay)
         private set
+    /** Fußball: selbst bestätigte Zuordnung liveonsat-Sender → eigener Sender (wird beim nächsten Spiel zuerst genommen) */
+    var losLearned by mutableStateOf(store.losLearned())
+        private set
+
+    fun learnLos(listed: String, channelKey: String) {
+        losLearned = losLearned + (listed.lowercase() to channelKey)
+        store.saveLosLearned(losLearned)
+    }
+
     /** Zusätzlicher Versatz je Sender */
     var audioDelays by mutableStateOf(store.audioDelays())
         private set

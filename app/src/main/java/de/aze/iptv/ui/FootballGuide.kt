@@ -71,10 +71,16 @@ fun FootballGuide(
     onClose: () -> Unit,
     /** Nach der Senderwahl: Spiel und alle gefundenen Sender (für die Liste rechts) */
     onWatch: ((String, List<de.aze.iptv.data.NumberedChannel>) -> Unit)? = null,
+    /** TV-Plan mit Vorschau offen: Bild des Players klein oben rechts zeigen */
+    onPreview: (Boolean) -> Unit = {},
 ) {
     val epg = app.epg
     val lineup = app.lineup
     var popup by remember { mutableStateOf<TodayMatch?>(null) }
+    /** Spiel, dessen liveonsat-Senderliste gerade mit Vorschau durchgegangen wird */
+    var zap by remember { mutableStateOf<TodayMatch?>(null) }
+    LaunchedEffect(zap) { onPreview(zap != null) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { onPreview(false) } }
     var reload by remember { mutableIntStateOf(0) }
 
     BackHandler { if (popup != null) popup = null else onClose() }
@@ -87,6 +93,8 @@ fun FootballGuide(
             // Erste Quelle für Sender: liveonsat.com (wie das Enigma2-Plugin FootOnSat)
             val los = runCatching { de.aze.iptv.data.LiveOnSat.today() }.getOrDefault(emptyList())
             val names = Football.nameIndex(lineup)
+            val learned = app.losLearned
+            val byKey = if (learned.isEmpty()) emptyMap() else lineup.all.associateBy { it.channel.key }
             val dayStart = Calendar.getInstance().apply {
                 set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
             }.timeInMillis
@@ -102,7 +110,10 @@ fun FootballGuide(
                 channels = list.associate { m ->
                     val fromEpg = Football.channelsFor(m, idx)
                     val fromPlan = listed[m.id].orEmpty().flatMap { b ->
-                        Football.matchByName(b.channel, names).map { MatchChannel(it, null, true, b.channel) }
+                        // selbst bestätigte Zuordnung hat Vorrang vor der automatischen Erkennung
+                        val own = learned[b.channel.lowercase()]?.let { byKey[it] }
+                        (if (own != null) listOf(own) else Football.matchByName(b.channel, names))
+                            .map { MatchChannel(it, null, true, b.channel) }
                     }
                     m.id to (fromPlan + fromEpg).distinctBy { it.channel.channel.key }
                         .sortedWith(compareBy({ !it.sure }, { it.channel.number }))
@@ -129,6 +140,24 @@ fun FootballGuide(
     }
     val time = remember { SimpleDateFormat("HH:mm", Locale.GERMANY) }
 
+    // TV-Plan mit Vorschau: statt der Spielübersicht (die Übersicht kommt mit Zurück wieder)
+    val z = zap
+    if (z != null) {
+        ListingZap(
+            app = app,
+            match = z,
+            listed = data?.listed?.get(z.id).orEmpty().map { it.channel },
+            findSimilar = { name -> data?.names?.let { Football.matchByNameLoose(name, it) }.orEmpty() },
+            onBack = { zap = null },
+            onFull = { list ->
+                onWatch?.invoke("${z.home} – ${z.away}", list)
+                zap = null
+                popup = null
+                onClose()
+            },
+        )
+        return
+    }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))) {
         Column(
             Modifier
@@ -218,6 +247,7 @@ fun FootballGuide(
                 similar = data?.similar?.get(p.id).orEmpty(),
                 current = app.current?.channel?.key,
                 findSimilar = { name -> data?.names?.let { Football.matchByNameLoose(name, it) }.orEmpty() },
+                onZap = { zap = p },
                 onPlay = { nc ->
                     app.play(nc)
                     onWatch?.invoke("${p.home} – ${p.away}", data?.channels?.get(p.id).orEmpty().map { it.channel })
@@ -238,6 +268,7 @@ private fun MatchPopup(
     similar: List<String>,
     current: String?,
     findSimilar: (String) -> List<de.aze.iptv.data.NumberedChannel>,
+    onZap: () -> Unit,
     onPlay: (de.aze.iptv.data.NumberedChannel) -> Unit,
     onClose: () -> Unit,
 ) {
@@ -307,6 +338,14 @@ private fun MatchPopup(
                 TvButton("Schließen", modifier = Modifier.focusRequester(first), onClick = onClose)
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // liveonsat-Liste selbst durchgehen: Sender mit Vorschau ausprobieren (▲ von oben erreichbar)
+                    if (listed.isNotEmpty()) item {
+                        TvButton(
+                            "📺 TV-Plan durchgehen – mit Vorschau",
+                            modifier = Modifier.fillMaxWidth().then(if (channels.isEmpty()) Modifier.focusRequester(first) else Modifier),
+                            onClick = onZap,
+                        )
+                    }
                     if (channels.isEmpty()) item {
                         Text("Keiner dieser Sender wurde in deiner Senderliste sicher erkannt:", color = Palette.TextSoft, fontSize = 14.sp)
                     }
@@ -350,7 +389,7 @@ private fun MatchPopup(
                         }
                         itemsIndexed(others.take(40)) { i, b ->
                             Focusable(
-                                modifier = Modifier.fillMaxWidth().then(if (channels.isEmpty() && i == 0) Modifier.focusRequester(first) else Modifier),
+                                modifier = Modifier.fillMaxWidth(),
                                 onClick = { pick = b.channel },
                             ) { focused ->
                                 Text(
@@ -432,6 +471,123 @@ fun MatchZapPanel(
                         if (playing) Text("▶", color = if (focused) Palette.OnAccent else Palette.Highlight, fontSize = 13.sp)
                     }
                 }
+            }
+        }
+    }
+}
+
+
+/**
+ * liveonsat-Senderliste eines Spiels selbst durchgehen: links die Sender laut liveonsat, daneben die ähnlichen Sender
+ * aus der eigenen Liste. Ein eigener Sender läuft nach kurzem Verweilen (oder OK) als kleines Bild oben rechts.
+ * OK auf dem laufenden Sender = Vollbild, und die Zuordnung wird gemerkt (beim nächsten Spiel automatisch richtig).
+ */
+@Composable
+private fun ListingZap(
+    app: AppController,
+    match: TodayMatch,
+    listed: List<String>,
+    findSimilar: (String) -> List<de.aze.iptv.data.NumberedChannel>,
+    onBack: () -> Unit,
+    onFull: (List<de.aze.iptv.data.NumberedChannel>) -> Unit,
+) {
+    BackHandler(onBack = onBack)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var sel by remember { mutableIntStateOf(0) }
+    var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val leftFirst = remember { FocusRequester() }
+    val rightFirst = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { leftFirst.requestFocus() }
+    }
+    val name = listed.getOrNull(sel)
+    val learnedKey = name?.let { app.losLearned[it.lowercase()] }
+    val candidates = remember(name, learnedKey) {
+        if (name == null) emptyList() else {
+            val own = learnedKey?.let { k -> app.lineup.all.firstOrNull { it.channel.key == k } }
+            (listOfNotNull(own) + findSimilar(name)).distinctBy { it.channel.key }
+        }
+    }
+    Box(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxHeight().padding(start = 24.dp, top = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Links: Sender laut liveonsat
+            Column(
+                Modifier.fillMaxHeight().width(260.dp).background(Palette.Panel, RoundedCornerShape(12.dp)).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Text("${match.home} – ${match.away}", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("Sender laut liveonsat", color = Palette.TextMuted, fontSize = 12.sp)
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    itemsIndexed(listed) { i, l ->
+                        Focusable(
+                            modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(leftFirst) else Modifier),
+                            onClick = { runCatching { rightFirst.requestFocus() } },
+                            onFocus = { sel = i },
+                        ) { focused ->
+                            val known = app.losLearned.containsKey(l.lowercase())
+                            Text(
+                                (if (known) "★ " else "") + l,
+                                color = if (focused) Palette.OnAccent else if (i == sel) Palette.Highlight else Palette.TextSoft,
+                                fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth()
+                                    .background(if (focused) Palette.Accent else if (i == sel) Palette.Raised else Palette.PanelDark, RoundedCornerShape(7.dp))
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            // Daneben: passende Sender aus der eigenen Liste
+            Column(
+                Modifier.fillMaxHeight().width(280.dp).background(Palette.Panel, RoundedCornerShape(12.dp)).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Text("In deiner Liste", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("▲▼ ausprobieren · OK auf laufendem Sender = Vollbild & merken", color = Palette.TextMuted, fontSize = 11.sp)
+                if (candidates.isEmpty()) {
+                    Text("Nichts Ähnliches gefunden.", color = Palette.TextMuted, fontSize = 13.sp)
+                }
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    itemsIndexed(candidates, key = { _, nc -> nc.channel.key }) { i, nc ->
+                        val playing = app.current?.channel?.key == nc.channel.key
+                        Focusable(
+                            modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(rightFirst) else Modifier),
+                            onClick = {
+                                job?.cancel()
+                                if (playing) {
+                                    if (name != null) app.learnLos(name, nc.channel.key)
+                                    onFull(candidates)
+                                } else app.play(nc)
+                            },
+                            onFocus = {
+                                // kurz verweilen, dann in der Vorschau zeigen (schnelles Durchblättern lädt nicht jeden Sender)
+                                job?.cancel()
+                                if (!playing) job = scope.launch { kotlinx.coroutines.delay(700); app.play(nc) }
+                            },
+                        ) { focused ->
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .background(if (focused) Palette.Accent else if (playing) Palette.Raised else Palette.PanelDark, RoundedCornerShape(7.dp))
+                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                val fg = if (focused) Palette.OnAccent else Palette.Text
+                                Text("${nc.number}", color = if (focused) fg else Palette.Highlight, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(46.dp))
+                                Text(nc.channel.name, color = fg, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                if (nc.channel.key == learnedKey) Text("★", color = if (focused) fg else Palette.Highlight, fontSize = 13.sp)
+                                if (playing) Text(" ▶", color = if (focused) fg else Palette.Highlight, fontSize = 13.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Unter dem kleinen Bild oben rechts: was gerade läuft
+        app.current?.let { cur ->
+            Column(Modifier.align(Alignment.TopEnd).padding(top = 236.dp, end = 24.dp).width(360.dp)) {
+                Text("${cur.number}  ${cur.channel.name}", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                app.epg.now(cur.channel)?.let { Text(it.title, color = Palette.EpgText, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
         }
     }
