@@ -318,9 +318,12 @@ fun PlayerScreen(
             lastFrames = f
             lastPos = pos
             lastBuffered = buffered
-            if ((jump >= 2 || frozen >= 6 || starved >= 8) && now >= nextAllowed) {
+            // Läuft schon (erstes Bild war da) und puffert 5 s ohne neue Daten → neu. Beim Start weiterhin 8 s Geduld.
+            val starvedLimit = if (firstFrameSeen) 5 else 8
+            if ((jump >= 2 || frozen >= 6 || starved >= starvedLimit) && now >= nextAllowed) {
                 qaLog("WATCHDOG ${if (jump >= 2) "jump" else if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name} | $snap")
-                val light = starved < 8
+                // Leicht neu verbinden (gleiche Adresse, letztes Bild bleibt). Nur Portal-Links (laufen ab) holen eine neue Adresse.
+                val light = starved < starvedLimit || (key != null && !StalkerClient.isStalker(key))
                 frozen = 0
                 starved = 0
                 jump = 0

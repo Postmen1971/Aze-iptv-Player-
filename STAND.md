@@ -92,7 +92,7 @@
 ## Flüssigkeits-Paket (nach unabhängiger Prüfung, 1.0.121)
 - Ursache der restlichen Hänger: Endet ein .ts-Stream beim Anbieter (oder bricht die Leitung ab), merkte Media3 das erst nach dem ganzen Vorrat (bis ~27 s), dann Schwarzbild + Decoder-Neustart + neu puffern.
 - Neu `player/LiveSource.kt`: Bei Verbindungsende wird SOFORT eine neue Verbindung als nächstes Stück angehängt (addMediaSource) → nahtloser Übergang ohne Neustart. Leitungsabbruch nach Daten zählt als Ende (EndOnDropDataSource). Schnelle Wiederholung 0,4 s (403/429 beim Zappen), 401/404/410 sofort Fehler.
-- Wächter: Zeitsprung schon nach 2 s; Zeitsprung/Standbild nur noch „leicht“ neu synchronisieren (ohne Senderwechsel-Ablauf, letztes Bild bleibt stehen). Keine Verbindung → wie bisher kompletter Neustart.
+- Wächter: Zeitsprung schon nach 2 s; „keine Daten“ bei laufendem Sender nach 5 s (Start 8 s), auch leicht neu (außer Portal-Links); Zeitsprung/Standbild nur noch „leicht“ neu synchronisieren (ohne Senderwechsel-Ablauf, letztes Bild bleibt stehen). Keine Verbindung → wie bisher kompletter Neustart.
 - HLS live: Geschwindigkeit fest 1,0 (kein Ruckeln durch 0,97–1,03×).
 - Player wird nicht mehr bei jedem Senderwechsel neu gebaut (Lippensynchron-Vorrat nach größtem Versatz).
 - Bildfläche nur bei echtem Frequenzwechsel neu (DisplayWatch.surfaceTick statt jede Bildschirm-Meldung).

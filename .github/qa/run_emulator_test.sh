@@ -100,7 +100,8 @@ sleep 2
 tb=$(ticks | wc -l)  # Lücken erst ab laufendem Bild zählen (nicht die Umschaltzeit)
 # Server trennt nach 15 s: neue Verbindung muss SOFORT angehängt werden und nahtlos übernehmen
 wait_for "REJOIN Test 4" 1 40
-wait_for "TRANSITION Test 4" 1 20 && shot "test4-uebergang"
+# Übergang kommt erst, wenn der alte Vorrat (bei 3× Lieferung ~30 s) abgespielt ist
+wait_for "TRANSITION Test 4" 1 60 && shot "test4-uebergang"
 picture_back "Test 4" 10
 sleep 5
 [ "$(count "ENDED Test 4")" -eq 0 ] || fail "Stream-Ende nicht nahtlos (Notlösung mit Neustart gebraucht)"
@@ -113,7 +114,8 @@ log "== Test 4b: Zeitsprung im Stream (Bildzeit springt 60 s vor, Ton läuft wei
 channel 5
 wait_for "FIRST_FRAME Test 5" 1 60
 # 15 s normal, dann Zeitsprung → spätestens nach ~3 s Erkennung neu synchronisieren, Bild wieder da
-wait_for "WATCHDOG jump Test 5" 1 35
+# je nach Zeitpunkt meldet der Player „läuft“ (Zeitsprung) oder „puffert“ (keine verwertbaren Daten) – beides muss schnell greifen
+wait_re "WATCHDOG (jump|starved) Test 5" 35
 wait_for "FIRST_FRAME Test 5" 2 15 && shot "test4b-nach-zeitsprung"
 note "Zustand Test 4b" "$(ticks | tail -25)"
 channel 4
@@ -183,7 +185,7 @@ wait_for "MV_FIRST_FRAME 0" 1 90
 wait_for "MV_FIRST_FRAME 1" 1 60
 # Bild 2 = „Test 4 Abbruch“: Server beendet den Stream nach 15 s → Bild muss sich OHNE Wächter selbst erholen
 wait_for "MV_REJOIN 1" 1 40
-wait_for "MV_TRANSITION 1 Test 4" 1 20
+wait_for "MV_TRANSITION 1 Test 4" 1 60
 sleep 5
 [ "$(count "MV_ENDED 1")" -eq 0 ] || fail "Multi-View: Stream-Ende nicht nahtlos (Notlösung mit Neustart gebraucht)"
 [ "$(count "MV_WATCHDOG 1")" -eq 0 ] || fail "Multi-View: nach Stream-Ende musste der Wächter eingreifen (Neuverbindung zu langsam)"
