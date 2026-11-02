@@ -169,19 +169,33 @@ class DisplayWatch {
     /** Ändert sich nach jedem Frequenzwechsel → Bildfläche neu anlegen. */
     var tick by androidx.compose.runtime.mutableIntStateOf(0)
         private set
+    /** Ändert sich NUR, wenn sich die Bildschirm-Frequenz wirklich geändert hat → dann Bildfläche neu anlegen.
+     *  (Andere Meldungen des Bildschirms – z. B. HDR, Helligkeit – legten sonst jedes Mal die Fläche neu an: Schwarzbild.) */
+    var surfaceTick by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+    private var lastMode = -1
+    private var pendingMode = -1
     private val main = Handler(Looper.getMainLooper())
-    private val bump = Runnable { tick++ }
+    private val bump = Runnable {
+        tick++
+        if (pendingMode == -1 || pendingMode != lastMode) surfaceTick++
+        lastMode = pendingMode
+    }
 
-    /** Vom System gemeldete Änderung: kurz warten, bis der Wechsel fertig ist. */
-    fun changed() {
+    /** Vom System gemeldete Änderung: kurz warten, bis der Wechsel fertig ist. [modeId] = -1 wenn unbekannt. */
+    fun changed(modeId: Int = -1) {
+        if (lastMode == -1 && modeId != -1 && tick == 0) lastMode = modeId
+        pendingMode = modeId
         main.removeCallbacks(bump)
         main.postDelayed(bump, 500)
     }
 
+    fun initMode(modeId: Int) { if (lastMode == -1) lastMode = modeId }
+
     /** Nach eigenem Umschalten: falls das System nichts meldet, nach 3 s trotzdem neu anlegen. */
     fun expectSwitch() {
         val start = tick
-        main.postDelayed({ if (tick == start) tick++ }, 3_000)
+        main.postDelayed({ if (tick == start) { tick++; surfaceTick++ } }, 3_000)
     }
 }
 
@@ -195,9 +209,10 @@ fun rememberDisplayWatch(): DisplayWatch {
             override fun onDisplayAdded(displayId: Int) = Unit
             override fun onDisplayRemoved(displayId: Int) = Unit
             override fun onDisplayChanged(displayId: Int) {
-                if (displayId == Display.DEFAULT_DISPLAY) watch.changed()
+                if (displayId == Display.DEFAULT_DISPLAY) watch.changed(modeId(dm))
             }
         }
+        watch.initMode(modeId(dm))
         dm?.registerDisplayListener(listener, Handler(Looper.getMainLooper()))
         onDispose { dm?.unregisterDisplayListener(listener) }
     }
@@ -223,3 +238,8 @@ suspend fun DisplayWatch.awaitChange(from: Int, timeoutMs: Long) {
         androidx.compose.runtime.snapshotFlow { tick }.first { it != from }
     }
 }
+
+private fun modeId(dm: android.hardware.display.DisplayManager?): Int =
+    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+        dm?.getDisplay(Display.DEFAULT_DISPLAY)?.mode?.modeId ?: -1
+    } else -1

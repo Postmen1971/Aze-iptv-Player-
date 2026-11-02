@@ -300,7 +300,8 @@ private fun MvSlot(
         } else if (YouTube.isYouTube(channel.channel.url)) {
             Text("YouTube geht im Multi-View nicht", color = Palette.TextMuted, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))
         } else {
-            key(channel.channel.key) { MvVideo(app, index, channel, active, texture) }
+            // EIN Player je Bild, der beim Umschalten bleibt (kein Neuaufbau, kein Decoder-Neustart)
+            MvVideo(app, index, channel, active, texture)
         }
         if (channel != null && labelInside && showLabel) Text(
             "${channel.number}  ${channel.channel.name}",
@@ -319,16 +320,22 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<String?>("Lädt …") }
     val activeNow by androidx.compose.runtime.rememberUpdatedState(active)
-    val player = remember {
-        val http = DefaultHttpDataSource.Factory()
+    val chNow by androidx.compose.runtime.rememberUpdatedState(channel)
+    val http = remember {
+        DefaultHttpDataSource.Factory()
             .setUserAgent(Http.USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(10_000)
+    }
+    val live = remember { de.aze.iptv.player.LiveSource(context, http) }
+    val viewRef = remember { arrayOfNulls<androidx.media3.ui.PlayerView>(1) }
+    val player = remember {
         ExoPlayer.Builder(context)
             .setRenderersFactory(DefaultRenderersFactory(context).setEnableDecoderFallback(true))
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
-            .setLoadControl(PlaybackConfig.loadControl(context, app.bufferLevel, maxBytes = 20 * 1024 * 1024))
+            // 10 MB je Bild (vorher 20): bei 4 Bildern sonst 80 MB – zu viel für Fire TV mit 1–2 GB
+            .setLoadControl(PlaybackConfig.loadControl(context, app.bufferLevel, maxBytes = 10 * 1024 * 1024))
             .build()
             .apply { playWhenReady = true }
     }
@@ -350,7 +357,7 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             override fun onRenderedFirstFrame() {
                 status = null
                 retries = 0
-                qaLog("MV_FIRST_FRAME $index ${channel.channel.name}")
+                qaLog("MV_FIRST_FRAME $index ${chNow.channel.name}")
             }
 
             override fun onPlaybackStateChanged(state: Int) {
@@ -360,6 +367,7 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
                     qaLog("MV_ENDED $index")
                     scope.launch {
                         delay(300)
+                        viewRef[0]?.setKeepContentOnPlayerReset(true)
                         player.stop()
                         player.prepare()
                     }
@@ -380,7 +388,13 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             }
         }
         player.addListener(listener)
+        val detachLive = live.attach(
+            player,
+            onRejoin = { qaLog("MV_REJOIN $index") },
+            onSwitch = { qaLog("MV_TRANSITION $index ${chNow.channel.name}") },
+        )
         onDispose {
+            detachLive()
             player.removeListener(listener)
             player.release()
         }
@@ -388,6 +402,8 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
 
     // Wächter je Bild (wie beim normalen Fernsehen): Bild steht 6 s oder 8 s keine neuen Daten → neu verbinden
     val frames = remember { java.util.concurrent.atomic.AtomicLong(0) }
+    /** Seit dem letzten Senderwechsel schon ein Bild? (wird beim Umschalten zurückgesetzt) */
+    val started = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     // Messwerte zur Fehlersuche: verworfene Bilder, Decoder, Auflösung
     val dropped = remember { java.util.concurrent.atomic.AtomicLong(0) }
     var decoder by remember { mutableStateOf("?") }
@@ -422,23 +438,24 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
     }
     LaunchedEffect(player) {
         var lastF = -1L; var lastBuf = -1L; var lastPos = -1L; var lastDrop = 0L
-        var frozen = 0; var starved = 0; var stuck = 0; var jump = 0; var started = false; var pause = 0
+        var frozen = 0; var starved = 0; var stuck = 0; var jump = 0; var pause = 0
         while (true) {
             delay(1_000)
             val f = frames.get()
             val buf = player.bufferedPosition
-            if (f > 0) started = true
+            if (f > 0) started.set(true)
+            val on = started.get()
             val ready = player.playbackState == Player.STATE_READY && player.videoFormat != null
             val buffering = player.playbackState == Player.STATE_BUFFERING
-            frozen = if (started && ready && f == lastF) frozen + 1 else 0
+            frozen = if (on && ready && f == lastF) frozen + 1 else 0
             // auch wenn noch Daten ankommen (Puffer füllt sich), aber 10 s kein neues Bild: hängt
-            stuck = if (started && player.playbackState != Player.STATE_IDLE && f == lastF) stuck + 1 else 0
-            starved = if (started && buffering && buf == lastBuf) starved + 1 else 0
+            stuck = if (on && player.playbackState != Player.STATE_IDLE && f == lastF) stuck + 1 else 0
+            starved = if (on && buffering && buf == lastBuf) starved + 1 else 0
             // Messzeile: Zustand · Bilder/s · Uhr läuft? · Daten kommen? · Vorrat · verworfen/s · Decoder · Auflösung
             val pos = player.currentPosition
             val d = dropped.get()
             // Zeitsprung im Stream: Uhr (Ton) läuft, Vorrat da, aber kein Bild – Bilder „noch nicht dran“ → neu synchronisieren
-            jump = if (started && player.isPlaying && lastPos >= 0 && pos != lastPos && f == lastF && buf - pos > 1_000) jump + 1 else 0
+            jump = if (on && player.isPlaying && lastPos >= 0 && pos != lastPos && f == lastF && buf - pos > 1_000) jump + 1 else 0
             val st = when (player.playbackState) {
                 Player.STATE_READY -> if (player.isPlaying) "läuft" else "bereit"
                 Player.STATE_BUFFERING -> "puffert"
@@ -455,15 +472,17 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             if (de.aze.iptv.BuildConfig.TEST_HOOKS) qaLog("MV_TICK $index $line")
             lastF = f; lastBuf = buf; lastPos = pos; lastDrop = d
             if (pause > 0) { pause--; continue }
-            if (jump >= 3 || frozen >= 6 || starved >= 8 || stuck >= 10) {
-                val why = if (jump >= 3) "Zeitsprung im Stream" else if (frozen >= 6) "Bild steht, Player „läuft“" else if (starved >= 8) "keine Daten mehr" else "kein neues Bild"
+            if (jump >= 2 || frozen >= 6 || starved >= 8 || stuck >= 10) {
+                val why = if (jump >= 2) "Zeitsprung im Stream" else if (frozen >= 6) "Bild steht, Player „läuft“" else if (starved >= 8) "keine Daten mehr" else "kein neues Bild"
                 qaLog("MV_WATCHDOG $index $why | $line")
                 status = "Bild hing ($why) – wird neu verbunden …"
                 // Messwerte vom Moment des Hängers 20 s stehen lassen (zum Abfotografieren)
                 hang = "Beim Hänger: $line"
                 hangUntil = now + 20_000
-                val wasJump = jump >= 3
+                val wasJump = jump >= 2
                 frozen = 0; starved = 0; stuck = 0; jump = 0; pause = 12
+                // letztes Bild stehen lassen statt Schwarz
+                viewRef[0]?.setKeepContentOnPlayerReset(true)
                 player.stop()
                 // Anbieter gibt die alte Verbindung erst nach ein paar Sekunden frei – sonst zählt er eine zu viel
                 // und trennt dafür das ANDERE Bild (dann bleibt abwechselnd links/rechts das Bild stehen)
@@ -474,7 +493,14 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
         }
     }
 
-    LaunchedEffect(player) {
+    var firstStart by remember { mutableStateOf(true) }
+    LaunchedEffect(channel.channel.key) {
+        // Senderwechsel in diesem Bild: gleicher Player, nur neue Quelle
+        status = "Lädt …"
+        viewRef[0]?.setKeepContentOnPlayerReset(false)
+        player.stop()
+        frames.set(0)
+        started.set(false)
         val url = try {
             app.resolveStreamUrl(channel.channel.url)
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -495,9 +521,14 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             .setMaxVideoSize(if (texture) 854 else 1280, if (texture) 480 else 720)
             .setForceHighestSupportedBitrate(false)
             .build()
-        player.setMediaItem(b.build())
-        // nacheinander starten: erst muss der normale Player seine Verbindung freigegeben haben, dann ein Bild nach dem anderen
-        delay(1_200L + index * 1_200L)
+        b.setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f).build())
+        player.setMediaSource(live.create(b.build()))
+        // Nur beim Öffnen nacheinander starten (erst muss der normale Player seine Verbindung freigegeben haben).
+        // Beim Umschalten in einem Bild sofort – lehnt der Anbieter kurz ab, wird alle 0,4 s neu versucht.
+        if (firstStart) {
+            delay(1_200L + index * 1_200L)
+            firstStart = false
+        }
         player.prepare()
     }
 
@@ -514,8 +545,8 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             },
-            update = { it.player = player },
-            onRelease = { it.player = null },
+            update = { it.player = player; viewRef[0] = it },
+            onRelease = { it.player = null; if (viewRef[0] === it) viewRef[0] = null },
         )
         status?.let {
             Text(it, color = Palette.TextMuted, fontSize = 13.sp, modifier = Modifier.align(Alignment.Center).padding(12.dp))

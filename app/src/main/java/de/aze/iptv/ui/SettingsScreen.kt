@@ -886,7 +886,13 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton(if (app.showDiag) "Fehlersuche-Anzeige: an" else "Fehlersuche-Anzeige: aus", selected = app.showDiag, onClick = { app.updateShowDiag(!app.showDiag) })
+            TvButton(if (app.multiViewOn) "Multi-View (Beta): an" else "Multi-View (Beta): aus", selected = app.multiViewOn, onClick = { app.updateMultiViewOn(!app.multiViewOn) })
         }
+        Text(
+            "Multi-View zeigt 2–4 Sender gleichzeitig (jedes Bild ist eine eigene Verbindung zum Anbieter). " +
+                "Ausgeschaltet verschwindet es aus dem Schnellmenü.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
       }
         Text("Untertitel", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

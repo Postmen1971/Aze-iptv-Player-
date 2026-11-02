@@ -112,14 +112,25 @@ fun PlayerScreen(
     // Ton-Bild-Versatz nur einbauen, wenn er auch genutzt wird (sonst exakt der Standard-Player)
     val syncUsed = app.audioDelay != 0 || app.audioDelays.isNotEmpty()
     // „Ton später“ braucht mehr Bild im Vorrat (in 0,5-s-Stufen, damit der Player nicht bei jeder Kleinigkeit neu entsteht)
-    val audioLeadMs = ((app.effectiveDelay(app.current?.channel?.key).coerceAtLeast(0) + 499) / 500) * 500
-    val player = remember(level, tunnel, syncUsed, audioLeadMs) {
-        val http = DefaultHttpDataSource.Factory()
+    // Vorrat nach dem GRÖSSTEN eingestellten Versatz – sonst entstand der Player bei jedem Senderwechsel neu
+    // (Sender mit eigenem Versatz), und das kostete jedes Mal Decoder-Neustart und eine kurze Blockade.
+    val maxLead = (app.audioDelay + (app.audioDelays.values.maxOrNull() ?: 0).coerceAtLeast(0)).coerceIn(0, 3_000)
+    val audioLeadMs = ((maxLead + 499) / 500) * 500
+    val http = remember {
+        DefaultHttpDataSource.Factory()
             .setUserAgent(Http.USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15_000)
             // Live-Sender schicken laufend Daten: 10 s Stille heißt Verbindung tot (vorher 20 s Standbild)
             .setReadTimeoutMs(10_000)
+    }
+    // Nahtloses Neuverbinden, wenn der Anbieter den Stream beendet (siehe LiveSource)
+    val live = remember { de.aze.iptv.player.LiveSource(context, http) }
+    /** Beim Neuverbinden das letzte Bild stehen lassen statt Schwarz (beim Senderwechsel aus) */
+    val playerViewRef = remember { arrayOfNulls<PlayerView>(1) }
+    // muss VOR player.stop() gesetzt sein – darum direkt an der Bildfläche, nicht über den Compose-Zustand
+    fun keepFrame(on: Boolean) { playerViewRef[0]?.setKeepContentOnPlayerReset(on) }
+    val player = remember(level, tunnel, syncUsed, audioLeadMs) {
         ExoPlayer.Builder(context)
             .setRenderersFactory(
                 (if (syncUsed) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context)).setEnableDecoderFallback(true),
@@ -282,8 +293,9 @@ fun PlayerScreen(
             lastFrames = f
             lastPos = pos
             lastBuffered = buffered
-            if ((jump >= 3 || frozen >= 6 || starved >= 8) && now >= nextAllowed) {
-                qaLog("WATCHDOG ${if (jump >= 3) "jump" else if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name}")
+            if ((jump >= 2 || frozen >= 6 || starved >= 8) && now >= nextAllowed) {
+                qaLog("WATCHDOG ${if (jump >= 2) "jump" else if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name}")
+                val light = starved < 8
                 frozen = 0
                 starved = 0
                 jump = 0
@@ -291,7 +303,14 @@ fun PlayerScreen(
                 val pause = longArrayOf(5_000, 15_000, 30_000, 60_000)
                 nextAllowed = now + pause[minOf(watchdogRestarts, pause.size - 1)]
                 watchdogRestarts++
-                restartTick++
+                if (light) {
+                    // Verbindung ist da, nur das Bild hängt: direkt neu synchronisieren – ohne Senderwechsel-Ablauf,
+                    // ohne Namenseinblendung, letztes Bild bleibt stehen
+                    keepFrame(true)
+                    player.stop()
+                    preparedAt = System.currentTimeMillis()
+                    player.prepare()
+                } else restartTick++
             }
         }
     }
@@ -392,6 +411,7 @@ fun PlayerScreen(
                     // Anbieter hat den Stream beendet: nach 0,3 s neu verbinden (stop + prepare, wie im Multi-View)
                     retryJob = scope.launch {
                         delay(300)
+                        keepFrame(true)
                         player.stop()
                         player.prepare()
                     }
@@ -444,8 +464,14 @@ fun PlayerScreen(
             }
         }
         player.addListener(listener)
+        val detachLive = live.attach(
+            player,
+            onRejoin = { qaLog("REJOIN ${app.current?.channel?.name}") },
+            onSwitch = { qaLog("TRANSITION ${app.current?.channel?.name}") },
+        )
         onDispose {
             retryJob?.cancel()
+            detachLive()
             player.removeListener(listener)
             player.release()
         }
@@ -500,6 +526,8 @@ fun PlayerScreen(
         }
         retryJob?.cancel()
         if (startedKey != ch.key) retries = 0
+        // neuer Sender: altes Bild nicht stehen lassen; gleicher Sender (Neustart): letztes Bild halten
+        keepFrame(startedKey == ch.key)
         startedKey = ch.key
         noPicture = true
         ytError = null
@@ -557,10 +585,12 @@ fun PlayerScreen(
         val builder = MediaItem.Builder().setUri(url)
         if (url.contains(".m3u8", ignoreCase = true)) builder.setMimeType(MimeTypes.APPLICATION_M3U8)
         if (url.contains(".mpd", ignoreCase = true)) builder.setMimeType(MimeTypes.APPLICATION_MPD)
-        level.liveOffsetMs?.let {
-            builder.setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setTargetOffsetMs(it).build())
-        }
-        player.setMediaItem(builder.build())
+        // Abspielgeschwindigkeit fest 1,0: Media3 regelt bei Live-HLS sonst zwischen 0,97× und 1,03× nach,
+        // um den Abstand zu „live“ zu halten – auf dem Fernseher sind das doppelte/ausgelassene Bilder (Ruckeln)
+        val liveCfg = MediaItem.LiveConfiguration.Builder().setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f)
+        level.liveOffsetMs?.let { liveCfg.setTargetOffsetMs(it) }
+        builder.setLiveConfiguration(liveCfg.build())
+        player.setMediaSource(live.create(builder.build()))
         // Live-TV läuft immer – auch falls der Player zuvor (z. B. vom System) pausiert wurde
         player.playWhenReady = true
         preparedAt = System.currentTimeMillis()
@@ -821,7 +851,7 @@ fun PlayerScreen(
                     )
                 }
             }
-        } else key(if (afrOn || afr50On) displayWatch.tick else 0) {
+        } else key(if (afrOn || afr50On) displayWatch.surfaceTick else 0) {
             // Nach einem Frequenzwechsel die Bildfläche neu anlegen: manche Geräte lassen die alte stehen (Standbild)
             AndroidView(
             modifier = videoModifier,
@@ -829,16 +859,16 @@ fun PlayerScreen(
                 PlayerView(ctx).apply {
                     useController = false
                     setShutterBackgroundColor(android.graphics.Color.BLACK)
-                    setKeepContentOnPlayerReset(false)
                     isFocusable = false
                     descendantFocusability = android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
                 }
             },
             update = { view ->
                 view.player = player
+                playerViewRef[0] = view
                 view.resizeMode = resize
             },
-            onRelease = { view -> view.player = null },
+            onRelease = { view -> view.player = null; if (playerViewRef[0] === view) playerViewRef[0] = null },
         )
         }
 
@@ -885,13 +915,9 @@ fun PlayerScreen(
             }
             else -> null
         }
-        if (app.showDiag && diagText.isNotEmpty() && !overlay) {
-            Text(
-                diagText, color = Color.White, fontSize = 13.sp,
-                modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
-                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 8.dp, vertical = 3.dp),
-            )
+        if (app.showDiag && !overlay) {
+            // eigener kleiner Baustein: die sekündlich neue Messzeile zeichnet nur sich selbst neu, nicht den ganzen Player
+            DiagLine({ diagText }, Modifier.align(Alignment.TopStart))
         }
         if (corner != null) {
             Box(
@@ -996,7 +1022,7 @@ fun PlayerScreen(
             // tracksVersion lesen, damit die Werte nach einem Spurwechsel neu angezeigt werden.
             @Suppress("UNUSED_VARIABLE") val v = tracksVersion
             // Reihenfolge von links: Fußball (SkorText), Bild, Ton, Player, Puffer, dann Wechsel zu Filme/Serien/Einstellungen.
-            val items = listOf(
+            val items = listOfNotNull(
                 QuickItem("Fußball", "SkorText") {
                     quickMenu = false
                     teletext = true
@@ -1014,11 +1040,11 @@ fun PlayerScreen(
                     else TrackHelper.nextAudio(player)?.language?.let { app.updateAudioLanguage(it) }
                     tracksVersion++
                 },
-                QuickItem("Multi-View", "2–4 Sender") {
+                if (app.multiViewOn) QuickItem("Multi-View", "Beta · 2–4 Sender") {
                     quickMenu = false
                     mvSecond = null
                     multiView = true
-                },
+                } else null,
                 QuickItem("Lippensynchron", msLabel(app.channelDelay(curCh?.key))) {
                     quickMenu = false
                     if (curCh != null) tool = 1
@@ -1086,4 +1112,16 @@ fun PlayerScreen(
 /** Kurze Zeilen fürs Protokoll (logcat, Kennung AzeQA) – der automatische Emulator-Test liest sie mit. */
 internal fun qaLog(msg: String) {
     android.util.Log.i("AzeQA", msg)
+}
+
+@Composable
+private fun DiagLine(text: () -> String, modifier: Modifier) {
+    val t = text()
+    if (t.isEmpty()) return
+    Text(
+        t, color = Color.White, fontSize = 13.sp,
+        modifier = modifier.padding(12.dp)
+            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
 }

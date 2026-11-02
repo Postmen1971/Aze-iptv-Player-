@@ -81,13 +81,18 @@ fun ChannelOverlay(
 
     val filter = app.playlistFilter
     val multi = app.activeSources.size > 1
-    val groups = app.lineup.groups.filter {
-        (it.channels.isNotEmpty() || it.isFavorites) && (it.isFavorites || filter == null || it.sourceId == filter)
+    // nur neu rechnen, wenn sich Liste oder Filter ändern (nicht bei jedem Neuzeichnen – große Listen)
+    val lineup = app.lineup
+    val groups = remember(lineup, filter) {
+        lineup.groups.filter {
+            (it.channels.isNotEmpty() || it.isFavorites) && (it.isFavorites || filter == null || it.sourceId == filter)
+        }
     }
     if (groups.isEmpty()) return
     val currentKey = app.current?.channel?.key
-    val startGroup = groups.indexOfFirst { g -> g.channels.any { it.channel.key == currentKey } }.coerceAtLeast(0)
-    var groupIndex by remember { mutableIntStateOf(startGroup) }
+    var groupIndex by remember {
+        mutableIntStateOf(groups.indexOfFirst { g -> g.channels.any { it.channel.key == currentKey } }.coerceAtLeast(0))
+    }
     var firstOpen by remember { mutableIntStateOf(1) }
     val headFocus = remember { FocusRequester() }
 

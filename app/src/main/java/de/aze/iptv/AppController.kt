@@ -458,6 +458,14 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         store.afrDelay = s
     }
 
+    var multiViewOn by mutableStateOf(store.multiViewOn)
+        private set
+
+    fun updateMultiViewOn(on: Boolean) {
+        multiViewOn = on
+        store.multiViewOn = on
+    }
+
     fun updateShowDiag(on: Boolean) {
         showDiag = on
         store.showDiag = on

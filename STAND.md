@@ -89,6 +89,17 @@
 - Lösung: auf TV-Geräten kein Noisy-Pausieren, `playWhenReady = true` bei jedem Senderstart, Wächter hebt ungewollte Pause auf.
 - Feste Standardwerte (bei Aziz auf der SHIELD bewährt): Bildwiederholrate an Sender anpassen, 6 s Wartezeit, immer beste Stufe.
 
+## Flüssigkeits-Paket (nach unabhängiger Prüfung, 1.0.121)
+- Ursache der restlichen Hänger: Endet ein .ts-Stream beim Anbieter (oder bricht die Leitung ab), merkte Media3 das erst nach dem ganzen Vorrat (bis ~27 s), dann Schwarzbild + Decoder-Neustart + neu puffern.
+- Neu `player/LiveSource.kt`: Bei Verbindungsende wird SOFORT eine neue Verbindung als nächstes Stück angehängt (addMediaSource) → nahtloser Übergang ohne Neustart. Leitungsabbruch nach Daten zählt als Ende (EndOnDropDataSource). Schnelle Wiederholung 0,4 s (403/429 beim Zappen), 401/404/410 sofort Fehler.
+- Wächter: Zeitsprung schon nach 2 s; Zeitsprung/Standbild nur noch „leicht“ neu synchronisieren (ohne Senderwechsel-Ablauf, letztes Bild bleibt stehen). Keine Verbindung → wie bisher kompletter Neustart.
+- HLS live: Geschwindigkeit fest 1,0 (kein Ruckeln durch 0,97–1,03×).
+- Player wird nicht mehr bei jedem Senderwechsel neu gebaut (Lippensynchron-Vorrat nach größtem Versatz).
+- Bildfläche nur bei echtem Frequenzwechsel neu (DisplayWatch.surfaceTick statt jede Bildschirm-Meldung).
+- Multi-View: ein Player je Bild bleibt beim Umschalten, versetzter Start nur beim Öffnen, 10 MB statt 20 MB je Bild, gleicher nahtloser Übergang. Schalter „Multi-View (Beta)“ unter Wiedergabe (aus = nicht im Schnellmenü).
+- Messzeile zeichnet nur sich selbst neu; Gruppenliste wird gemerkt statt bei jedem Neuzeichnen gefiltert.
+- Bewusst NICHT gemacht (Gerätetest nötig): erzwungenes asynchrones Decodieren, Non-IDR-Keyframes, Baseline-Profile.
+
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
 2. **SkorText-Update direkt im Player:** Beim Öffnen von SkorText prüfen, ob es auf GitHub eine neuere Version gibt, und die Seiten selbst nachladen (ohne neuen Player-Build). Der Update-Knopf in SkorText soll das auch auslösen (im Player derzeit ohne Funktion, `SkorBridge.installApk` ist leer).

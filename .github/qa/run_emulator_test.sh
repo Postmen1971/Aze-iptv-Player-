@@ -34,6 +34,32 @@ wait_for() {
   return 1
 }
 
+# wartet, bis eines der Muster (Regex, mit | getrennt) im Protokoll steht (max. $2 s)
+wait_re() {
+  local i=0
+  while [ $i -lt "$2" ]; do
+    [ "$(qa | grep -cE -- "$1" || true)" -ge 1 ] && { log "ok: '$1' nach ${i}s"; return 0; }
+    sleep 1; i=$((i+1))
+  done
+  fail "'$1' kam nicht innerhalb ${2}s"; return 1
+}
+
+# wartet bis zu $2 s auf ein NEUES Sekunden-Protokoll mit laufendem Bild
+picture_back() {
+  local base i=0
+  base=$(ticks | wc -l)
+  while [ $i -lt "$2" ]; do
+    if ticks | tail -n +$((base+1)) | grep -q " img=[1-9]"; then log "ok: Bild läuft ($1) nach ${i}s"; return 0; fi
+    sleep 1; i=$((i+1))
+  done
+  fail "Bild kam nicht wieder ($1)"; return 1
+}
+
+# längste Folge von Sekunden ohne neues Bild (nach dem ersten Bild) ab Protokollzeile $1
+max_gap() {
+  ticks | tail -n +$(($1+1)) | awk '{ if ($0 ~ / img=0 /) { if (seen) { run++; if (run>max) max=run } } else { seen=1; run=0 } } END { print max+0 }'
+}
+
 channel() {  # Sender per Zifferntaste wählen
   adb shell input keyevent "KEYCODE_$1"; sleep 0.3; adb shell input keyevent KEYCODE_DPAD_CENTER
 }
@@ -53,8 +79,9 @@ shot "test1-nach-45s"
 log "== Test 2: Server schickt keine Daten mehr (tote Verbindung)"
 channel 2
 wait_for "FIRST_FRAME Test 2" 1 60
-wait_for "WATCHDOG starved Test 2" 1 50
-wait_for "FIRST_FRAME Test 2" 2 40 && shot "test2-wieder-da"
+# tote Verbindung: entweder der Wächter greift oder (nach 10 s Lesezeit) wird nahtlos neu verbunden
+wait_re "WATCHDOG starved Test 2|TRANSITION Test 2" 50
+picture_back "Test 2" 30 && shot "test2-wieder-da"
 
 log "== Test 3: Bild bleibt stehen, Ton läuft weiter (Bild hört 15 s nach Start auf)"
 w=$(count "WATCHDOG")
@@ -67,12 +94,19 @@ note "Zustand Test 3" "$(ticks | tail -45)"
 
 log "== Test 4: Server trennt die Verbindung"
 w=$(count "WATCHDOG")
+tb=$(ticks | wc -l)
 channel 4
 wait_for "FIRST_FRAME Test 4" 1 60
-wait_for "ENDED Test 4" 1 40
-# nach dem Ende muss das Bild innerhalb von 5 s zurück sein – ohne Wächter
-wait_for "FIRST_FRAME Test 4" 2 5 && shot "test4-wieder-da"
+# Server trennt nach 15 s: neue Verbindung muss SOFORT angehängt werden und nahtlos übernehmen
+wait_for "REJOIN Test 4" 1 40
+wait_for "TRANSITION Test 4" 1 20 && shot "test4-uebergang"
+picture_back "Test 4" 10
+sleep 5
+[ "$(count "ENDED Test 4")" -eq 0 ] || fail "Stream-Ende nicht nahtlos (Notlösung mit Neustart gebraucht)"
 [ "$(count "WATCHDOG")" -eq "$w" ] || fail "Nach Stream-Ende musste der Wächter eingreifen"
+g=$(max_gap "$tb")
+note "Test 4 Übergang" "längste Lücke ohne Bild: ${g} s"
+[ "$g" -le 2 ] || fail "Übergang nach Stream-Ende nicht flüssig: ${g} s ohne Bild"
 
 log "== Test 4b: Zeitsprung im Stream (Bildzeit springt 60 s vor, Ton läuft weiter)"
 channel 5
@@ -131,8 +165,10 @@ adb shell am start -W -n $PKG/.MainActivity --ez aze_test_multiview true
 wait_for "MV_FIRST_FRAME 0" 1 90
 wait_for "MV_FIRST_FRAME 1" 1 60
 # Bild 2 = „Test 4 Abbruch“: Server beendet den Stream nach 15 s → Bild muss sich OHNE Wächter selbst erholen
-wait_for "MV_ENDED 1" 1 40
-wait_for "MV_FIRST_FRAME 1 Test 4" 2 15
+wait_for "MV_REJOIN 1" 1 40
+wait_for "MV_TRANSITION 1 Test 4" 1 20
+sleep 5
+[ "$(count "MV_ENDED 1")" -eq 0 ] || fail "Multi-View: Stream-Ende nicht nahtlos (Notlösung mit Neustart gebraucht)"
 [ "$(count "MV_WATCHDOG 1")" -eq 0 ] || fail "Multi-View: nach Stream-Ende musste der Wächter eingreifen (Neuverbindung zu langsam)"
 # Bild 2 wählen und über die Senderauswahl (OK → Gruppe → Sender) einen anderen Sender setzen
 adb shell input keyevent KEYCODE_DPAD_RIGHT

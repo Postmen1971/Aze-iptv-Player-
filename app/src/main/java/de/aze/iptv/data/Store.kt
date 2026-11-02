@@ -184,6 +184,11 @@ class Store(context: Context) {
         set(v) = prefs.edit().putInt("afrDelay", v).apply()
 
     /** Kleine Anzeige zur Fehlersuche im Bild (Frequenz, Bilder, Position). */
+    /** Multi-View (Beta) im Schnellmenü anbieten */
+    var multiViewOn: Boolean
+        get() = prefs.getBoolean("multiViewOn", true)
+        set(v) = prefs.edit().putBoolean("multiViewOn", v).apply()
+
     var showDiag: Boolean
         get() = prefs.getBoolean("showDiag", false)
         set(v) = prefs.edit().putBoolean("showDiag", v).apply()
