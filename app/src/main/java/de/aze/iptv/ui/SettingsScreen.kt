@@ -1113,6 +1113,7 @@ private fun AboutSection(app: AppController) {
             })
         }
     }
+    HangLogSection(app)
     Section("Über") {
         Text(
             "Aze-IPTV-Player ist ein Player und liefert selbst keine Sender oder Inhalte. " +
@@ -1211,3 +1212,73 @@ internal fun InputDialog(
     }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 }
+
+/** Hänger-Protokoll: Übersicht, anzeigen, hochladen (Link für Claude), leeren */
+@Composable
+private fun HangLogSection(app: AppController) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var summary by remember { mutableStateOf("…") }
+    var show by remember { mutableStateOf(false) }
+    var text by remember { mutableStateOf("") }
+    var link by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var refresh by remember { mutableStateOf(0) }
+    LaunchedEffect(refresh) {
+        val (sum, t) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            de.aze.iptv.data.HangLog.summary() to
+                de.aze.iptv.data.HangLog.read().lines().filter { it.isNotBlank() }.takeLast(40).reversed().joinToString("\n")
+        }
+        summary = sum
+        text = t
+    }
+    Section("Hänger-Protokoll") {
+        Text(
+            "Die App merkt sich jede Bildlücke, jeden Eingriff des Wächters und jeden Fehler – mit Sender, Uhrzeit und Messwerten. " +
+                "„Hochladen“ legt das Protokoll als Text auf paste.rs ab (nur Sendernamen und Zeiten, keine Adressen oder Zugangsdaten) " +
+                "und zeigt einen kurzen Link – den kannst du Claude schicken.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Text(summary, color = Palette.TextSoft, fontSize = 14.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton(if (show) "Ausblenden" else "Anzeigen", selected = show, onClick = { show = !show; refresh++ })
+            TvButton(if (busy) "Lädt hoch …" else "Hochladen & Link zeigen", onClick = {
+                if (busy) return@TvButton
+                busy = true
+                link = null
+                scope.launch {
+                    try {
+                        link = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            de.aze.iptv.data.HangLog.upload(hangHeader(app))
+                        }
+                    } catch (e: Exception) {
+                        app.message = "Hochladen hat nicht geklappt: ${e.message ?: "keine Verbindung"}"
+                    } finally {
+                        busy = false
+                    }
+                }
+            })
+            TvButton("Leeren", onClick = {
+                de.aze.iptv.data.HangLog.clear()
+                link = null
+                scope.launch { kotlinx.coroutines.delay(300); refresh++ }
+            })
+        }
+        link?.let {
+            Text("Link: $it", color = Palette.Highlight, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        }
+        if (show) {
+            Text(
+                text.ifEmpty { "Noch keine Einträge." },
+                color = Palette.TextSoft, fontSize = 11.sp, lineHeight = 14.sp,
+            )
+        }
+    }
+}
+
+/** Kopfzeilen fürs hochgeladene Protokoll: Gerät, App-Version und die wichtigsten Wiedergabe-Einstellungen */
+private fun hangHeader(app: AppController): String =
+    "Aze-IPTV-Player ${BuildConfig.VERSION_NAME}\n" +
+        "Gerät: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})\n" +
+        "Puffer: ${app.bufferLevel.label} · Player: ${app.playerEngine.label} · Tunneling: ${app.tunneling} · " +
+        "Frequenz: ${if (app.afr50) "50 Hz" else if (app.afr) "je Sender" else "nie"} (Wartezeit ${app.afrDelay} s) · " +
+        "Ton-Versatz: ${app.audioDelay} ms"

@@ -239,6 +239,10 @@ fun PlayerScreen(
         var jump = 0
         var healthy = 0
         var nextAllowed = 0L
+        // Bildlücke: Sekunden, in denen Bild laufen sollte, aber keins kam (fürs Hänger-Protokoll)
+        var gap = 0
+        var gapInfo = ""
+        var gapKey: String? = null
         while (true) {
             delay(1_000)
             val now = System.currentTimeMillis()
@@ -265,6 +269,27 @@ fun PlayerScreen(
             starved = if (!switching && buffering && buffered == lastBuffered && (firstFrameSeen || sinceStart >= 10_000)) starved + 1 else 0
             if (firstFrameSeen && pictureMoving && !buffering) healthy++ else if (!pictureMoving) healthy = 0
             if (healthy >= 60) { healthy = 0; watchdogRestarts = 0; nextAllowed = 0 }
+            val stateName = when (player.playbackState) {
+                Player.STATE_READY -> if (player.isPlaying) "läuft" else "bereit"
+                Player.STATE_BUFFERING -> "puffert"
+                Player.STATE_IDLE -> "angehalten"
+                else -> "Ende"
+            }
+            val snap = "$stateName · Vorrat %.1f s · Uhr %s · Ton %s".format(
+                (buffered - pos).coerceAtLeast(0) / 1000f, if (pos != lastPos) "läuft" else "steht",
+                if (player.audioFormat != null) "ja" else "–",
+            )
+            val key = app.current?.channel?.key
+            if (key != gapKey) { gap = 0; gapKey = key }
+            if (!switching && firstFrameSeen && player.playWhenReady && !pictureMoving &&
+                player.playbackState != Player.STATE_IDLE
+            ) {
+                if (gap == 0) gapInfo = snap
+                gap++
+            } else {
+                if (gap >= 1 && pictureMoving) qaLog("LUECKE ${gap}s ${app.current?.channel?.name} | Beginn: $gapInfo")
+                gap = 0
+            }
 
             if (app.showDiag) {
                 @Suppress("DEPRECATION")
@@ -294,7 +319,7 @@ fun PlayerScreen(
             lastPos = pos
             lastBuffered = buffered
             if ((jump >= 2 || frozen >= 6 || starved >= 8) && now >= nextAllowed) {
-                qaLog("WATCHDOG ${if (jump >= 2) "jump" else if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name}")
+                qaLog("WATCHDOG ${if (jump >= 2) "jump" else if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name} | $snap")
                 val light = starved < 8
                 frozen = 0
                 starved = 0
@@ -1112,6 +1137,8 @@ fun PlayerScreen(
 /** Kurze Zeilen fürs Protokoll (logcat, Kennung AzeQA) – der automatische Emulator-Test liest sie mit. */
 internal fun qaLog(msg: String) {
     android.util.Log.i("AzeQA", msg)
+    // auch ins Hänger-Protokoll auf dem Gerät (ohne die sekündlichen Messzeilen)
+    if (!msg.startsWith("TICK") && !msg.startsWith("MV_TICK")) de.aze.iptv.data.HangLog.add(msg)
 }
 
 @Composable

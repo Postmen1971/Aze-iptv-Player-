@@ -100,6 +100,11 @@
 - Messzeile zeichnet nur sich selbst neu; Gruppenliste wird gemerkt statt bei jedem Neuzeichnen gefiltert.
 - Bewusst NICHT gemacht (Gerätetest nötig): erzwungenes asynchrones Decodieren, Non-IDR-Keyframes, Baseline-Profile.
 
+## Arbeitsweise gegen späte Fehler (ab 1.0.122)
+- Vor größeren Player-Änderungen: erst recherchieren (Media3-Doku/Issues, offene Player wie Kodi/mpv/Just Player), unabhängige Prüfung VOR dem Bauen.
+- Hänger-Protokoll auf dem Gerät (`data/HangLog.kt`, Datei `haenger.log`): jede Bildlücke (LUECKE n s + Zustand zu Beginn), Wächter-Eingriff mit Messwerten, Fehler, nahtlose Neuverbindungen (REJOIN/TRANSITION), Multi-View-Ereignisse. Nur Sendernamen, keine Adressen. Einstellungen → „Hänger-Protokoll“ → Anzeigen / Hochladen (paste.rs, Link an Claude schicken – Claude kann den Link lesen, wenn Aziz ihn im Chat schickt) / Leeren.
+- Test-Server realistisch: drop.ts 3× schneller als Echtzeit (großer Vorrat wie echter Anbieter), neuer Sender „Test 6 Limit“ (1 Verbindung, 403 bis 2 s nach Freigabe, trennt alle 20 s). Emulator misst „längste Lücke ohne Bild“ (≤ 2 s), Dauerlauf 3 min.
+
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
 2. **SkorText-Update direkt im Player:** Beim Öffnen von SkorText prüfen, ob es auf GitHub eine neuere Version gibt, und die Seiten selbst nachladen (ohne neuen Player-Build). Der Update-Knopf in SkorText soll das auch auslösen (im Player derzeit ohne Funktion, `SkorBridge.installApk` ist leer).

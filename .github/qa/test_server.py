@@ -3,7 +3,9 @@
   /ok.ts      läuft normal
   /stall.ts   nach 15 s kommen keine Daten mehr, Verbindung bleibt offen (tote Verbindung)
   /vstop.ts   nach 15 s nur noch Ton, kein Bild
-  /drop.ts    nach 15 s trennt der Server die Verbindung
+  /drop.ts    wie ein echter Anbieter 3× schneller als Echtzeit (großer Vorrat), nach 15 s trennt der Server
+  /one.ts     „Anbieter mit nur 1 Verbindung“: 2× schneller, trennt alle 20 s; eine neue Verbindung wird abgelehnt (403),
+              solange die alte läuft und noch 2 s danach (Anbieter gibt den Platz verzögert frei)
 """
 import os, sys, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,11 +25,18 @@ http://10.0.2.2:{p}/vstop.ts
 http://10.0.2.2:{p}/drop.ts
 #EXTINF:-1 group-title="QA",Test 5 Zeitsprung
 http://10.0.2.2:{p}/jump.ts
+#EXTINF:-1 group-title="QA",Test 6 Limit
+http://10.0.2.2:{p}/one.ts
 """.format(p=PORT)
 
 
 def log(msg):
     print(time.strftime("%H:%M:%S"), msg, flush=True)
+
+
+ONE_LOCK = threading.Lock()
+ONE_BUSY = False
+ONE_FREE_AT = 0.0
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -48,17 +57,37 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
         mode = {"ok.ts": ("ok.ts", None), "stall.ts": ("ok.ts", "stall"),
-                "vstop.ts": ("vstop.ts", None), "drop.ts": ("ok.ts", "drop"), "jump.ts": ("jump.ts", None)}.get(path)
+                "vstop.ts": ("vstop.ts", None), "drop.ts": ("ok.ts", "drop"), "jump.ts": ("jump.ts", None),
+                "one.ts": ("ok.ts", "one")}.get(path)
         if mode is None:
             self.send_error(404)
             return
         name, behaviour = mode
+        global ONE_BUSY, ONE_FREE_AT
+        if behaviour == "one":
+            with ONE_LOCK:
+                if ONE_BUSY or time.time() < ONE_FREE_AT:
+                    log("one: abgelehnt (403) – Verbindung noch belegt")
+                    self.send_error(403)
+                    return
+                ONE_BUSY = True
+            try:
+                self.stream(name, behaviour, speed=2.0, cut=20)
+            finally:
+                with ONE_LOCK:
+                    ONE_BUSY = False
+                    ONE_FREE_AT = time.time() + 2.0
+            return
+        self.stream(name, behaviour, speed=3.0 if behaviour == "drop" else 1.0, cut=15)
+
+    def stream(self, name, behaviour, speed, cut):
+        path = name
         f = os.path.join(MEDIA, name)
         size = os.path.getsize(f)
         # Bytes pro Sekunde = Echtzeit. vstop hat nach 15 s nur noch Ton (wenige Bytes): mit der Rate des normalen
         # Senders liefern, sonst kommt der Bild-Teil viel zu langsam (das wäre ein anderer Fall: „Anbieter zu langsam“)
         ok = os.path.join(MEDIA, "ok.ts")
-        rate = os.path.getsize(ok) / DURATION["ok.ts"]
+        rate = os.path.getsize(ok) / DURATION["ok.ts"] * speed
         self.send_response(200)
         self.send_header("Content-Type", "video/mp2t")
         self.end_headers()
@@ -69,12 +98,12 @@ class Handler(BaseHTTPRequestHandler):
             with open(f, "rb") as fh:
                 while True:
                     elapsed = time.time() - start
-                    if behaviour and elapsed >= 15:
+                    if behaviour and elapsed >= cut:
                         if behaviour == "stall":
                             log("stall: keine Daten mehr")
                             time.sleep(90)
                         else:
-                            log("drop: Verbindung getrennt")
+                            log(f"{behaviour}: Verbindung getrennt")
                         return
                     allowed = burst + rate * elapsed
                     if sent >= allowed:

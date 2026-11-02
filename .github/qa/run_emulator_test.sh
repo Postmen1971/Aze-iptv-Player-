@@ -94,9 +94,10 @@ note "Zustand Test 3" "$(ticks | tail -45)"
 
 log "== Test 4: Server trennt die Verbindung"
 w=$(count "WATCHDOG")
-tb=$(ticks | wc -l)
 channel 4
 wait_for "FIRST_FRAME Test 4" 1 60
+sleep 2
+tb=$(ticks | wc -l)  # Lücken erst ab laufendem Bild zählen (nicht die Umschaltzeit)
 # Server trennt nach 15 s: neue Verbindung muss SOFORT angehängt werden und nahtlos übernehmen
 wait_for "REJOIN Test 4" 1 40
 wait_for "TRANSITION Test 4" 1 20 && shot "test4-uebergang"
@@ -117,6 +118,22 @@ wait_for "FIRST_FRAME Test 5" 2 15 && shot "test4b-nach-zeitsprung"
 note "Zustand Test 4b" "$(ticks | tail -25)"
 channel 4
 sleep 3
+
+log "== Test 4c: Anbieter mit nur 1 Verbindung, trennt alle 20 s – 3 Minuten Dauerlauf"
+w=$(count "WATCHDOG"); e=$(count "ENDED")
+channel 6
+wait_for "FIRST_FRAME Test 6" 1 60
+sleep 2
+tb=$(ticks | wc -l)  # Lücken erst ab laufendem Bild zählen (nicht die Umschaltzeit)
+sleep 180
+t=$(count "TRANSITION Test 6")
+g=$(max_gap "$tb")
+note "Test 4c Dauerlauf" "nahtlose Übergänge: $t · längste Lücke ohne Bild: ${g} s · abgelehnte Verbindungen werden schnell neu versucht"
+[ "$t" -ge 4 ] || fail "Dauerlauf: zu wenige nahtlose Neuverbindungen ($t)"
+[ "$g" -le 2 ] || fail "Dauerlauf: ${g} s ohne Bild"
+[ "$(count "WATCHDOG")" -eq "$w" ] || fail "Dauerlauf: Wächter musste eingreifen"
+[ "$(count "ENDED")" -eq "$e" ] || fail "Dauerlauf: Notlösung mit Neustart gebraucht"
+shot "test4c-dauerlauf"
 
 log "== Test 5: schnelles Zappen (20× hoch/runter), danach muss Test 1 laufen"
 for i in $(seq 1 10); do adb shell input keyevent KEYCODE_DPAD_UP; adb shell input keyevent KEYCODE_DPAD_DOWN; done
