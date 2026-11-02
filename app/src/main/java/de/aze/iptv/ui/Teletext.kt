@@ -127,6 +127,10 @@ object Teletext {
             main.post { web.evaluateJavascript("window.__skorUpd && window.__skorUpd('')", null) }
         }
 
+        /** SkorText erkennt daran, dass er im Aze-IPTV-Player läuft (Update kommt dann mit dem Player) */
+        @JavascriptInterface
+        fun host(): String = "aze"
+
         @JavascriptInterface
         fun pref(key: String, def: String): String = prefs.getString(key, def) ?: def
 

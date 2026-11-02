@@ -1,7 +1,7 @@
 /* SkorText für Android TV / NVIDIA Shield – Portierung des Enigma2-Plugins */
 (function () {
 "use strict";
-var VERSION = "3.10";
+var VERSION = "3.13";
 
 /* ================= Texte ================= */
 var TXT = {
@@ -19,19 +19,19 @@ var TXT = {
   noMore:"Kein weiterer Spieltag",newsHint:"▲▼ wählen · OK lesen · ◄► Rubrik",articleHint:"▲▼ / ◄► nächste Meldung · OK / ZURÜCK",
   resHint:"◄► Liga · OK Tabelle",tabHint:"◄► Liga · OK Ergebnisse",
   cNAT:"LÄNDERSPIELE",cRANK:"RANGLISTEN",cMORE:"WEITERES",more:"▼ mehr: Länderspiele, Ranglisten",t_more:"wischen ▲ = mehr: Länderspiele, Ranglisten",
-  fav:"Mein Verein",today:"Heute",yesterday:"Gestern",tomorrow:"Morgen",dayHint:"◄► Tag wechseln",t_dayHint:"wischen ◄► = Tag wechseln",
+  fav:"Mein Verein",today:"Heute",tv:"Heute im TV",tvHint:"Sender laut liveonsat.com",tvNone:"keine Sender bekannt",yesterday:"Gestern",tomorrow:"Morgen",dayHint:"◄► Tag wechseln",t_dayHint:"wischen ◄► = Tag wechseln",
   last:"Letzte Spiele",next:"Nächste Spiele",noFav:"Kein Lieblingsverein gewählt.",noFav2:"Unter Einstellungen (900) auswählen.",place:"Platz",
   scorers:"Torschützen",detHint:"OK = Tabelle · ▲▼ blättern",t_detHint:"Titel antippen = Tabelle · wischen ▲▼",pen:"E",og:"ET",
   rkFifa:"FIFA-Weltrangliste",rkUefa:"UEFA-Länderwertung",rkClub:"UEFA-Klubwertung",points:"Punkte",season:"Saison",nation:"Land",asOf:"Stand",
   noMatches:"Keine Spiele an diesem Tag.",nlHint:"◄► ▲▼ nächste Gruppe",natEU:"Länderspiele Europa",t_nlHint:"wischen = nächste Gruppe",helpOpen:"OK = öffnen",t_helpOpen:"antippen = öffnen",
   helpInfo:"Alle Tasten und Seiten auf einen Blick.",updRow:"Update suchen",updOpen:"OK = jetzt prüfen",t_updOpen:"antippen = jetzt prüfen",
-  updInfo:"Neue Version von GitHub laden. Installiert:",updNone:"SkorText ist aktuell",updLoad:"Update %s wird geladen …",updPerm:"Bitte „Unbekannte Apps installieren“ erlauben, dann nochmal",
+  updInfo:"Neue Version von GitHub laden. Installiert:",updNone:"SkorText ist aktuell",updLoad:"Update %s wird geladen …",updPerm:"Bitte „Unbekannte Apps installieren“ für SkorText erlauben und mit ZURÜCK zurückkommen – dann geht es von selbst weiter",updOpening:"Installation wird geöffnet …",updEmbed:"Im Aze-IPTV-Player kommt SkorText mit dessen Update (Einstellungen → App-Update)",
   updErr:"Update fehlgeschlagen",updAvail:"Neue Version %s – Einstellungen → Update",
   t_openHint:"Antippen = öffnen · ZURÜCK beenden",t_home:"◄ Übersicht (hier tippen)",t_resHint:"wischen ◄► Liga · Titel antippen = Tabelle",
   t_tabHint:"wischen ◄► Liga · Titel antippen = Ergebnisse",t_setHint:"Antippen = ändern · ZURÜCK zurück",
   t_newsHint:"Antippen = lesen · wischen ◄► Rubrik",t_articleHint:"wischen = nächste Meldung · Titel antippen = zurück",t_mdArrows:"wischen ▲▼",
   helpRows:[["◄ ►","Liga wechseln"],["OK","Ergebnisse ⇄ Tabelle"],["▲ ▼","Ergebnisse: Spieltag vor/zurück"],["▲ ▼","Tabelle: Unterseite"],
-   ["ZURÜCK","Übersicht, nochmal = App beenden"],["Übersicht","▲▼◄► wählen, OK öffnet"],["440–460","Champions / Europa / Conference League"],["295 / 305","DFB-Pokal / Türkiye Kupası"],["510","Heute (◄► Tag)"],["110","Mein Verein"],["470","Länderspiele Europa: NL / EM- / WM-Quali"],["480–484","Ranglisten FIFA / UEFA"],["500","Alle Live-Spiele"],["600","Haberler (Nachrichten)"],
+   ["ZURÜCK","Übersicht, nochmal = App beenden"],["Übersicht","▲▼◄► wählen, OK öffnet"],["440–460","Champions / Europa / Conference League"],["295 / 305","DFB-Pokal / Türkiye Kupası"],["510","Heute (◄► Tag)"],["520","Heute im TV: Sender je Spiel"],["110","Mein Verein"],["470","Länderspiele Europa: NL / EM- / WM-Quali"],["480–484","Ranglisten FIFA / UEFA"],["500","Alle Live-Spiele"],["600","Haberler (Nachrichten)"],
    ["900","Einstellungen (Stil, Sprache …)"],["Farbtasten","falls vorhanden: DE / TR / Europa / Live"],["0–9","falls vorhanden: Seitennummer"],["Tablet","antippen = öffnen · Titel = Tabelle · oben = Übersicht"],["Wischen","◄► Liga wechseln · ▲▼ Spieltag / Unterseite"]]},
  tr: {overview:"Genel Bakış",results:"Sonuçlar",table:"Puan Durumu",liveTable:"Canlı Puan Durumu",md:"%d. Hafta",live:"Canlı",
   allLive:"Tüm Canlı Maçlar",help:"Kullanım",settings:"Ayarlar",noLive:"Şu an canlı maç yok",ht:"İY",ft:"MS",
@@ -47,19 +47,19 @@ var TXT = {
   noMore:"Başka hafta yok",newsHint:"▲▼ seç · OK oku · ◄► kategori",articleHint:"▲▼ / ◄► sonraki haber · OK / GERİ",
   resHint:"◄► Lig · OK Puan",tabHint:"◄► Lig · OK Sonuçlar",
   cNAT:"MİLLİ MAÇLAR",cRANK:"SIRALAMALAR",cMORE:"DİĞER",more:"▼ devamı: Milli maçlar, sıralamalar",t_more:"kaydır ▲ = devamı: Milli maçlar, sıralamalar",
-  fav:"Takımım",today:"Bugün",yesterday:"Dün",tomorrow:"Yarın",dayHint:"◄► gün değiştir",t_dayHint:"kaydır ◄► = gün değiştir",
+  fav:"Takımım",today:"Bugün",tv:"Bugün TV'de",tvHint:"Kanallar: liveonsat.com",tvNone:"kanal bilgisi yok",yesterday:"Dün",tomorrow:"Yarın",dayHint:"◄► gün değiştir",t_dayHint:"kaydır ◄► = gün değiştir",
   last:"Son maçlar",next:"Sıradaki maçlar",noFav:"Favori takım seçilmedi.",noFav2:"Ayarlar (900) altından seç.",place:"Sıra",
   scorers:"Goller",detHint:"OK = Puan durumu · ▲▼ sayfa",t_detHint:"başlığa dokun = Puan · kaydır ▲▼",pen:"P",og:"KK",
   rkFifa:"FIFA Dünya Sıralaması",rkUefa:"UEFA Ülke Puanı",rkClub:"UEFA Kulüp Puanı",points:"Puan",season:"Sezon",nation:"Ülke",asOf:"Güncel",
   noMatches:"Bu gün maç yok.",nlHint:"◄► ▲▼ sonraki grup",natEU:"Avrupa milli maçları",t_nlHint:"kaydır = sonraki grup",helpOpen:"OK = aç",t_helpOpen:"dokun = aç",
   helpInfo:"Tüm tuşlar ve sayfalar.",updRow:"Güncelleme ara",updOpen:"OK = şimdi kontrol et",t_updOpen:"dokun = şimdi kontrol et",
-  updInfo:"GitHub'dan yeni sürüm yükle. Kurulu:",updNone:"SkorText güncel",updLoad:"Güncelleme %s yükleniyor …",updPerm:"Lütfen „Bilinmeyen uygulamalar“ iznini ver, sonra tekrar",
+  updInfo:"GitHub'dan yeni sürüm yükle. Kurulu:",updNone:"SkorText güncel",updLoad:"Güncelleme %s yükleniyor …",updPerm:"Lütfen SkorText için „Bilinmeyen uygulamalar“ iznini ver ve GERİ ile dön – kurulum kendiliğinden başlar",updOpening:"Kurulum açılıyor …",updEmbed:"Aze-IPTV-Player içinde SkorText onun güncellemesiyle gelir (Ayarlar → Uygulama güncellemesi)",
   updErr:"Güncelleme başarısız",updAvail:"Yeni sürüm %s – Ayarlar → Güncelleme",
   t_openHint:"Dokun = aç · GERİ çık",t_home:"◄ Genel Bakış (dokun)",t_resHint:"kaydır ◄► Lig · başlığa dokun = Puan",
   t_tabHint:"kaydır ◄► Lig · başlığa dokun = Sonuçlar",t_setHint:"Dokun = değiştir · GERİ",
   t_newsHint:"Dokun = oku · kaydır ◄► kategori",t_articleHint:"kaydır = sonraki haber · başlığa dokun = geri",t_mdArrows:"kaydır ▲▼",
   helpRows:[["◄ ►","Lig değiştir"],["OK","Sonuçlar ⇄ Puan Durumu"],["▲ ▼","Sonuçlar: önceki/sonraki hafta"],["▲ ▼","Puan durumu: alt sayfa"],
-   ["GERİ","Genel Bakış, tekrar = uygulamadan çık"],["Genel Bakış","▲▼◄► seç, OK aç"],["440–460","Şampiyonlar / Avrupa / Konferans Ligi"],["295 / 305","Almanya Kupası / Türkiye Kupası"],["510","Bugün (◄► gün)"],["110","Takımım"],["470","Avrupa milli maçlar: UL / EURO / DK eleme"],["480–484","Sıralamalar FIFA / UEFA"],["500","Tüm canlı maçlar"],["600","Haberler"],
+   ["GERİ","Genel Bakış, tekrar = uygulamadan çık"],["Genel Bakış","▲▼◄► seç, OK aç"],["440–460","Şampiyonlar / Avrupa / Konferans Ligi"],["295 / 305","Almanya Kupası / Türkiye Kupası"],["510","Bugün (◄► gün)"],["520","Bugün TV'de: maç başına kanallar"],["110","Takımım"],["470","Avrupa milli maçlar: UL / EURO / DK eleme"],["480–484","Sıralamalar FIFA / UEFA"],["500","Tüm canlı maçlar"],["600","Haberler"],
    ["900","Ayarlar (görünüm, dil …)"],["Renk tuşları","varsa: DE / TR / Avrupa / Canlı"],["0–9","varsa: sayfa numarası"],["Tablet","dokun = aç · başlık = Puan · üst = Genel Bakış"],["Kaydır","◄► lig değiştir · ▲▼ hafta / alt sayfa"]]}
 };
 var SETTINGS = [
@@ -959,7 +959,9 @@ var FEED_SETS = {tr: [
  {page: 610, name: "Güncel", source: "Anadolu Ajansı", url: "https://www.aa.com.tr/tr/rss/default?cat=guncel"},
  {page: 620, name: "Dünya", source: "Anadolu Ajansı", url: "https://www.aa.com.tr/tr/rss/default?cat=dunya"},
  {page: 630, name: "Ekonomi", source: "Anadolu Ajansı", url: "https://www.aa.com.tr/tr/rss/default?cat=ekonomi"},
- {page: 640, name: "Spor", source: "Anadolu Ajansı", url: "https://www.aa.com.tr/tr/rss/default?cat=spor"}
+ {page: 640, name: "Spor", source: "Anadolu Ajansı", url: "https://www.aa.com.tr/tr/rss/default?cat=spor"},
+ {page: 650, name: "Kahramanmaraş", source: "haberler.com", url: "https://www.haberler.com/kahramanmaras/rss"},
+ {page: 660, name: "Maraş Yerel", source: "Maraş Manşet", url: "https://www.marasmanset.com/rss"}
 ], de: [
  {page: 600, name: "Schlagzeilen", source: "tagesschau", url: "https://www.tagesschau.de/infoservices/alle-meldungen-100~rss2.xml"},
  {page: 610, name: "Inland", source: "tagesschau", url: "https://www.tagesschau.de/inland/index~rss2.xml"},
@@ -1065,13 +1067,13 @@ window.addEventListener("resize", function () { layout(); draw(); });
 
 function pageType(p) {
   if (p === 100) return "idx"; if (p === 190) return "help"; if (p === 500) return "live"; if (p === 900) return "set"; if (p === 910) return "lsel";
-  if (p === 110) return "fav"; if (p === 470) return "nl"; if (p === 510) return "day"; if (rankingByPage(p)) return "rank";
+  if (p === 110) return "fav"; if (p === 470) return "nl"; if (p === 510) return "day"; if (p === 520) return "tv"; if (rankingByPage(p)) return "rank";
   if (feedByPage(p)) return "news";
   var v = STORE.view(p); return v ? v[2] : null;
 }
 function allPages() {
   var pages = [100, 110, 190, 470]; STORE.allViews().forEach(function (v) { pages.push(v[1], v[1] + 1); });
-  return pages.concat([500, 510]).concat(RANKINGS.map(function (r) { return r.page; })).concat(FEEDS.map(function (f) { return f.page; })).concat([900, 910]).sort(function (a, b) { return a - b; });
+  return pages.concat([500, 510, 520]).concat(RANKINGS.map(function (r) { return r.page; })).concat(FEEDS.map(function (f) { return f.page; })).concat([900, 910]).sort(function (a, b) { return a - b; });
 }
 function up(s, country) {
   if (country === "tr" || cfg("lang") === "tr") { var u = trUpper(s); if (cfg("lang") !== "tr") u = u.replace(/LİGA/g, "LIGA"); return u; }
@@ -1147,7 +1149,7 @@ function go(p) {
   var a = STORE.leagueByPage(S.page), b = STORE.leagueByPage(p);
   if (!a || a !== b) S.md = null;
   var old = S.page;
-  if (p === 510 && old !== 510) S.dayOff = 0;
+  if ((p === 510 || p === 520) && old !== p) S.dayOff = 0;
   S.det = false;
   S.page = p; S.sub = 0; S.lastRot = Date.now(); S.newsSel = 0; S.newsOpen = null;
   var f = feedByPage(p); if (f) needFeed(f);
@@ -1248,7 +1250,7 @@ function lselItems() {
   });
   out.push([null, T("cNAT"), "nat"], [470, NAT.groups.length ? NAT.title(lang) : T("natEU"), "nat"]);
   out.push([null, T("cRANK"), "rk"], [480, T("rkFifa"), "rk"], [482, T("rkUefa"), "rk"], [484, T("rkClub"), "rk"]);
-  out.push([null, T("cMORE"), "more"], [110, T("fav"), "more"], [510, T("today"), "more"], [500, T("allLive"), "more"], [600, "Nachrichten / Haberler", "more"]);
+  out.push([null, T("cMORE"), "more"], [110, T("fav"), "more"], [510, T("today"), "more"], [520, T("tv"), "more"], [500, T("allLive"), "more"], [600, "Nachrichten / Haberler", "more"]);
   return out;
 }
 function lselToggle() { if (S.lsSel === null || S.lsSel === undefined) return; togglePage(S.lsSel); message(pageOn(S.lsSel) ? T("lselOn") : T("lselOff"), 1.2); }
@@ -1296,7 +1298,7 @@ function idxCols() {
   var fav = cfg("fav");
   function sec(hdr, items) { items = items.filter(function (it) { return it.page === 900 || pageOn(it.page); }); return items.length ? [hdr].concat(items) : []; }
   var more = sec({hdr: T("cMORE"), bg: "m", fg: "k"}, [
-    {page: 110, lbl: T("fav") + (fav ? " · " + fav : "")}, {page: 510, lbl: T("today")}, {page: 500, lbl: T("allLive"), live: true},
+    {page: 110, lbl: T("fav") + (fav ? " · " + fav : "")}, {page: 510, lbl: T("today")}, {page: 520, lbl: T("tv")}, {page: 500, lbl: T("allLive"), live: true},
     {page: 600, lbl: newsLabel()}, {page: 900, lbl: T("settings")}]);
   var dep = sec({hdr: T("cDE"), bg: "r", fg: "w"}, views("de"));
   var left = dep.concat(dep.length ? [null] : []).concat(more);
@@ -1491,6 +1493,7 @@ function subpages() {
     subs = chunk(lines).map(function (ch) { return {ban: [up(T("help")), "SkorText"], bg: ["b", "w"], head: blank(), lines: ch}; });
   } else if (t === "fav") subs = favSubpages();
   else if (t === "day") subs = daySubpages();
+  else if (t === "tv") subs = tvSubpages();
   else if (t === "nl") subs = nlSubpages();
   else if (t === "rank") subs = rankSubpages();
   else if (t === "set") {
@@ -1649,6 +1652,57 @@ function daySubpages() {
   if (!blocks.length) blocks = [[blank(), text(T("noMatches"), "c")]];
   return chunkBlocks(blocks).map(function (ch) { return {ban: [title, ""], bg: ["b", "w"], head: head, lines: ch}; });
 }
+/* Seite 520 „Heute im TV“: Sender je Spiel von liveonsat.com. Ein GitHub-Auftrag (Projekt SkorText) legt die
+   Liste alle 30 Minuten als kleine Datei ab (nur europäische Sender, DE/TR zuerst) – viel leichter als die liveonsat-Seite. */
+var TVF = {t: 0, list: null, loading: false, error: null, url: "https://raw.githubusercontent.com/Postmen1971/SkorText/feed/liveonsat.json"};
+function needTv() {
+  var now = Date.now() / 1000;
+  if (TVF.loading || (TVF.list && now - TVF.t < 1800) || (TVF.error && now - TVF.t < 120)) return;
+  TVF.loading = true;
+  rawJSON(TVF.url).then(function (d) {
+    TVF.loading = false; TVF.t = Date.now() / 1000; TVF.error = null;
+    // nur die Spiele von heute (die Datei enthält 7 Tage; ältere Dateien ohne Datum gelten nur am selben Tag)
+    var n = new Date(), iso = n.getFullYear() + "-" + two(n.getMonth() + 1) + "-" + two(n.getDate());
+    TVF.list = (d.fixtures || []).filter(function (f) { return f.date ? f.date === iso : String(d.updated || "").slice(0, 10) === iso; });
+    draw();
+  }, function (e) { TVF.loading = false; TVF.t = Date.now() / 1000; TVF.error = niceError(e); draw(); });
+}
+function tvNorm(t) { return String(t || "").toLowerCase().replace(/ı/g, "i").replace(/ß/g, "ss").normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+var TV_NOISE = {fc: 1, sc: 1, sk: 1, fk: 1, cf: 1, ac: 1, as: 1, sv: 1, vfb: 1, vfl: 1, tsg: 1, afc: 1, club: 1, de: 1, the: 1};
+function tvTokens(team) { return tvNorm(team).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3 && !TV_NOISE[w]; }); }
+var TV_YOUTH = /\b(u-?\d{2}|women|woman|frauen|kadin|ladies|reserves|ii)\b|\(w\)/i;
+function tvChannels(home, away) {
+  var t1 = tvTokens(home), t2 = tvTokens(away), youth = TV_YOUTH.test(home + " " + away);
+  var has = function (s, ts) { return ts.some(function (w) { return s.indexOf(w) >= 0; }); };
+  var f = (TVF.list || []).filter(function (x) { return youth || !TV_YOUTH.test(x.home + " " + x.away); }).filter(function (x) {
+    var h = tvNorm(x.home), a = tvNorm(x.away);
+    return (has(h, t1) && has(a, t2)) || (has(a, t1) && has(h, t2));
+  })[0];
+  return f ? f.channels.map(function (c) { return c.replace(/\s*📺/g, "").trim(); }) : [];
+}
+function tvSubpages() {
+  var lang = cfg("lang"), d = new Date(), key = d.getFullYear() + two(d.getMonth() + 1) + two(d.getDate()), day = STORE.days[key] || {};
+  var title = up(T("tv") + " · " + dayLabel(Date.now() / 1000)), head = infoHead(T("tvHint"));
+  if (!day.list || !TVF.list) {
+    var err = day.error || (!TVF.list ? TVF.error : null);
+    var l = err && !TVF.loading && !day.loading ? [blank(), text(T("noData"), "r"), text(fit(err, G.cols), "d")] : [blank(), text(T("loading"), "y")];
+    return [{ban: [title, ""], bg: ["b", "w"], head: head, lines: l}];
+  }
+  var blocks = [];
+  day.list.forEach(function (x) {
+    var lg = x[0], bl = [text((lg.tag ? lg.tag + " " : "") + lg.name(lang), "y")];
+    x[1].forEach(function (e0, i) {
+      var e = STORE.live[e0.id] || e0;
+      if (e.state === "post") return; // vorbei – im TV nicht mehr interessant
+      bl.push(zebra(resRow(e), i));
+      var ch = tvChannels(e.h, e.a);
+      bl.push(text("   " + fit(ch.length ? ch.join(" · ") : T("tvNone"), G.cols - 3), ch.length ? "g" : "d"));
+    });
+    if (bl.length > 1) blocks.push(bl);
+  });
+  if (!blocks.length) blocks = [[blank(), text(T("noMatches"), "c")]];
+  return chunkBlocks(blocks).map(function (ch) { return {ban: [title, ""], bg: ["b", "w"], head: head, lines: ch}; });
+}
 function rankSubpages() {
   var C = G.cols, rk = rankingByPage(S.page), title = up({fifa: T("rkFifa"), uefa: T("rkUefa"), club: T("rkClub")}[rk.kind]);
   var hd = [null, [seg(0, 4, T("pl"), "c", null, "r"), seg(6, C - 30, rk.kind === "club" ? T("club") : T("nation"), "c"),
@@ -1779,7 +1833,10 @@ function newerVersion(a, b) {
   for (var i = 0; i < Math.max(x.length, y.length); i++) { var p = +(x[i] || 0), q = +(y[i] || 0); if (p !== q) return p > q; }
   return false;
 }
+/* Im Aze-IPTV-Player eingebettet: dort kommt SkorText mit dem Update des Players – eigener Update-Knopf nur Hinweis */
+var EMBED = !!(window.SkorBridge && SkorBridge.host && SkorBridge.host() === "aze");
 function checkUpdate(manual) {
+  if (EMBED) { if (manual) { UPD.msg = T("updEmbed"); message(UPD.msg, 6); draw(); } return; }
   if (UPD.busy) return;
   UPD.busy = true; if (manual) { UPD.msg = "…"; draw(); }
   rawJSON(UPD_BASE + "version.json").then(function (v) {
@@ -1791,7 +1848,8 @@ function checkUpdate(manual) {
 }
 window.__skorUpd = function (st) {
   if (st === "perm") UPD.msg = T("updPerm");
-  else if (String(st).indexOf("error") === 0) UPD.msg = T("updErr");
+  else if (st === "open") UPD.msg = T("updOpening");
+  else if (String(st).indexOf("error") === 0) UPD.msg = T("updErr") + ": " + String(st).slice(6);
   else UPD.msg = "";
   if (UPD.msg) message(UPD.msg, 5);
   draw();
@@ -1806,6 +1864,7 @@ function tick() {
   if (tt === "fav") favLeagues().forEach(needLeague);
   else if (tt === "nl") needNat();
   else if (tt === "day") needDay();
+  else if (tt === "tv") { needDay(); needTv(); }
   else if (tt === "rank") needRank(rankingByPage(S.page));
   var f = feedByPage(S.page); if (f) needFeed(f);
   if (cfg("rotate") === "10" && !f && !(tt === "res" && !S.det) && Date.now() - S.lastRot > 10000) {
