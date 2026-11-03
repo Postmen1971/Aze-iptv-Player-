@@ -359,9 +359,10 @@ private fun Browse(
                               val requested = HashSet<String>()
                               val loader = coil.Coil.imageLoader(ctx)
                               // „Filme & Serien bevorzugt“: gleich die ganze Kategorie (bis 400 Cover) im Hintergrund holen
-                              if (vodFast) {
-                                  kotlinx.coroutines.delay(800) // erst die sichtbaren Cover
-                                  list.asSequence().take(400).forEach { item ->
+                              // Standard: die ersten 150 Cover der Kategorie (bleibt im 250-MB-Rahmen); bevorzugt: bis 400
+                              run {
+                                  kotlinx.coroutines.delay(if (vodFast) 800 else 1_200) // erst die sichtbaren Cover
+                                  list.asSequence().take(if (vodFast) 400 else 150).forEach { item ->
                                       val url = item.poster ?: return@forEach
                                       if (requested.add(url)) loader.enqueue(posterRequest(ctx, url))
                                   }
@@ -369,7 +370,7 @@ private fun Browse(
                               androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }.collect { first ->
                                   // kurz warten, bis das Blättern ruht – sonst drängeln sich vorgeladene Cover vor die sichtbaren
                                   kotlinx.coroutines.delay(250)
-                                  list.subList(first.coerceAtMost(list.size), list.size).take(if (vodFast) 60 else 24).forEach { item ->
+                                  list.subList(first.coerceAtMost(list.size), list.size).take(if (vodFast) 80 else 60).forEach { item ->
                                       val url = item.poster ?: return@forEach
                                       if (requested.add(url)) loader.enqueue(posterRequest(ctx, url))
                                   }

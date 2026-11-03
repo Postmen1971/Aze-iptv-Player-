@@ -1333,8 +1333,9 @@ private fun VodCoverSection(app: AppController) {
     Section("Filme & Serien – Cover") {
         Text(
             "Cover werden immer in kleiner Auflösung geladen (reicht für die Kacheln und ist viel schneller). " +
-                "„Filme & Serien bevorzugt“ lädt beim Öffnen einer Kategorie gleich alle Cover im Hintergrund und behält bis zu 1 GB " +
-                "auf dem Gerät (Standard: 250 MB) – beim Blättern sind sie dann sofort da. Gilt ab dem nächsten Start der App.",
+                "Standard lädt beim Öffnen einer Kategorie die ersten 150 Cover vor und behält bis zu 250 MB. " +
+                "„Filme & Serien bevorzugt“ lädt gleich bis zu 400 Cover im Hintergrund und behält bis zu 1 GB auf dem Gerät – " +
+                "beim Blättern sind sie dann sofort da. Gilt ab dem nächsten Start der App.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
