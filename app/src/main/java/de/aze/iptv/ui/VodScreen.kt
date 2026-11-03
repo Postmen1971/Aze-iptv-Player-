@@ -1,5 +1,7 @@
 package de.aze.iptv.ui
 
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
@@ -894,7 +896,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
             }
             // Tablet/Handy: Tippen zeigt/versteckt die Leiste, doppelt Tippen links/rechts spult 10 s
             .pointerInput(Unit) {
-                androidx.compose.foundation.gestures.detectTapGestures(
+                detectTapGestures(
                     onTap = { if (picker != null) picker = null else { showUi = !showUi; uiTick++ } },
                     onDoubleTap = { o ->
                         if (o.x < size.width / 2) { nudge(-1, 0); flash("−10 s") } else { nudge(+1, 0); flash("+10 s") }
@@ -982,7 +984,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                     Modifier.fillMaxWidth().height(28.dp)
                         .pointerInput(duration) {
                             if (duration <= 0) return@pointerInput
-                            androidx.compose.foundation.gestures.detectTapGestures { o ->
+                            detectTapGestures { o ->
                                 uiTick++
                                 seekJob?.cancel(); pending = null
                                 player.seekTo((duration * (o.x / size.width).coerceIn(0f, 1f)).toLong())
@@ -990,7 +992,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                         }
                         .pointerInput(duration) {
                             if (duration <= 0) return@pointerInput
-                            androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+                            detectHorizontalDragGestures(
                                 onDragEnd = { pending?.let { player.seekTo(it) }; pending = null },
                             ) { change, _ ->
                                 uiTick++
