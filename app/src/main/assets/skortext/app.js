@@ -1,7 +1,7 @@
 /* SkorText für Android TV / NVIDIA Shield – Portierung des Enigma2-Plugins */
 (function () {
 "use strict";
-var VERSION = "3.13";
+var VERSION = "3.14";
 
 /* ================= Texte ================= */
 var TXT = {
@@ -19,7 +19,7 @@ var TXT = {
   noMore:"Kein weiterer Spieltag",newsHint:"▲▼ wählen · OK lesen · ◄► Rubrik",articleHint:"▲▼ / ◄► nächste Meldung · OK / ZURÜCK",
   resHint:"◄► Liga · OK Tabelle",tabHint:"◄► Liga · OK Ergebnisse",
   cNAT:"LÄNDERSPIELE",cRANK:"RANGLISTEN",cMORE:"WEITERES",more:"▼ mehr: Länderspiele, Ranglisten",t_more:"wischen ▲ = mehr: Länderspiele, Ranglisten",
-  fav:"Mein Verein",today:"Heute",tv:"Heute im TV",tvHint:"Sender laut liveonsat.com",tvNone:"keine Sender bekannt",yesterday:"Gestern",tomorrow:"Morgen",dayHint:"◄► Tag wechseln",t_dayHint:"wischen ◄► = Tag wechseln",
+  fav:"Mein Verein",today:"Heute",tv:"Heute im TV",tvHint:"▲▼ Spiel · OK Sender · ZURÜCK zu",tvNone:"keine Sender bekannt",yesterday:"Gestern",tomorrow:"Morgen",dayHint:"◄► Tag wechseln",t_dayHint:"wischen ◄► = Tag wechseln",
   last:"Letzte Spiele",next:"Nächste Spiele",noFav:"Kein Lieblingsverein gewählt.",noFav2:"Unter Einstellungen (900) auswählen.",place:"Platz",
   scorers:"Torschützen",detHint:"OK = Tabelle · ▲▼ blättern",t_detHint:"Titel antippen = Tabelle · wischen ▲▼",pen:"E",og:"ET",
   rkFifa:"FIFA-Weltrangliste",rkUefa:"UEFA-Länderwertung",rkClub:"UEFA-Klubwertung",points:"Punkte",season:"Saison",nation:"Land",asOf:"Stand",
@@ -31,7 +31,7 @@ var TXT = {
   t_tabHint:"wischen ◄► Liga · Titel antippen = Ergebnisse",t_setHint:"Antippen = ändern · ZURÜCK zurück",
   t_newsHint:"Antippen = lesen · wischen ◄► Rubrik",t_articleHint:"wischen = nächste Meldung · Titel antippen = zurück",t_mdArrows:"wischen ▲▼",
   helpRows:[["◄ ►","Liga wechseln"],["OK","Ergebnisse ⇄ Tabelle"],["▲ ▼","Ergebnisse: Spieltag vor/zurück"],["▲ ▼","Tabelle: Unterseite"],
-   ["ZURÜCK","Übersicht, nochmal = App beenden"],["Übersicht","▲▼◄► wählen, OK öffnet"],["440–460","Champions / Europa / Conference League"],["295 / 305","DFB-Pokal / Türkiye Kupası"],["510","Heute (◄► Tag)"],["520","Heute im TV: Sender je Spiel"],["110","Mein Verein"],["470","Länderspiele Europa: NL / EM- / WM-Quali"],["480–484","Ranglisten FIFA / UEFA"],["500","Alle Live-Spiele"],["600","Haberler (Nachrichten)"],
+   ["ZURÜCK","Übersicht, nochmal = App beenden"],["Übersicht","▲▼◄► wählen, OK öffnet"],["440–460","Champions / Europa / Conference League"],["295 / 305","DFB-Pokal / Türkiye Kupası"],["510","Heute (◄► Tag)"],["520","Heute im TV: ▲▼ Spiel, OK alle Sender"],["110","Mein Verein"],["470","Länderspiele Europa: NL / EM- / WM-Quali"],["480–484","Ranglisten FIFA / UEFA"],["500","Alle Live-Spiele"],["600","Haberler (Nachrichten)"],
    ["900","Einstellungen (Stil, Sprache …)"],["Farbtasten","falls vorhanden: DE / TR / Europa / Live"],["0–9","falls vorhanden: Seitennummer"],["Tablet","antippen = öffnen · Titel = Tabelle · oben = Übersicht"],["Wischen","◄► Liga wechseln · ▲▼ Spieltag / Unterseite"]]},
  tr: {overview:"Genel Bakış",results:"Sonuçlar",table:"Puan Durumu",liveTable:"Canlı Puan Durumu",md:"%d. Hafta",live:"Canlı",
   allLive:"Tüm Canlı Maçlar",help:"Kullanım",settings:"Ayarlar",noLive:"Şu an canlı maç yok",ht:"İY",ft:"MS",
@@ -47,7 +47,7 @@ var TXT = {
   noMore:"Başka hafta yok",newsHint:"▲▼ seç · OK oku · ◄► kategori",articleHint:"▲▼ / ◄► sonraki haber · OK / GERİ",
   resHint:"◄► Lig · OK Puan",tabHint:"◄► Lig · OK Sonuçlar",
   cNAT:"MİLLİ MAÇLAR",cRANK:"SIRALAMALAR",cMORE:"DİĞER",more:"▼ devamı: Milli maçlar, sıralamalar",t_more:"kaydır ▲ = devamı: Milli maçlar, sıralamalar",
-  fav:"Takımım",today:"Bugün",tv:"Bugün TV'de",tvHint:"Kanallar: liveonsat.com",tvNone:"kanal bilgisi yok",yesterday:"Dün",tomorrow:"Yarın",dayHint:"◄► gün değiştir",t_dayHint:"kaydır ◄► = gün değiştir",
+  fav:"Takımım",today:"Bugün",tv:"Bugün TV'de",tvHint:"▲▼ maç · OK kanallar · GERİ kapat",tvNone:"kanal bilgisi yok",yesterday:"Dün",tomorrow:"Yarın",dayHint:"◄► gün değiştir",t_dayHint:"kaydır ◄► = gün değiştir",
   last:"Son maçlar",next:"Sıradaki maçlar",noFav:"Favori takım seçilmedi.",noFav2:"Ayarlar (900) altından seç.",place:"Sıra",
   scorers:"Goller",detHint:"OK = Puan durumu · ▲▼ sayfa",t_detHint:"başlığa dokun = Puan · kaydır ▲▼",pen:"P",og:"KK",
   rkFifa:"FIFA Dünya Sıralaması",rkUefa:"UEFA Ülke Puanı",rkClub:"UEFA Kulüp Puanı",points:"Puan",season:"Sezon",nation:"Ülke",asOf:"Güncel",
@@ -1151,7 +1151,7 @@ function go(p) {
   var old = S.page;
   if ((p === 510 || p === 520) && old !== p) S.dayOff = 0;
   S.det = false;
-  S.page = p; S.sub = 0; S.lastRot = Date.now(); S.newsSel = 0; S.newsOpen = null;
+  S.page = p; S.sub = 0; S.lastRot = Date.now(); S.newsSel = 0; S.newsOpen = null; S.tvSel = 0; S.tvOpen = null;
   var f = feedByPage(p); if (f) needFeed(f);
   if (p === 100) idxMark(old);
   var lg = STORE.leagueByPage(p); if (lg) needLeague(lg);
@@ -1177,6 +1177,7 @@ function key(k) {
   S.entry = "";
   var t = pageType(S.page);
   if (t === "news" && ["back", "ok", "up", "down", "left", "right"].indexOf(k) >= 0) { newsKey(k); draw(); return; }
+  if (t === "tv" && ["ok", "up", "down"].indexOf(k) >= 0 || (t === "tv" && k === "back" && S.tvOpen !== null)) { tvKey(k); draw(); return; }
   if (k === "back" && t === "lsel") { go(900); draw(); return; }
   if (k === "back") {
     if (S.page !== 100) { go(100); message(T("exitAgain"), 1.8); }
@@ -1680,28 +1681,70 @@ function tvChannels(home, away) {
   })[0];
   return f ? f.channels.map(function (c) { return c.replace(/\s*📺/g, "").trim(); }) : [];
 }
+/* Spiele für „Heute im TV“: ohne beendete Spiele und ohne Amateurligen (Regionalliga, Oberliga, Verbandsliga) */
+var TV_LOW = /regionalliga|oberliga|verbandsliga|landesliga/i;
+function tvMatches() {
+  var d = new Date(), key = d.getFullYear() + two(d.getMonth() + 1) + two(d.getDate()), day = STORE.days[key] || {}, out = [];
+  (day.list || []).forEach(function (x) {
+    var lg = x[0];
+    if (lg.ccd === "fupa" || TV_LOW.test(lg.name("de") + " " + (lg.tag || ""))) return;
+    x[1].forEach(function (e0) {
+      var e = STORE.live[e0.id] || e0;
+      if (e.state !== "post") out.push({lg: lg, e: e, ch: tvChannels(e.h, e.a)});
+    });
+  });
+  return out;
+}
+/* ▲▼ wählt ein Spiel, OK klappt seine Sender auf/zu, ein anderes Spiel wählen schließt es, ZURÜCK schließt es */
+function tvKey(k) {
+  var n = tvMatches().length;
+  if (k === "back") { S.tvOpen = null; return; }
+  if (!n) return;
+  if (k === "ok") { S.tvOpen = S.tvOpen === S.tvSel ? null : S.tvSel; return; }
+  var d = k === "down" ? 1 : -1;
+  S.tvSel = Math.max(0, Math.min(n - 1, S.tvSel + d)); S.tvOpen = null;
+}
 function tvSubpages() {
-  var lang = cfg("lang"), d = new Date(), key = d.getFullYear() + two(d.getMonth() + 1) + two(d.getDate()), day = STORE.days[key] || {};
+  var lang = cfg("lang"), C = G.cols, d = new Date(), key = d.getFullYear() + two(d.getMonth() + 1) + two(d.getDate()), day = STORE.days[key] || {};
   var title = up(T("tv") + " · " + dayLabel(Date.now() / 1000)), head = infoHead(T("tvHint"));
   if (!day.list || !TVF.list) {
     var err = day.error || (!TVF.list ? TVF.error : null);
-    var l = err && !TVF.loading && !day.loading ? [blank(), text(T("noData"), "r"), text(fit(err, G.cols), "d")] : [blank(), text(T("loading"), "y")];
+    var l = err && !TVF.loading && !day.loading ? [blank(), text(T("noData"), "r"), text(fit(err, C), "d")] : [blank(), text(T("loading"), "y")];
     return [{ban: [title, ""], bg: ["b", "w"], head: head, lines: l}];
   }
-  var blocks = [];
-  day.list.forEach(function (x) {
-    var lg = x[0], bl = [text((lg.tag ? lg.tag + " " : "") + lg.name(lang), "y")];
-    x[1].forEach(function (e0, i) {
-      var e = STORE.live[e0.id] || e0;
-      if (e.state === "post") return; // vorbei – im TV nicht mehr interessant
-      bl.push(zebra(resRow(e), i));
-      var ch = tvChannels(e.h, e.a);
-      bl.push(text("   " + fit(ch.length ? ch.join(" · ") : T("tvNone"), G.cols - 3), ch.length ? "g" : "d"));
-    });
-    if (bl.length > 1) blocks.push(bl);
+  var ms = tvMatches();
+  if (!ms.length) return [{ban: [title, ""], bg: ["b", "w"], head: head, lines: [blank(), text(T("noMatches"), "c")]}];
+  if (S.tvSel >= ms.length) { S.tvSel = ms.length - 1; S.tvOpen = null; }
+  var lines = [], map = [], selLine = 0, lastLg = null;
+  ms.forEach(function (m, i) {
+    if (m.lg !== lastLg) { lines.push(text((m.lg.tag ? m.lg.tag + " " : "") + m.lg.name(lang), "y")); map.push(null); lastLg = m.lg; }
+    var oc = G.cols; G.cols = C - 5; var row = resRow(m.e); G.cols = oc; // rechts Platz für die Sender-Anzahl
+    var sel = i === S.tvSel, segs = row[1].slice();
+    // rechts: Anzahl Sender (▼ wenn aufgeklappt)
+    segs.push(seg(C - 4, 4, m.ch.length ? (S.tvOpen === i ? "▼" : "") + m.ch.length : "–", m.ch.length ? "g" : "d", null, "r"));
+    if (sel) selLine = lines.length;
+    lines.push([sel ? COL.sel : row[0], segs]); map.push(i);
+    if (S.tvOpen === i) {
+      if (!m.ch.length) { lines.push(text("   " + T("tvNone"), "d")); map.push(i); }
+      // alle Sender, abwechselnd grün / hellblau, Zeilen umbrechen
+      var cur = [], col = 3;
+      m.ch.forEach(function (name, k) {
+        var nm = fit(name, C - 4);
+        if (col + nm.length > C) { lines.push([null, cur]); map.push(i); cur = []; col = 3; }
+        cur.push(seg(col, nm.length, nm, k % 2 === 0 ? "g" : "c")); col += nm.length + 2;
+      });
+      if (cur.length) { lines.push([null, cur]); map.push(i); }
+    }
   });
-  if (!blocks.length) blocks = [[blank(), text(T("noMatches"), "c")]];
-  return chunkBlocks(blocks).map(function (ch) { return {ban: [title, ""], bg: ["b", "w"], head: head, lines: ch}; });
+  // Ausschnitt von 20 Zeilen, der das gewählte Spiel (und seine Sender) zeigt
+  var H = 20, start = 0;
+  if (lines.length > H) {
+    start = Math.max(0, selLine - 2);
+    if (start > 0 && map[start - 1] === null) start--; // Liga-Überschrift mitnehmen
+    start = Math.min(start, lines.length - H);
+  }
+  S.tvRowMap = map.slice(start, start + H);
+  return [{ban: [title, (S.tvSel + 1) + "/" + ms.length], bg: ["b", "w"], head: head, lines: lines.slice(start, start + H)}];
 }
 function rankSubpages() {
   var C = G.cols, rk = rankingByPage(S.page), title = up({fifa: T("rkFifa"), uefa: T("rkUefa"), club: T("rkClub")}[rk.kind]);
@@ -1926,6 +1969,7 @@ function touchTap(x, y) {
     } else if (S.newsOpen !== null) key("right");
     return;
   }
+  if (t === "tv") { var ti = (S.tvRowMap || [])[bi]; if (ti !== undefined && ti !== null) { S.tvSel = ti; tvKey("ok"); draw(); } return; }
   if (t === "res") key("ok");
 }
 function touchSwipe(dx, dy) {
