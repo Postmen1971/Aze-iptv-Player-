@@ -113,6 +113,11 @@
 - Aziz schickt den Link → Claude prüft und trägt in `community/liveonsat.json` ein (Format: {"map": {"liveonsat name klein": ["Sendername", …]}}). Die App lädt die Datei (raw.githubusercontent, höchstens alle 12 h, Zwischenspeicher) und findet die Sender per Namen (`Football.byOwnName`).
 - Vorrang: selbst gemerkt ★ > Gemeinschaft ✓ > automatische Erkennung.
 
+## Fußball direkt in die Vorschau + schnellere Cover (1.0.133)
+- Fußball heute: OK auf Spiel = direkt TV-Plan mit Vorschau (wenn liveonsat Sender kennt), OK lang = alte Übersicht.
+- Cover: TMDB-Links auf w185 umgeschrieben (`smallPoster`), OkHttp-Dispatcher 64/16 statt 5 je Server, Vorladen erst nach 250 ms Ruhe (24 bzw. 60 voraus).
+- Einstellung „Filme & Serien – Cover“: Standard / „Filme & Serien bevorzugt“ (Store `vodFast`: ganze Kategorie bis 400 Cover vorladen, Disk-Cache 1 GB statt 250 MB, Speicher 25 %; gilt ab Neustart).
+
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
 2. **SkorText-Update direkt im Player:** Beim Öffnen von SkorText prüfen, ob es auf GitHub eine neuere Version gibt, und die Seiten selbst nachladen (ohne neuen Player-Build). Der Update-Knopf in SkorText soll das auch auslösen (im Player derzeit ohne Funktion, `SkorBridge.installApk` ist leer).

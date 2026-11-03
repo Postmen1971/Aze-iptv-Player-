@@ -81,13 +81,21 @@ class MainActivity : ComponentActivity() {
 
         // Bilder (Poster, Logos): großer Speicher-Zwischenspeicher und dauerhafter Zwischenspeicher auf dem Gerät,
         // auch wenn der Server "nicht speichern" meldet – so sind Poster beim zweiten Mal sofort da.
+        // „Filme & Serien bevorzugt“: größerer Zwischenspeicher (1 GB statt 250 MB), mehr Bilder im Arbeitsspeicher
+        val vodFast = app.vodFast
         coil.Coil.setImageLoader(
             coil.ImageLoader.Builder(this)
-                .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(0.15).build() }
+                .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (vodFast) 0.25 else 0.15).build() }
                 .diskCache {
                     coil.disk.DiskCache.Builder()
                         .directory(cacheDir.resolve("bilder"))
-                        .maxSizeBytes(250L * 1024 * 1024)
+                        .maxSizeBytes(if (vodFast) 1024L * 1024 * 1024 else 250L * 1024 * 1024)
+                        .build()
+                }
+                // Standard lädt nur 5 Bilder gleichzeitig vom selben Server – Cover standen Schlange
+                .okHttpClient {
+                    okhttp3.OkHttpClient.Builder()
+                        .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 64; maxRequestsPerHost = 16 })
                         .build()
                 }
                 .respectCacheHeaders(false)

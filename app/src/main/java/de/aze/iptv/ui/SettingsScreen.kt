@@ -1113,6 +1113,7 @@ private fun AboutSection(app: AppController) {
             })
         }
     }
+    VodCoverSection(app)
     HangLogSection(app)
     LearnedChannelsSection(app)
     Section("Über") {
@@ -1323,5 +1324,22 @@ private fun LearnedChannelsSection(app: AppController) {
             TvButton("Alle vergessen", onClick = { app.forgetLos(); link = null })
         }
         link?.let { Text("Link: $it", color = Palette.Highlight, fontSize = 26.sp, fontWeight = FontWeight.Bold) }
+    }
+}
+
+/** Filme & Serien: Cover schneller (mehr Speicher) oder Standard */
+@Composable
+private fun VodCoverSection(app: AppController) {
+    Section("Filme & Serien – Cover") {
+        Text(
+            "Cover werden immer in kleiner Auflösung geladen (reicht für die Kacheln und ist viel schneller). " +
+                "„Filme & Serien bevorzugt“ lädt beim Öffnen einer Kategorie gleich alle Cover im Hintergrund und behält bis zu 1 GB " +
+                "auf dem Gerät (Standard: 250 MB) – beim Blättern sind sie dann sofort da. Gilt ab dem nächsten Start der App.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Standard", selected = !app.vodFast, onClick = { app.updateVodFast(false) })
+            TvButton("Filme & Serien bevorzugt", selected = app.vodFast, onClick = { app.updateVodFast(true) })
+        }
     }
 }

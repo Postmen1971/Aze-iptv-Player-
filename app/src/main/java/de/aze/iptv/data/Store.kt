@@ -184,6 +184,11 @@ class Store(context: Context) {
         set(v) = prefs.edit().putInt("afrDelay", v).apply()
 
     /** Kleine Anzeige zur Fehlersuche im Bild (Frequenz, Bilder, Position). */
+    /** Filme & Serien bevorzugt: Cover großzügig vorladen und länger auf dem Gerät behalten (mehr Speicher) */
+    var vodFast: Boolean
+        get() = prefs.getBoolean("vodFast", false)
+        set(v) = prefs.edit().putBoolean("vodFast", v).apply()
+
     /** Multi-View (Beta) im Schnellmenü anbieten */
     var multiViewOn: Boolean
         get() = prefs.getBoolean("multiViewOn", true)

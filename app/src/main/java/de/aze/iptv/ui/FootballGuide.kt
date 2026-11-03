@@ -141,8 +141,8 @@ fun FootballGuide(
 
     val first = remember { FocusRequester() }
     var selected by remember { mutableIntStateOf(0) }
-    LaunchedEffect(data, popup) {
-        if (data != null && popup == null) {
+    LaunchedEffect(data, popup, zap) {
+        if (data != null && popup == null && zap == null) {
             withFrameNanos { }
             runCatching { first.requestFocus() }
         }
@@ -183,7 +183,7 @@ fun FootballGuide(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text("Fußball heute", color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text("OK zeigt die Sender · Zurück schließt", color = Palette.TextMuted, fontSize = 12.sp)
+            Text("OK = TV-Plan mit Vorschau · OK lang = Übersicht · Zurück schließt", color = Palette.TextMuted, fontSize = 12.sp)
             if (epg.channelCount == 0) {
                 Text(
                     "Hinweis: Noch keine Programmzeitschrift geladen – ohne sie können keine Sender gefunden werden.",
@@ -214,7 +214,10 @@ fun FootballGuide(
                         Focusable(
                             // Fokus-Anker auf der zuletzt gewählten Zeile – nach dem Schließen des Fensters geht es dort weiter
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(first) else Modifier),
-                            onClick = { popup = m },
+                            // OK: gleich den TV-Plan mit Vorschau öffnen (wenn liveonsat Sender kennt), sonst die Übersicht
+                            onClick = { if (planned > 0) zap = m else popup = m },
+                            // OK lang: die Übersicht (Sender aus Programmzeitschrift und TV-Plan)
+                            onLongClick = { popup = m },
                             onFocus = { selected = i },
                         ) { focused ->
                             val fg = if (focused) Palette.OnAccent else Palette.Text

@@ -354,12 +354,24 @@ private fun Browse(
                           val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
                           // Poster der nächsten Reihen schon vorladen, damit beim schnellen Blättern Bilder da sind
                           val ctx = LocalContext.current
+                          val vodFast = app.vodFast
                           LaunchedEffect(list, gridState) {
                               val requested = HashSet<String>()
-                              androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }.collect { first ->
-                                  list.drop(first).take(48).forEach { item ->
+                              val loader = coil.Coil.imageLoader(ctx)
+                              // „Filme & Serien bevorzugt“: gleich die ganze Kategorie (bis 400 Cover) im Hintergrund holen
+                              if (vodFast) {
+                                  kotlinx.coroutines.delay(800) // erst die sichtbaren Cover
+                                  list.asSequence().take(400).forEach { item ->
                                       val url = item.poster ?: return@forEach
-                                      if (requested.add(url)) coil.Coil.imageLoader(ctx).enqueue(posterRequest(ctx, url))
+                                      if (requested.add(url)) loader.enqueue(posterRequest(ctx, url))
+                                  }
+                              }
+                              androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }.collect { first ->
+                                  // kurz warten, bis das Blättern ruht – sonst drängeln sich vorgeladene Cover vor die sichtbaren
+                                  kotlinx.coroutines.delay(250)
+                                  list.subList(first.coerceAtMost(list.size), list.size).take(if (vodFast) 60 else 24).forEach { item ->
+                                      val url = item.poster ?: return@forEach
+                                      if (requested.add(url)) loader.enqueue(posterRequest(ctx, url))
                                   }
                               }
                           }
@@ -389,10 +401,17 @@ private fun Browse(
     }
 }
 
+/**
+ * Kleine Cover-Variante: Viele Anbieter verlinken TMDB-Bilder in voller Größe (oft 200–500 KB). TMDB liefert dieselben
+ * Bilder auch klein (w185, ca. 15 KB) – für die Kacheln reicht das völlig und lädt ein Vielfaches schneller.
+ */
+private val tmdbSize = Regex("(image\\.tmdb\\.org/t/p/)(original|w\\d+(_and_h\\d+[^/]*)?|h\\d+)/")
+internal fun smallPoster(url: String): String = url.replace(tmdbSize, "$1w185/")
+
 /** Poster in fester, kleiner Größe laden: schneller und passt immer in den Zwischenspeicher. */
 private fun posterRequest(context: android.content.Context, url: String): coil.request.ImageRequest =
     coil.request.ImageRequest.Builder(context)
-        .data(url)
+        .data(smallPoster(url))
         .size(200, 300)
         .crossfade(false)
         .build()

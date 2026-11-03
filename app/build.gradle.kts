@@ -108,6 +108,8 @@ dependencies {
 
     // Poster und Bilder für Filme & Serien
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // für mehr gleichzeitige Cover-Downloads (Coil nutzt OkHttp)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // QR-Code für die Handy-Verbindung
     implementation("com.google.zxing:core:3.5.3")
 

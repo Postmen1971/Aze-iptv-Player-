@@ -507,6 +507,14 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         store.afrDelay = s
     }
 
+    var vodFast by mutableStateOf(store.vodFast)
+        private set
+
+    fun updateVodFast(on: Boolean) {
+        vodFast = on
+        store.vodFast = on
+    }
+
     var multiViewOn by mutableStateOf(store.multiViewOn)
         private set
 
