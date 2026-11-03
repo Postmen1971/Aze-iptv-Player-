@@ -1,5 +1,10 @@
 package de.aze.iptv.ui
 
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -503,14 +508,14 @@ private fun ListingZap(
     onFull: (List<de.aze.iptv.data.NumberedChannel>) -> Unit,
 ) {
     BackHandler(onBack = onBack)
-    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var sel by remember { mutableIntStateOf(0) }
-    var job by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    val leftFirst = remember { FocusRequester() }
-    val rightFirst = remember { FocusRequester() }
+    // Fokus bleibt immer in den beiden Spalten (vorher rutschte er unten ins Leere → ◀ ging nicht mehr)
+    val leftReqs = remember(listed.size) { List(listed.size) { FocusRequester() } }
+    var leftFocus by remember { mutableIntStateOf(0) }
+    var rightFocus by remember { mutableIntStateOf(0) }
     LaunchedEffect(Unit) {
         withFrameNanos { }
-        runCatching { leftFirst.requestFocus() }
+        runCatching { leftReqs.firstOrNull()?.requestFocus() }
     }
     val name = listed.getOrNull(sel)
     val learnedKey = name?.let { app.losLearned[it.lowercase()] }
@@ -524,6 +529,12 @@ private fun ListingZap(
             (listOfNotNull(own) + shared + findSimilar(name)).distinctBy { it.channel.key }
         }
     }
+    val rightReqs = remember(candidates) { List(candidates.size) { FocusRequester() } }
+    fun merke(nc: de.aze.iptv.data.NumberedChannel) {
+        if (name == null) return
+        app.learnLos(name, nc)
+        app.message = "★ Gemerkt: „$name“ = ${nc.channel.name}"
+    }
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxHeight().padding(start = 24.dp, top = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // Links: Sender laut liveonsat
@@ -532,13 +543,25 @@ private fun ListingZap(
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Text("${match.home} – ${match.away}", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text("Sender laut liveonsat", color = Palette.TextMuted, fontSize = 12.sp)
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Sender laut liveonsat · ▶ oder OK = rechts", color = Palette.TextMuted, fontSize = 12.sp)
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (e.key) {
+                            Key.DirectionUp -> leftFocus == 0
+                            Key.DirectionDown -> leftFocus >= listed.size - 1
+                            Key.DirectionRight -> { runCatching { rightReqs.firstOrNull()?.requestFocus() }; true }
+                            Key.DirectionLeft -> true
+                            else -> false
+                        }
+                    },
+                ) {
                     itemsIndexed(listed) { i, l ->
                         Focusable(
-                            modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(leftFirst) else Modifier),
-                            onClick = { runCatching { rightFirst.requestFocus() } },
-                            onFocus = { sel = i },
+                            modifier = Modifier.fillMaxWidth().focusRequester(leftReqs[i]),
+                            onClick = { runCatching { rightReqs.firstOrNull()?.requestFocus() } },
+                            onFocus = { sel = i; leftFocus = i },
                         ) { focused ->
                             val known = app.losLearned.containsKey(l.lowercase())
                             Text(
@@ -559,27 +582,37 @@ private fun ListingZap(
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Text("In deiner Liste", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("▲▼ ausprobieren · OK auf laufendem Sender = Vollbild & merken · ★ gemerkt · ✓ von anderen bestätigt", color = Palette.TextMuted, fontSize = 11.sp)
+                Text("★ gemerkt · ✓ von anderen bestätigt · ◀ zurück", color = Palette.TextMuted, fontSize = 11.sp)
                 if (candidates.isEmpty()) {
                     Text("Nichts Ähnliches gefunden.", color = Palette.TextMuted, fontSize = 13.sp)
                 }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (e.key) {
+                            Key.DirectionUp -> rightFocus == 0
+                            Key.DirectionDown -> rightFocus >= candidates.size - 1
+                            Key.DirectionLeft -> { runCatching { leftReqs.getOrNull(sel)?.requestFocus() }; true }
+                            Key.DirectionRight -> true
+                            else -> false
+                        }
+                    },
+                ) {
                     itemsIndexed(candidates, key = { _, nc -> nc.channel.key }) { i, nc ->
                         val playing = app.current?.channel?.key == nc.channel.key
                         Focusable(
-                            modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(rightFirst) else Modifier),
+                            modifier = Modifier.fillMaxWidth().focusRequester(rightReqs[i]),
+                            // OK = in der Vorschau zeigen; OK auf dem laufenden Sender = Vollbild und merken
                             onClick = {
-                                job?.cancel()
                                 if (playing) {
-                                    if (name != null) app.learnLos(name, nc)
+                                    merke(nc)
                                     onFull(candidates)
                                 } else app.play(nc)
                             },
-                            onFocus = {
-                                // kurz verweilen, dann in der Vorschau zeigen (schnelles Durchblättern lädt nicht jeden Sender)
-                                job?.cancel()
-                                if (!playing) job = scope.launch { kotlinx.coroutines.delay(700); app.play(nc) }
-                            },
+                            // OK lang = nur merken (★), in der Vorschau bleiben
+                            onLongClick = { merke(nc); if (!playing) app.play(nc) },
+                            onFocus = { rightFocus = i },
                         ) { focused ->
                             Row(
                                 Modifier.fillMaxWidth()
@@ -599,11 +632,20 @@ private fun ListingZap(
                 }
             }
         }
-        // Unter dem kleinen Bild oben rechts: was gerade läuft
-        app.current?.let { cur ->
-            Column(Modifier.align(Alignment.TopEnd).padding(top = 236.dp, end = 24.dp).width(360.dp)) {
+        // Bedienung gut sichtbar unter dem kleinen Bild
+        Column(Modifier.align(Alignment.TopEnd).padding(top = 236.dp, end = 24.dp).width(360.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            app.current?.let { cur ->
                 Text("${cur.number}  ${cur.channel.name}", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 app.epg.now(cur.channel)?.let { Text(it.title, color = Palette.EpgText, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            }
+            Column(
+                Modifier.padding(top = 10.dp).background(Palette.Panel, RoundedCornerShape(10.dp)).padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+            ) {
+                Text("OK  = Sender in der Vorschau zeigen", color = Palette.TextSoft, fontSize = 13.sp)
+                Text("OK nochmal  = Vollbild + ★ merken", color = Palette.TextSoft, fontSize = 13.sp)
+                Text("OK lang  = nur ★ merken", color = Palette.Highlight, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text("◀ zurück zur linken Liste · ZURÜCK = Spiel", color = Palette.TextMuted, fontSize = 12.sp)
             }
         }
     }
