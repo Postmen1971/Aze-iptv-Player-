@@ -186,7 +186,7 @@ object LiveOnSat {
 
     /** Sender für ein Spiel des Tages (Zuordnung über die Mannschaftsnamen). */
     // Jugend-/Frauen-Spiele derselben Vereine nicht verwechseln
-    private val youth = Regex("(?i)\\b(u\\d{2}|women|woman|frauen|kadin|ladies|reserves|ii)\\b|\\(w\\)")
+    private val youth = Regex("(?i)\\b(u-?\\d{2}|women|woman|frauen|kadin|ladies|reserves|ii)\\b|\\(w\\)")
 
     fun forMatch(m: TodayMatch, all: List<Fixture>): List<String> {
         val t1 = Football.tokens(m.home)
