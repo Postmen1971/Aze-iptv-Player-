@@ -34,6 +34,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -268,12 +269,29 @@ fun ChannelOverlay(
                     val start = if (firstOpen == 1) group.channels.indexOfFirst { it.channel.key == currentKey }.coerceAtLeast(0) else 0
                     val listState = rememberLazyListState(initialFirstVisibleItemIndex = (start - 5).coerceAtLeast(0))
                     val first = remember { FocusRequester() }
+                    // Rundlauf: ▲ beim ersten Sender → letzter, ▼ beim letzten → erster (nie in die Gruppen-Kopfzeile)
+                    val wrapScope = androidx.compose.runtime.rememberCoroutineScope()
+                    val wrapReq = remember { FocusRequester() }
+                    var focusedIdx by remember { mutableIntStateOf(start) }
+                    var wrapTo by remember { mutableStateOf<Int?>(null) }
+                    val lastIdx = group.channels.size - 1
+                    fun wrap(target: Int) {
+                        wrapTo = target
+                        wrapScope.launch {
+                            listState.scrollToItem((target - 5).coerceAtLeast(0))
+                            withFrameNanos { }
+                            withFrameNanos { }
+                            runCatching { wrapReq.requestFocus() }
+                        }
+                    }
                     LazyColumn(
                         state = listState,
                         verticalArrangement = Arrangement.spacedBy(1.dp),
                         modifier = Modifier.onPreviewKeyEvent { e ->
                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (e.key) {
+                                Key.DirectionUp -> if (focusedIdx == 0 && lastIdx > 0) { wrap(lastIdx); true } else focusedIdx == 0
+                                Key.DirectionDown -> if (focusedIdx == lastIdx && lastIdx > 0) { wrap(0); true } else false
                                 Key.DirectionLeft -> { showGroups = true; true }
                                 // Rechts in der Senderliste: Liste schließen, das laufende Programm läuft weiter
                                 Key.DirectionRight -> { onClose(); true }
@@ -288,7 +306,9 @@ fun ChannelOverlay(
                             Focusable(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .then(if (index == start) Modifier.focusRequester(first) else Modifier),
+                                    .then(if (index == start) Modifier.focusRequester(first) else Modifier)
+                                    .then(if (index == wrapTo) Modifier.focusRequester(wrapReq) else Modifier),
+                                onFocus = { focusedIdx = index },
                                 onClick = {
                                     app.play(nc)
                                     onClose()
