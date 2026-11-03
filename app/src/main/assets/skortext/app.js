@@ -1,7 +1,7 @@
 /* SkorText für Android TV / NVIDIA Shield – Portierung des Enigma2-Plugins */
 (function () {
 "use strict";
-var VERSION = "3.14";
+var VERSION = "3.15";
 
 /* ================= Texte ================= */
 var TXT = {
@@ -1670,7 +1670,8 @@ function needTv() {
 }
 function tvNorm(t) { return String(t || "").toLowerCase().replace(/ı/g, "i").replace(/ß/g, "ss").normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
 var TV_NOISE = {fc: 1, sc: 1, sk: 1, fk: 1, cf: 1, ac: 1, as: 1, sv: 1, vfb: 1, vfl: 1, tsg: 1, afc: 1, club: 1, de: 1, the: 1};
-function tvTokens(team) { return tvNorm(team).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3 && !TV_NOISE[w]; }); }
+var TV_ALIAS = {internazionale: "inter"}; // liveonsat schreibt „Inter Milan“
+function tvTokens(team) { return tvNorm(team).split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3 && !TV_NOISE[w]; }).map(function (w) { return TV_ALIAS[w] || w; }); }
 var TV_YOUTH = /\b(u-?\d{2}|women|woman|frauen|kadin|ladies|reserves|ii)\b|\(w\)/i;
 function tvChannels(home, away) {
   var t1 = tvTokens(home), t2 = tvTokens(away), youth = TV_YOUTH.test(home + " " + away);
