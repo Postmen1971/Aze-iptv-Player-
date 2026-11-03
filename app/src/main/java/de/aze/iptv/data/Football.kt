@@ -146,8 +146,11 @@ object Football {
             .replace(marks, "")
 
     /** Aussagekräftige Wörter eines Vereinsnamens, z. B. "Borussia Dortmund" → [borussia, dortmund]. */
+    private val teamAlias = mapOf("internazionale" to "inter")
+
     fun tokens(team: String): List<String> =
         norm(team).split(Regex("[^a-z0-9]+")).filter { it.length >= 3 && it !in generic }
+            .map { teamAlias[it] ?: it } // „Internazionale“ heißt bei liveonsat „Inter Milan“
             .ifEmpty { listOf(norm(team).replace(Regex("[^a-z0-9]"), "")) }
 
     private val genericFootball = listOf("fussball", "football", "futbol", "canli mac", "live-fussball", "livefussball")
