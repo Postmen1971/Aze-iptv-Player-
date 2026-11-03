@@ -1,5 +1,6 @@
 package de.aze.iptv.ui
 
+import androidx.compose.ui.input.pointer.pointerInput
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
@@ -890,6 +891,15 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                         code == AndroidKeyEvent.KEYCODE_INFO -> { showUi = true; true }
                     else -> false
                 }
+            }
+            // Tablet/Handy: Tippen zeigt/versteckt die Leiste, doppelt Tippen links/rechts spult 10 s
+            .pointerInput(Unit) {
+                androidx.compose.foundation.gestures.detectTapGestures(
+                    onTap = { if (picker != null) picker = null else { showUi = !showUi; uiTick++ } },
+                    onDoubleTap = { o ->
+                        if (o.x < size.width / 2) { nudge(-1, 0); flash("−10 s") } else { nudge(+1, 0); flash("+10 s") }
+                    },
+                )
             },
     ) {
         val videoModifier = if (aspect.ratio != null) {
@@ -967,14 +977,43 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                     Text(p.title, color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     if (!isPlaying && target == null) Text("Pause", color = Palette.Highlight, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
-                ProgressBar(position = position, target = target, buffered = buffered, duration = duration)
+                // Zeitleiste: antippen oder ziehen springt an die Stelle (Tablet/Handy)
+                Box(
+                    Modifier.fillMaxWidth().height(28.dp)
+                        .pointerInput(duration) {
+                            if (duration <= 0) return@pointerInput
+                            androidx.compose.foundation.gestures.detectTapGestures { o ->
+                                uiTick++
+                                seekJob?.cancel(); pending = null
+                                player.seekTo((duration * (o.x / size.width).coerceIn(0f, 1f)).toLong())
+                            }
+                        }
+                        .pointerInput(duration) {
+                            if (duration <= 0) return@pointerInput
+                            androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+                                onDragEnd = { pending?.let { player.seekTo(it) }; pending = null },
+                            ) { change, _ ->
+                                uiTick++
+                                seekJob?.cancel()
+                                pending = (duration * (change.position.x / size.width).coerceIn(0f, 1f)).toLong()
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    ProgressBar(position = position, target = target, buffered = buffered, duration = duration)
+                }
                 Row {
                     Text(fmtTime(target ?: position), color = Palette.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.weight(1f))
                     if (duration > 0) Text("−" + fmtTime(duration - (target ?: position)) + "  ·  " + fmtTime(duration), color = Palette.TextSoft, fontSize = 14.sp)
                 }
                 if (showUi) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically,
+                        // auf schmalen Bildschirmen (Tablet) seitlich wischbar statt abgeschnitten
+                        modifier = Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+                    ) {
+                        TvButton("✕", onClick = { exit() })
                         TvButton("⟲ 10 s", onClick = { uiTick++; nudge(-1, 0) })
                         TvButton(if (isPlaying) "❚❚ Pause" else "▶ Weiter", modifier = Modifier.focusRequester(playFocus), onClick = { uiTick++; togglePause() })
                         TvButton("30 s ⟳", onClick = { uiTick++; nudge(+1, 4) })
@@ -987,7 +1026,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                         })
                     }
                     Text(
-                        "◀ ▶ spulen (halten = schneller) · OK Pause · 0–9 springt auf 0–90 %",
+                        "◀ ▶ spulen (halten = schneller) · OK Pause · 0–9 springt auf 0–90 % · Tablet: Leiste antippen/ziehen, doppelt tippen ±10 s",
                         color = Palette.TextMuted, fontSize = 12.sp,
                     )
                 }
