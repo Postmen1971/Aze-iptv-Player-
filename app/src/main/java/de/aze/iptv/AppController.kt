@@ -521,6 +521,14 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         de.aze.iptv.ui.CoverUrls.proxy = on
     }
 
+    var vodLang by mutableStateOf(store.vodLang)
+        private set
+
+    fun updateVodLang(v: Int) {
+        vodLang = v
+        store.vodLang = v
+    }
+
     var vodFast by mutableStateOf(store.vodFast)
         private set
 

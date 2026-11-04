@@ -189,6 +189,11 @@ class Store(context: Context) {
         get() = prefs.getBoolean("coverProxy", true)
         set(v) = prefs.edit().putBoolean("coverProxy", v).apply()
 
+    /** Bevorzugte Sprache bei Filmen & Serien: 0 = Deutsch, dann Türkisch · 1 = Türkisch, dann Deutsch · 2 = keine */
+    var vodLang: Int
+        get() = prefs.getInt("vodLang", 0)
+        set(v) = prefs.edit().putInt("vodLang", v).apply()
+
     /** Filme & Serien bevorzugt: Cover großzügig vorladen und länger auf dem Gerät behalten (mehr Speicher) */
     var vodFast: Boolean
         get() = prefs.getBoolean("vodFast", false)

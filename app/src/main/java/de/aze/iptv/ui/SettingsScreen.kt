@@ -1362,6 +1362,12 @@ private fun VodCoverSection(app: AppController) {
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         TvSwitch("Schneller Bilderdienst", "Cover verkleinert über schnelle Server", app.coverProxy) { app.updateCoverProxy(!app.coverProxy) }
+        Text("Bevorzugte Sprache – deren Cover werden zuerst geladen, dann der Rest nach und nach", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Deutsch, dann Türkisch", selected = app.vodLang == 0, onClick = { app.updateVodLang(0) })
+            TvButton("Türkisch, dann Deutsch", selected = app.vodLang == 1, onClick = { app.updateVodLang(1) })
+            TvButton("Keine Bevorzugung", selected = app.vodLang == 2, onClick = { app.updateVodLang(2) })
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Standard", selected = !app.vodFast, onClick = { app.updateVodFast(false) })
             TvButton("Filme & Serien bevorzugt", selected = app.vodFast, onClick = { app.updateVodFast(true) })

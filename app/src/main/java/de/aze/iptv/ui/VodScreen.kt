@@ -198,11 +198,27 @@ private fun Browse(
         runCatching { catFocus.requestFocus() }
     }
     // Anzahl je Kategorie im Hintergrund holen (große Listen brauchen ein paar Sekunden)
+    val ctx = LocalContext.current
     LaunchedEffect(api, series) {
         // erst wenn die erste Kategorie da ist – sonst konkurriert die große Gesamtliste mit ihr (und mit den Covern)
         androidx.compose.runtime.snapshotFlow { items }.first { it != null }
         delay(1_500)
         counts = runCatching { api.counts(series) }.getOrDefault(emptyMap())
+        // Danach im Hintergrund die Cover der bevorzugten Sprache (z. B. erst alle deutschen, dann türkischen
+        // Kategorien), dann der Rest – in kleinen Portionen, damit die Leitung frei bleibt.
+        val pref = app.vodLang
+        if (pref == 2) return@LaunchedEffect
+        val all = runCatching { api.all(series) }.getOrNull() ?: return@LaunchedEffect
+        val langOf = cats.orEmpty().associate { it.id to vodLanguage(it.name) }
+        val order = if (pref == 0) listOf("de", "tr") else listOf("tr", "de")
+        val queue = (order.flatMap { l -> all.filter { langOf[it.cat] == l } } + all.filter { langOf[it.cat] == null })
+            .mapNotNull { it.poster }.distinct().take(if (app.vodFast) 3_000 else 600)
+        val loader = coil.Coil.imageLoader(ctx)
+        qaLog("VOD_PREFETCH ${queue.size} Cover (${order.joinToString(" → ")} zuerst)")
+        queue.chunked(30).forEach { batch ->
+            batch.forEach { loader.enqueue(posterRequest(ctx, it)) }
+            delay(1_500)
+        }
     }
     // Erwachsenen-Filter: solche Kategorien gar nicht erst zeigen
     val adultOff = app.adultFilter
@@ -1127,4 +1143,18 @@ private fun ProgressBar(position: Long, target: Long?, buffered: Long, duration:
             }
         }
     }
+}
+
+/**
+ * Sprache einer Kategorie für das Vorladen: „DE• Action“, „DE | …“, „GER …“, „Deutsch …“ = de;
+ * „TR …“ oder türkische Wörter/Buchstaben („KONSERLER“, „TIYATRO“, „… FILMLERI“, „Yerli“, „Dizi“) = tr.
+ */
+private val deCat = Regex("(?i)^\\W*(de|ger|deu)\\b|deutsch")
+private val trCat = Regex("(?i)^\\W*tr\\b|türk|turk|yerli|dizi|filmleri|konser|tiyatro|sinema")
+// türkische Sonderbuchstaben – bewusst OHNE (?i), sonst passt „İ“ auch auf jedes „i“
+private val trChars = Regex("[ıİşŞğĞ]")
+internal fun vodLanguage(name: String): String? = when {
+    deCat.containsMatchIn(name) -> "de"
+    trCat.containsMatchIn(name) || trChars.containsMatchIn(name) -> "tr"
+    else -> null
 }
