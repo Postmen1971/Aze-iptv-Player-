@@ -382,6 +382,9 @@ fun PlayerScreen(
     }
     // Senderliste direkt in der Gruppenübersicht öffnen (Taste mit Aktion „Gruppen“)
     var overlayGroups by remember { mutableStateOf(false) }
+    var overlayFocused by remember { mutableStateOf(false) }
+    var overlayKick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(overlay) { if (!overlay) overlayFocused = false }
     // Tablet/Handy: Leiste mit großen Knöpfen (Tippen ins Bild zeigt/versteckt sie)
     val touchDevice = remember(context) { !de.aze.iptv.player.FrameRate.isTv(context) }
     var touchBar by remember { mutableStateOf(false) }
@@ -714,10 +717,10 @@ fun PlayerScreen(
             .background(if (ytActive) Color.Transparent else Color.Black)
             .focusRequester(focus)
             .onPreviewKeyEvent { e ->
-                // Messpunkt: kommt ▲/▼ bei geöffneter Senderliste überhaupt im Player an?
-                if (overlay && e.type == KeyEventType.KeyDown &&
+                // Senderliste offen, aber ohne Fokus (z. B. nach Touch-Bedienung): ▲/▼ holt den Fokus in die Liste
+                if (overlay && !overlayFocused && e.type == KeyEventType.KeyDown &&
                     (e.key == androidx.compose.ui.input.key.Key.DirectionUp || e.key == androidx.compose.ui.input.key.Key.DirectionDown)
-                ) qaLog("ROOT_KEY ${e.key} overlay=$overlay")
+                ) { overlayKick++; qaLog("ROOT_KEY kick=$overlayKick"); return@onPreviewKeyEvent true }
                 false
             }
             .onKeyEvent { e ->
@@ -1006,6 +1009,8 @@ fun PlayerScreen(
                 onExitApp = { activity?.finish() },
                 onFootball = { overlay = false; football = true },
                 startInGroups = overlayGroups,
+                focusKick = overlayKick,
+                onFocusInside = { overlayFocused = it },
             )
         }
 

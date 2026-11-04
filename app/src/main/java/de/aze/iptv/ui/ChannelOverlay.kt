@@ -69,6 +69,9 @@ fun ChannelOverlay(
     onExitApp: () -> Unit = onClose,
     onFootball: (() -> Unit)? = null,
     startInGroups: Boolean = false,
+    // Zähler vom Player: ▲/▼ kam an, aber die Liste hatte keinen Fokus → Fokus in die Liste holen
+    focusKick: Int = 0,
+    onFocusInside: (Boolean) -> Unit = {},
 ) {
     // Links in der Senderliste → Gruppen, nochmal Links → Menü (TV, Filme, Serien, Suchen, Einstellungen).
     // Zurück: Senderliste → Gruppen → App beenden.
@@ -114,6 +117,7 @@ fun ChannelOverlay(
     Row(
         modifier = Modifier
             .fillMaxSize()
+            .onFocusChanged { onFocusInside(it.hasFocus) }
             .pointerInput(Unit) {
                 var dx = 0f
                 detectHorizontalDragGestures(
@@ -164,6 +168,7 @@ fun ChannelOverlay(
                 SectionLabel("Gruppen", modifier = Modifier.padding(start = 10.dp, top = 14.dp, bottom = 10.dp))
                 val gState = rememberLazyListState(initialFirstVisibleItemIndex = (groupIndex - 5).coerceAtLeast(0))
                 val gFirst = remember { FocusRequester() }
+                LaunchedEffect(focusKick) { if (focusKick > 0) { withFrameNanos { }; runCatching { gFirst.requestFocus() } } }
                 LazyColumn(
                     state = gState,
                     verticalArrangement = Arrangement.spacedBy(1.dp),
@@ -378,6 +383,9 @@ fun ChannelOverlay(
                                 }
                             }
                         }
+                    }
+                    LaunchedEffect(focusKick) {
+                        if (focusKick > 0) { withFrameNanos { }; runCatching { first.requestFocus() }; qaLog("LIST_KICK $focusKick"); return@LaunchedEffect }
                     }
                     LaunchedEffect(Unit) {
                         withFrameNanos { }
