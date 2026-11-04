@@ -295,8 +295,8 @@ fun ChannelOverlay(
                         modifier = Modifier.onPreviewKeyEvent { e ->
                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (e.key) {
-                                Key.DirectionUp -> if (focusedIdx == 0 && lastIdx > 0) { wrap(lastIdx); true } else focusedIdx == 0
-                                Key.DirectionDown -> if (focusedIdx == lastIdx && lastIdx > 0) { wrap(0); true } else false
+                                // Messpunkt für den Emulator-Test (welcher Sender hat den Fokus, wenn ▲/▼ ankommt)
+                                Key.DirectionUp, Key.DirectionDown -> { qaLog("LIST_KEY ${if (e.key == Key.DirectionUp) "up" else "down"} idx=$focusedIdx/$lastIdx"); false }
                                 Key.DirectionLeft -> { showGroups = true; true }
                                 // Rechts in der Senderliste: Liste schließen, das laufende Programm läuft weiter
                                 Key.DirectionRight -> { onClose(); true }
@@ -312,7 +312,16 @@ fun ChannelOverlay(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .then(if (index == start) Modifier.focusRequester(first) else Modifier)
-                                    .then(if (index == wrapTo) Modifier.focusRequester(wrapReq) else Modifier),
+                                    .then(if (index == wrapTo) Modifier.focusRequester(wrapReq) else Modifier)
+                                    // Rundlauf direkt am Sender: ▲ beim ersten → letzter, ▼ beim letzten → erster
+                                    .onPreviewKeyEvent { e ->
+                                        if (e.type != KeyEventType.KeyDown || lastIdx <= 0) return@onPreviewKeyEvent false
+                                        when {
+                                            e.key == Key.DirectionUp && index == 0 -> { wrap(lastIdx); true }
+                                            e.key == Key.DirectionDown && index == lastIdx -> { wrap(0); true }
+                                            else -> false
+                                        }
+                                    },
                                 onFocus = { focusedIdx = index },
                                 onClick = {
                                     app.play(nc)
@@ -369,7 +378,8 @@ fun ChannelOverlay(
                     }
                     LaunchedEffect(Unit) {
                         withFrameNanos { }
-                        runCatching { first.requestFocus() }
+                        val ok = runCatching { first.requestFocus() }.isSuccess
+                        qaLog("LIST_OPEN ${group.name} start=$start von ${group.channels.size} fokus=$ok")
                         firstOpen = 0
                     }
                 }

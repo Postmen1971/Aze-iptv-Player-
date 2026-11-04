@@ -84,6 +84,7 @@ sleep 2
 shot "test1b-liste-nach-hoch"
 [ "$(count "LIST_HEAD_FOCUS")" -eq 0 ] || fail "Senderliste: ▲ ist in der Gruppen-Kopfzeile gelandet"
 [ "$(count "LIST_WRAP")" -ge 1 ] || fail "Senderliste: ▲ oben ist nicht ans Ende gesprungen"
+note "Senderliste ▲" "$(qa | grep -E "LIST_" | head -12)"
 adb shell input keyevent KEYCODE_DPAD_RIGHT   # Rechts schließt die Liste
 sleep 2
 
