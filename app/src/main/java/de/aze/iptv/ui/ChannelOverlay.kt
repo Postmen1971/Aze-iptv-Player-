@@ -1,5 +1,6 @@
 package de.aze.iptv.ui
 
+import androidx.compose.ui.focus.focusProperties
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.ui.input.pointer.pointerInput
@@ -219,8 +220,11 @@ fun ChannelOverlay(
             } else {
             // Gruppenkopf: ◀ Name ▶
             Focusable(
-                modifier = Modifier.fillMaxWidth().focusRequester(headFocus),
+                // Mit der Fernbedienung nur erreichbar, wenn die Gruppe leer ist (sonst landete ▲ hier und OK wechselte die Gruppe)
+                modifier = Modifier.fillMaxWidth().focusRequester(headFocus)
+                    .focusProperties { canFocus = group.channels.isEmpty() },
                 onClick = { switchGroup(+1) },
+                onFocus = { qaLog("LIST_HEAD_FOCUS") },
             ) { focused ->
                 Row(
                     modifier = Modifier
@@ -276,6 +280,7 @@ fun ChannelOverlay(
                     var wrapTo by remember { mutableStateOf<Int?>(null) }
                     val lastIdx = group.channels.size - 1
                     fun wrap(target: Int) {
+                        qaLog("LIST_WRAP $target")
                         wrapTo = target
                         wrapScope.launch {
                             listState.scrollToItem((target - 5).coerceAtLeast(0))

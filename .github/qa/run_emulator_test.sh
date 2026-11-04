@@ -76,6 +76,17 @@ w=$(count "WATCHDOG"); [ "$w" -eq 0 ] || fail "Wächter hat einen normal laufend
 alive || fail "App nach Test 1 nicht mehr da"
 shot "test1-nach-45s"
 
+log "== Test 1b: Senderliste – ▲ oben springt ans Ende, nie in die Gruppen-Kopfzeile"
+adb shell input keyevent KEYCODE_BACK   # Zurück öffnet die Senderliste
+sleep 3
+for i in $(seq 1 30); do adb shell input keyevent KEYCODE_DPAD_UP; done
+sleep 2
+shot "test1b-liste-nach-hoch"
+[ "$(count "LIST_HEAD_FOCUS")" -eq 0 ] || fail "Senderliste: ▲ ist in der Gruppen-Kopfzeile gelandet"
+[ "$(count "LIST_WRAP")" -ge 1 ] || fail "Senderliste: ▲ oben ist nicht ans Ende gesprungen"
+adb shell input keyevent KEYCODE_DPAD_RIGHT   # Rechts schließt die Liste
+sleep 2
+
 log "== Test 2: Server schickt keine Daten mehr (tote Verbindung)"
 channel 2
 wait_for "FIRST_FRAME Test 2" 1 60
