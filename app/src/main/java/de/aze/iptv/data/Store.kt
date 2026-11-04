@@ -301,6 +301,11 @@ class Store(context: Context) {
         set(v) = prefs.edit().putBoolean("zapInGroup", v).apply()
 
     /** Sendername beim Umschalten: 0 = nur bei schwarzem Bild, 1 = 3 Sekunden mit Sendung, 2 = aus */
+    /** Aurora-Design wurde einmal automatisch eingestellt (danach entscheidet Aziz selbst) */
+    var auroraApplied: Boolean
+        get() = prefs.getBoolean("auroraApplied", false)
+        set(v) = prefs.edit().putBoolean("auroraApplied", v).apply()
+
     var nameDisplay: Int
         get() = prefs.getInt("nameDisplay", 0)
         set(v) = prefs.edit().putInt("nameDisplay", v).apply()

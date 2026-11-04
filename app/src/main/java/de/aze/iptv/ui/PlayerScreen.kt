@@ -3,6 +3,7 @@ package de.aze.iptv.ui
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -12,6 +13,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -541,9 +544,9 @@ fun PlayerScreen(
     // Sendername beim Umschalten (Einstellung „3 Sekunden mit Sendung“)
     var zapInfo by remember { mutableStateOf(false) }
     LaunchedEffect(currentKey) {
-        if (app.nameDisplay == 1 && currentKey != null) {
+        if ((app.nameDisplay == 1 || app.nameDisplay == 3) && currentKey != null) {
             zapInfo = true
-            delay(3_000)
+            delay(if (app.nameDisplay == 3) 4_000 else 3_000)
             zapInfo = false
         }
     }
@@ -933,7 +936,7 @@ fun PlayerScreen(
             notFound != null -> { { Text(notFound ?: "", color = Palette.Live, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             ytError != null && !overlay && !search -> { { Text(ytError ?: "", color = Palette.Live, fontSize = 22.sp, fontWeight = FontWeight.Bold) } }
             cur != null && !overlay && !search && !teletext && !football && matchZap == null && tool == 0 &&
-                when (app.nameDisplay) { 0 -> noPicture; 1 -> zapInfo || noPicture; else -> false } -> {
+                when (app.nameDisplay) { 0 -> noPicture; 1 -> zapInfo || noPicture; 3 -> noPicture && !zapInfo; else -> false } -> {
                 {
                     Column {
                         Row {
@@ -953,6 +956,11 @@ fun PlayerScreen(
         if (app.showDiag && !overlay) {
             // eigener kleiner Baustein: die sekündlich neue Messzeile zeichnet nur sich selbst neu, nicht den ganzen Player
             DiagLine({ diagText }, Modifier.align(Alignment.TopStart))
+        }
+        // Infoleiste unten beim Umschalten (Einstellung „Infoleiste unten“)
+        if (app.nameDisplay == 3 && zapInfo && cur != null && !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) {
+            val vf = player.videoFormat
+            ZapBar(app, cur, vf?.let { f -> if (f.height > 0) "${f.height}p" else null }, Modifier.align(Alignment.BottomCenter))
         }
         if (corner != null) {
             Box(
@@ -1162,4 +1170,53 @@ private fun DiagLine(text: () -> String, modifier: Modifier) {
             .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
             .padding(horizontal = 8.dp, vertical = 3.dp),
     )
+}
+
+/** Infoleiste unten beim Umschalten (Einstellung „Infoleiste unten“, Aurora-Design) */
+@Composable
+internal fun ZapBar(app: AppController, cur: de.aze.iptv.data.NumberedChannel, quality: String?, modifier: Modifier) {
+    val now = System.currentTimeMillis()
+    val prog = app.epg.now(cur.channel)
+    val next = app.epg.next(cur.channel)
+    val hm = remember { java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMANY) }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = 32.dp, vertical = 26.dp)
+            .background(Palette.PanelDark.copy(alpha = 0.92f), RoundedCornerShape(22.dp))
+            .border(1.dp, Palette.Line.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
+            .padding(horizontal = 22.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("${cur.number}", color = Palette.Highlight, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(cur.channel.name, color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                Text(
+                    "● LIVE", color = Palette.Live, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.background(Palette.Live.copy(alpha = 0.16f), RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+                quality?.let {
+                    Text(
+                        it, color = Palette.TextSoft, fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.background(Palette.Raised, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+                    )
+                }
+            }
+            if (prog != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(prog.title, color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                    Text(hm.format(java.util.Date(prog.start)) + " – " + hm.format(java.util.Date(prog.stop)), color = Palette.TextMuted, fontSize = 13.sp)
+                }
+                Box(Modifier.fillMaxWidth().height(5.dp).background(Palette.Raised, RoundedCornerShape(3.dp))) {
+                    Box(Modifier.fillMaxWidth(prog.progress(now)).height(5.dp).background(Palette.Highlight, RoundedCornerShape(3.dp)))
+                }
+                next?.let { Text("Danach " + hm.format(java.util.Date(it.start)) + " " + it.title, color = Palette.TextMuted, fontSize = 13.sp, maxLines = 1) }
+            } else {
+                Text("Keine Programminfo", color = Palette.TextMuted, fontSize = 13.sp)
+            }
+        }
+        Text(hm.format(java.util.Date(now)), color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+    }
 }

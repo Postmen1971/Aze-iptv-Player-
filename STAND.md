@@ -118,6 +118,11 @@
 - Cover: TMDB-Links auf w185 umgeschrieben (`smallPoster`), OkHttp-Dispatcher 64/16 statt 5 je Server, Vorladen erst nach 250 ms Ruhe (24 bzw. 60 voraus).
 - Einstellung „Filme & Serien – Cover“: Standard / „Filme & Serien bevorzugt“ (Store `vodFast`: ganze Kategorie bis 400 Cover vorladen, Disk-Cache 1 GB statt 250 MB, Speicher 25 %; gilt ab Neustart).
 
+## Redesign „Aurora“ (1.0.138)
+- Konzept: claude.ai Design-Canvas „Aze-IPTV Redesign Aurora“ (https://claude.ai/artifact/7eMpFnULA4ati4jj2Sg8r6).
+- Neues Farbschema „Aurora“ (Nachtblau, Minz-Akzent #3EE6C1, Rot nur LIVE), hinten an `Schemes` angehängt (gespeicherte Indizes bleiben gültig); einmalig automatisch eingestellt (Store `auroraApplied`). Knöpfe runder (14 dp).
+- Sendername beim Umschalten: neue Wahl 3 = „Infoleiste unten“ (`ZapBar`: Nummer, Name, LIVE, Auflösung, Sendung mit Zeit/Fortschritt, „Danach …“, Uhr; 4 s). Standard bleibt die bisherige Anzeige – Wunsch von Aziz.
+
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
 2. **SkorText-Update direkt im Player:** Beim Öffnen von SkorText prüfen, ob es auf GitHub eine neuere Version gibt, und die Seiten selbst nachladen (ohne neuen Player-Build). Der Update-Knopf in SkorText soll das auch auslösen (im Player derzeit ohne Funktion, `SkorBridge.installApk` ist leer).

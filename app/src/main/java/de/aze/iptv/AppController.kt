@@ -398,8 +398,13 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         )
     }
 
-    /** Farbschema (Index in [de.aze.iptv.ui.Schemes]). */
-    var schemeIndex by mutableStateOf(store.scheme.coerceIn(0, Schemes.lastIndex))
+    /** Farbschema (Index in [de.aze.iptv.ui.Schemes]). Neues Design „Aurora“ einmalig einstellen. */
+    var schemeIndex by mutableStateOf(
+        (if (!store.auroraApplied) {
+            store.auroraApplied = true
+            de.aze.iptv.ui.AuroraIndex.also { store.scheme = it }
+        } else store.scheme).coerceIn(0, Schemes.lastIndex),
+    )
         private set
 
     var textColorIndex by mutableStateOf(store.textColor.coerceIn(0, de.aze.iptv.ui.TextColors.lastIndex))

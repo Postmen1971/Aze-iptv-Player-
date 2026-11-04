@@ -288,8 +288,13 @@ private fun ControlsSection(app: AppController) {
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Nur bei schwarzem Bild", selected = app.nameDisplay == 0, onClick = { app.updateNameDisplay(0) })
             TvButton("3 Sekunden mit Sendung", selected = app.nameDisplay == 1, onClick = { app.updateNameDisplay(1) })
+            TvButton("Infoleiste unten", selected = app.nameDisplay == 3, onClick = { app.updateNameDisplay(3) })
             TvButton("Aus", selected = app.nameDisplay == 2, onClick = { app.updateNameDisplay(2) })
         }
+        Text(
+            "„Infoleiste unten“: beim Umschalten 4 Sekunden eine Leiste mit Sender, Sendung, Fortschritt und was danach kommt.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
     }
     Section("Tastenbelegung der Fernbedienung") {
         Text(

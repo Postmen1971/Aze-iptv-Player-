@@ -101,7 +101,18 @@ val Schemes = listOf(
         text = Color(0xFFF2FBF4), textSoft = Color(0xFFCBE9D3), textMuted = Color(0xFF8DB99B),
         accent = Color(0xFFDFF7E5), onAccent = Color(0xFF061A0E), highlight = Color(0xFF5BE36B),
     ),
+    // „Aurora“ (Redesign 11/2026): tiefes Nachtblau, ein leuchtender Minz-Akzent für die Auswahl, Rot nur für LIVE
+    ColorScheme(
+        "Aurora",
+        ground = Color(0xFF060A13), panel = Color(0xFF0C1524), panelDark = Color(0xFF09101C),
+        raised = Color(0xFF13243A), line = Color(0xFF1E2E46),
+        text = Color(0xFFEEF3FA), textSoft = Color(0xFFC9D3E2), textMuted = Color(0xFF8A97AC),
+        accent = Color(0xFF3EE6C1), onAccent = Color(0xFF06221C), highlight = Color(0xFF3EE6C1),
+    ),
 )
+
+/** Index von „Aurora“ in [Schemes] */
+val AuroraIndex: Int get() = Schemes.indexOfFirst { it.name == "Aurora" }
 
 /** Wählbare Schriftfarben (null = wie im Farbschema). */
 val TextColors: List<Pair<String, Color?>> = listOf(
@@ -221,7 +232,7 @@ fun TvButton(
     onClick: () -> Unit,
 ) {
     Focusable(modifier = modifier, onClick = onClick) { focused ->
-        val shape = RoundedCornerShape(12.dp)
+        val shape = RoundedCornerShape(14.dp)
         val fg = when {
             focused -> Palette.OnAccent
             danger -> Palette.Live
