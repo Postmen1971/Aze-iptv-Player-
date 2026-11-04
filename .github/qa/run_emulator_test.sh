@@ -82,9 +82,9 @@ sleep 3
 for i in $(seq 1 30); do adb shell input keyevent KEYCODE_DPAD_UP; done
 sleep 2
 shot "test1b-liste-nach-hoch"
+note "Senderliste ▲" "$(qa | grep -E "LIST_|ROOT_KEY" | head -40)"
 [ "$(count "LIST_HEAD_FOCUS")" -eq 0 ] || fail "Senderliste: ▲ ist in der Gruppen-Kopfzeile gelandet"
 [ "$(count "LIST_WRAP")" -ge 1 ] || fail "Senderliste: ▲ oben ist nicht ans Ende gesprungen"
-note "Senderliste ▲" "$(qa | grep -E "LIST_" | head -12)"
 adb shell input keyevent KEYCODE_DPAD_RIGHT   # Rechts schließt die Liste
 sleep 2
 

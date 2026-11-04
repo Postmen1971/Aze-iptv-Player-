@@ -44,6 +44,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -292,7 +293,9 @@ fun ChannelOverlay(
                     LazyColumn(
                         state = listState,
                         verticalArrangement = Arrangement.spacedBy(1.dp),
-                        modifier = Modifier.onPreviewKeyEvent { e ->
+                        modifier = Modifier
+                            .onFocusChanged { qaLog("LIST_FOCUS has=${it.hasFocus}") }
+                            .onPreviewKeyEvent { e ->
                             if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (e.key) {
                                 // Messpunkt für den Emulator-Test (welcher Sender hat den Fokus, wenn ▲/▼ ankommt)
@@ -322,7 +325,7 @@ fun ChannelOverlay(
                                             else -> false
                                         }
                                     },
-                                onFocus = { focusedIdx = index },
+                                onFocus = { focusedIdx = index; qaLog("LIST_ITEM_FOCUS $index") },
                                 onClick = {
                                     app.play(nc)
                                     onClose()

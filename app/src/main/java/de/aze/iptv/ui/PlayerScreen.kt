@@ -37,6 +37,8 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -711,6 +713,13 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(if (ytActive) Color.Transparent else Color.Black)
             .focusRequester(focus)
+            .onPreviewKeyEvent { e ->
+                // Messpunkt: kommt ▲/▼ bei geöffneter Senderliste überhaupt im Player an?
+                if (overlay && e.type == KeyEventType.KeyDown &&
+                    (e.key == androidx.compose.ui.input.key.Key.DirectionUp || e.key == androidx.compose.ui.input.key.Key.DirectionDown)
+                ) qaLog("ROOT_KEY ${e.key} overlay=$overlay")
+                false
+            }
             .onKeyEvent { e ->
                 // Einstellungen/PIN liegen darüber: keine Tasten an den Player (sonst unsichtbares Umschalten)
                 if (!active || multiView) return@onKeyEvent false
