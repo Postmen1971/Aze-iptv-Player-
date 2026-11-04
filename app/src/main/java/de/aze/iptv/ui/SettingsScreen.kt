@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -118,20 +119,24 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
         // Linke Leiste scrollt mit (auf manchen Fernsehern passten nicht alle Bereiche auf den Bildschirm)
         Column(
             modifier = Modifier
-                .width(220.dp)
+                .width(250.dp)
                 .fillMaxHeight()
-                .background(Palette.Ground.copy(alpha = 0.96f))
+                .background(Palette.PanelDark)
                 .verticalScroll(rememberScrollState())
-                .padding(start = 14.dp, end = 12.dp, top = 22.dp, bottom = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
+                .padding(start = 16.dp, end = 14.dp, top = 26.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
+            // Kopf wie im Aurora-Entwurf: Logo, Name, Version
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(start = 10.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(start = 8.dp, bottom = 18.dp),
             ) {
-                AzeLogo(24.dp)
-                Text("Einstellungen", color = Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+                AzeLogo(34.dp)
+                Column {
+                    Text("Aze-IPTV", color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("Version ${BuildConfig.VERSION_NAME}", color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
             CategoryItem("← Fernsehen", selected = false, modifier = Modifier.focusRequester(firstFocus), onFocus = {}, onClick = onClose)
             cats.forEachIndexed { i, name ->
@@ -149,9 +154,11 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 .weight(1f)
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(horizontal = 30.dp, vertical = 26.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // Seitentitel des gewählten Bereichs
+            cats.getOrNull(cat)?.let { Text(it, color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp)) }
             app.message?.let {
                 Text(it, color = Palette.TextSoft, fontSize = 13.sp)
             }
@@ -225,22 +232,25 @@ private fun CategoryItem(
     onClick: () -> Unit,
 ) {
     Focusable(modifier = modifier.fillMaxWidth(), onClick = onClick, onFocus = onFocus) { focused ->
-        // Gleicher Stil wie das Seitenmenü: ruhige Schrift, Fokus = helle Pille, gewählter Bereich leicht im Akzentton
-        Text(
-            label,
-            color = if (focused) Palette.OnAccent else if (selected) Palette.Text else Palette.TextSoft,
-            fontSize = 15.sp,
-            fontWeight = if (focused || selected) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        // Aurora: Fokus = gefüllte Akzent-Pille, gewählter Bereich leicht im Akzentton, Punkt vorn
+        val fg = if (focused) Palette.OnAccent else if (selected) Palette.Highlight else Palette.TextSoft
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    if (focused) Palette.Accent else if (selected) Palette.Highlight.copy(alpha = 0.16f) else Palette.PanelDark.copy(alpha = 0f),
-                    RoundedCornerShape(12.dp),
+                    if (focused) Palette.Accent else if (selected) Palette.Highlight.copy(alpha = 0.14f) else Palette.PanelDark.copy(alpha = 0f),
+                    RoundedCornerShape(14.dp),
                 )
-                .padding(horizontal = 12.dp, vertical = 9.dp),
-        )
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.size(8.dp).background(if (focused) Palette.OnAccent else if (selected) Palette.Highlight else Palette.Line, androidx.compose.foundation.shape.CircleShape))
+            Text(
+                label, color = fg, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
@@ -251,19 +261,19 @@ private fun Section(title: String, startOpen: Boolean = true, content: @Composab
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Palette.PanelBrush, RoundedCornerShape(14.dp))
-            .border(1.dp, Palette.Line.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .background(Palette.Panel, RoundedCornerShape(20.dp))
+            .border(1.dp, Palette.Line.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Focusable(modifier = Modifier.fillMaxWidth(), onClick = { open = !open }) { focused ->
             Row(
                 Modifier.fillMaxWidth()
-                    .then(if (focused) Modifier.background(Palette.FocusBrush, RoundedCornerShape(8.dp)) else Modifier)
+                    .then(if (focused) Modifier.background(Palette.FocusBrush, RoundedCornerShape(10.dp)) else Modifier)
                     .padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(title, color = if (focused) Palette.OnAccent else Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(title, color = if (focused) Palette.OnAccent else Palette.Text, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
                 Text(if (open) "▾" else "▸", color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 18.sp)
             }
         }
@@ -889,15 +899,8 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
                 "„Je Sender“ stellt bei jedem Sender passend um.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton(if (app.showDiag) "Fehlersuche-Anzeige: an" else "Fehlersuche-Anzeige: aus", selected = app.showDiag, onClick = { app.updateShowDiag(!app.showDiag) })
-            TvButton(if (app.multiViewOn) "Multi-View (Beta): an" else "Multi-View (Beta): aus", selected = app.multiViewOn, onClick = { app.updateMultiViewOn(!app.multiViewOn) })
-        }
-        Text(
-            "Multi-View zeigt 2–4 Sender gleichzeitig (jedes Bild ist eine eigene Verbindung zum Anbieter). " +
-                "Ausgeschaltet verschwindet es aus dem Schnellmenü.",
-            color = Palette.TextMuted, fontSize = 13.sp,
-        )
+        TvSwitch("Fehlersuche-Anzeige", "Messzeile oben links (Bilder/s, Vorrat, Zustand)", app.showDiag) { app.updateShowDiag(!app.showDiag) }
+        TvSwitch("Multi-View (Beta)", "2–4 Sender gleichzeitig – jedes Bild ist eine eigene Verbindung; aus = nicht im Schnellmenü", app.multiViewOn) { app.updateMultiViewOn(!app.multiViewOn) }
       }
         Text("Untertitel", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1348,12 +1351,42 @@ private fun VodCoverSection(app: AppController) {
                 "Servern geladen (der Dienst sieht nur die Bild-Adresse, nie Zugangsdaten). Klappt es dort nicht, kommt das Bild direkt vom Anbieter.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TvButton(if (app.coverProxy) "Schneller Bilderdienst: an" else "Schneller Bilderdienst: aus", selected = app.coverProxy, onClick = { app.updateCoverProxy(!app.coverProxy) })
-        }
+        TvSwitch("Schneller Bilderdienst", "Cover verkleinert über schnelle Server", app.coverProxy) { app.updateCoverProxy(!app.coverProxy) }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Standard", selected = !app.vodFast, onClick = { app.updateVodFast(false) })
             TvButton("Filme & Serien bevorzugt", selected = app.vodFast, onClick = { app.updateVodFast(true) })
+        }
+    }
+}
+
+/** Schalter-Zeile im Aurora-Stil: Titel + Erklärung links, Schalter rechts; OK schaltet um. */
+@Composable
+internal fun TvSwitch(title: String, hint: String?, on: Boolean, onToggle: () -> Unit) {
+    Focusable(modifier = Modifier.fillMaxWidth(), onClick = onToggle) { focused ->
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(if (focused) Palette.Raised else Palette.PanelDark.copy(alpha = 0f), RoundedCornerShape(14.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                hint?.let { Text(it, color = Palette.TextMuted, fontSize = 12.5.sp) }
+            }
+            val track = if (on) Palette.Highlight else Palette.Line
+            Row(
+                Modifier
+                    .width(48.dp).height(28.dp)
+                    .background(track, RoundedCornerShape(14.dp))
+                    .then(if (focused) Modifier.border(2.dp, Palette.Text, RoundedCornerShape(14.dp)) else Modifier)
+                    .padding(3.dp),
+                horizontalArrangement = if (on) Arrangement.End else Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(22.dp).background(if (on) Palette.OnAccent else Palette.TextSoft, androidx.compose.foundation.shape.CircleShape))
+            }
         }
     }
 }
