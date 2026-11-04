@@ -752,9 +752,18 @@ private fun YouTubeSection(app: AppController) {
 @Composable
 private fun AppearanceSection(app: AppController) {
     Section("Aussehen") {
-        Text("Farbschema", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        // Aurora-Familie (neues Design) in eigener Reihe, darunter die bisherigen Farbschemata
+        val aurora = Schemes.withIndex().filter { it.value.name.startsWith("Aurora") }
+        val classic = Schemes.withIndex().filter { !it.value.name.startsWith("Aurora") }
+        Text("Farbschema – Aurora (neues Design)", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Schemes.forEachIndexed { i, sc ->
+            aurora.forEach { (i, sc) ->
+                TvButton("● " + sc.name.removePrefix("Aurora").trim().ifEmpty { "Minz" }, selected = app.schemeIndex == i, onClick = { app.updateScheme(i) })
+            }
+        }
+        Text("Farbschema – klassisch", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            classic.forEach { (i, sc) ->
                 TvButton(sc.name, selected = app.schemeIndex == i, onClick = { app.updateScheme(i) })
             }
         }

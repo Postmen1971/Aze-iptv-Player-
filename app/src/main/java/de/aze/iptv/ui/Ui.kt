@@ -101,13 +101,42 @@ val Schemes = listOf(
         text = Color(0xFFF2FBF4), textSoft = Color(0xFFCBE9D3), textMuted = Color(0xFF8DB99B),
         accent = Color(0xFFDFF7E5), onAccent = Color(0xFF061A0E), highlight = Color(0xFF5BE36B),
     ),
-    // „Aurora“ (Redesign 11/2026): tiefes Nachtblau, ein leuchtender Minz-Akzent für die Auswahl, Rot nur für LIVE
+    // „Aurora“ (Redesign 11/2026): tiefes Nachtblau, ein leuchtender Akzent für die Auswahl, Rot nur für LIVE
+    // Aurora-Familie: gleicher Nachtblau-Grund, wählbarer Akzent (Minz, Blau, Bernstein, Violett, Koralle)
     ColorScheme(
         "Aurora",
         ground = Color(0xFF060A13), panel = Color(0xFF0C1524), panelDark = Color(0xFF09101C),
         raised = Color(0xFF13243A), line = Color(0xFF1E2E46),
         text = Color(0xFFEEF3FA), textSoft = Color(0xFFC9D3E2), textMuted = Color(0xFF8A97AC),
         accent = Color(0xFF3EE6C1), onAccent = Color(0xFF06221C), highlight = Color(0xFF3EE6C1),
+    ),
+    ColorScheme(
+        "Aurora Blau",
+        ground = Color(0xFF060A13), panel = Color(0xFF0C1524), panelDark = Color(0xFF09101C),
+        raised = Color(0xFF13243A), line = Color(0xFF1E2E46),
+        text = Color(0xFFEEF3FA), textSoft = Color(0xFFC9D3E2), textMuted = Color(0xFF8A97AC),
+        accent = Color(0xFF5AA0FF), onAccent = Color(0xFF071A33), highlight = Color(0xFF5AA0FF),
+    ),
+    ColorScheme(
+        "Aurora Bernstein",
+        ground = Color(0xFF060A13), panel = Color(0xFF0C1524), panelDark = Color(0xFF09101C),
+        raised = Color(0xFF13243A), line = Color(0xFF1E2E46),
+        text = Color(0xFFEEF3FA), textSoft = Color(0xFFC9D3E2), textMuted = Color(0xFF8A97AC),
+        accent = Color(0xFFFFB547), onAccent = Color(0xFF2B1A00), highlight = Color(0xFFFFB547),
+    ),
+    ColorScheme(
+        "Aurora Violett",
+        ground = Color(0xFF060A13), panel = Color(0xFF0C1524), panelDark = Color(0xFF09101C),
+        raised = Color(0xFF13243A), line = Color(0xFF1E2E46),
+        text = Color(0xFFEEF3FA), textSoft = Color(0xFFC9D3E2), textMuted = Color(0xFF8A97AC),
+        accent = Color(0xFFB78CFF), onAccent = Color(0xFF1E0F3A), highlight = Color(0xFFB78CFF),
+    ),
+    ColorScheme(
+        "Aurora Koralle",
+        ground = Color(0xFF060A13), panel = Color(0xFF0C1524), panelDark = Color(0xFF09101C),
+        raised = Color(0xFF13243A), line = Color(0xFF1E2E46),
+        text = Color(0xFFEEF3FA), textSoft = Color(0xFFC9D3E2), textMuted = Color(0xFF8A97AC),
+        accent = Color(0xFFFF7A6B), onAccent = Color(0xFF2E0B07), highlight = Color(0xFFFF7A6B),
     ),
 )
 
