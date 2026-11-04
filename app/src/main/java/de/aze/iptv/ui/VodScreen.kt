@@ -209,9 +209,14 @@ private fun Browse(
         val pref = app.vodLang
         if (pref == 2) return@LaunchedEffect
         val all = runCatching { api.all(series) }.getOrNull() ?: return@LaunchedEffect
+        // Ausgeblendete Kategorien (und Erwachsenen-Filter) werden gar nicht erst geladen
+        val skip = cats.orEmpty().filter {
+            app.isVodHidden(sourceId, series, it.id) || (app.adultFilter && de.aze.iptv.data.AdultFilter.isAdult(it.name))
+        }.map { it.id }.toSet()
+        val visible = all.filter { it.cat !in skip }
         val langOf = cats.orEmpty().associate { it.id to vodLanguage(it.name) }
         val order = if (pref == 0) listOf("de", "tr") else listOf("tr", "de")
-        val queue = (order.flatMap { l -> all.filter { langOf[it.cat] == l } } + all.filter { langOf[it.cat] == null })
+        val queue = (order.flatMap { l -> visible.filter { langOf[it.cat] == l } } + visible.filter { langOf[it.cat] == null })
             .mapNotNull { it.poster }.distinct().take(if (app.vodFast) 3_000 else 600)
         val loader = coil.Coil.imageLoader(ctx)
         qaLog("VOD_PREFETCH ${queue.size} Cover (${order.joinToString(" → ")} zuerst)")
@@ -243,8 +248,10 @@ private fun Browse(
     LaunchedEffect(query) {
         val q = query ?: return@LaunchedEffect
         results = null
+        // Suche ohne ausgeblendete Kategorien
+        val shown = catList.map { it.id }.toSet()
         results = runCatching { api.all(series) }.getOrDefault(emptyList())
-            .filter { it.name.contains(q, ignoreCase = true) }
+            .filter { it.name.contains(q, ignoreCase = true) && (it.cat == null || it.cat in shown) }
     }
     LaunchedEffect(menu) {
         if (!menu) {
