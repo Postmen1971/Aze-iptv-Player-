@@ -212,18 +212,18 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
  */
 @androidx.compose.runtime.Composable
 fun AzeClock(fontSize: androidx.compose.ui.unit.TextUnit = 13.sp, withDate: Boolean = true) {
-    var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    val now = androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         while (true) {
             kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L + 50)
-            now = System.currentTimeMillis()
+            now.longValue = System.currentTimeMillis()
         }
     }
     val fmt = androidx.compose.runtime.remember(withDate) {
         java.text.SimpleDateFormat(if (withDate) "EE dd.MM. · HH:mm" else "HH:mm", java.util.Locale.GERMANY)
     }
     androidx.compose.material3.Text(
-        fmt.format(java.util.Date(now)),
+        fmt.format(java.util.Date(now.longValue)),
         color = Palette.Highlight, fontSize = fontSize, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
     )
 }
