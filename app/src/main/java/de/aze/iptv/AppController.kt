@@ -507,6 +507,15 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         store.afrDelay = s
     }
 
+    var coverProxy by mutableStateOf(store.coverProxy)
+        private set
+
+    fun updateCoverProxy(on: Boolean) {
+        coverProxy = on
+        store.coverProxy = on
+        de.aze.iptv.ui.CoverUrls.proxy = on
+    }
+
     var vodFast by mutableStateOf(store.vodFast)
         private set
 

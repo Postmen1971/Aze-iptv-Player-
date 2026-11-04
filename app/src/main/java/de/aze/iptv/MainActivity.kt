@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
         // auch wenn der Server "nicht speichern" meldet – so sind Poster beim zweiten Mal sofort da.
         // „Filme & Serien bevorzugt“: größerer Zwischenspeicher (1 GB statt 250 MB), mehr Bilder im Arbeitsspeicher
         val vodFast = app.vodFast
+        de.aze.iptv.ui.CoverUrls.proxy = app.coverProxy
         coil.Coil.setImageLoader(
             coil.ImageLoader.Builder(this)
                 .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (vodFast) 0.25 else 0.15).build() }
@@ -98,6 +99,8 @@ class MainActivity : ComponentActivity() {
                         .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 64; maxRequestsPerHost = 16 })
                         .build()
                 }
+                // Bilderdienst nicht erreichbar oder Bild dort unbekannt → Original direkt vom Anbieter laden
+                .components { add(CoverFallback()) }
                 .respectCacheHeaders(false)
                 .crossfade(false)
                 .build(),
@@ -249,5 +252,16 @@ private class CrashLogger(private val file: java.io.File, private val next: Thre
             )
         }
         next?.uncaughtException(t, e)
+    }
+}
+
+/** Wenn ein Cover über images.weserv.nl nicht kommt: dasselbe Bild direkt von der Original-Adresse laden. */
+private class CoverFallback : coil.intercept.Interceptor {
+    override suspend fun intercept(chain: coil.intercept.Interceptor.Chain): coil.request.ImageResult {
+        val result = chain.proceed(chain.request)
+        val data = chain.request.data as? String ?: return result
+        if (result !is coil.request.ErrorResult || !data.startsWith(de.aze.iptv.ui.CoverUrls.PROXY)) return result
+        val original = runCatching { android.net.Uri.parse(data).getQueryParameter("url") }.getOrNull() ?: return result
+        return chain.proceed(chain.request.newBuilder().data(original).build())
     }
 }

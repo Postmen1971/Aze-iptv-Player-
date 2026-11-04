@@ -1338,6 +1338,14 @@ private fun VodCoverSection(app: AppController) {
                 "beim Blättern sind sie dann sofort da. Gilt ab dem nächsten Start der App.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
+        Text(
+            "Schneller Bilderdienst: Cover vom Server des Anbieters werden über images.weserv.nl verkleinert und von schnellen " +
+                "Servern geladen (der Dienst sieht nur die Bild-Adresse, nie Zugangsdaten). Klappt es dort nicht, kommt das Bild direkt vom Anbieter.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton(if (app.coverProxy) "Schneller Bilderdienst: an" else "Schneller Bilderdienst: aus", selected = app.coverProxy, onClick = { app.updateCoverProxy(!app.coverProxy) })
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Standard", selected = !app.vodFast, onClick = { app.updateVodFast(false) })
             TvButton("Filme & Serien bevorzugt", selected = app.vodFast, onClick = { app.updateVodFast(true) })

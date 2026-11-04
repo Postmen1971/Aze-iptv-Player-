@@ -410,7 +410,26 @@ private fun Browse(
  * Bilder auch klein (w185, ca. 15 KB) – für die Kacheln reicht das völlig und lädt ein Vielfaches schneller.
  */
 private val tmdbSize = Regex("(image\\.tmdb\\.org/t/p/)(original|w\\d+(_and_h\\d+[^/]*)?|h\\d+)/")
-internal fun smallPoster(url: String): String = url.replace(tmdbSize, "$1w185/")
+internal fun smallPoster(url: String): String = CoverUrls.small(url, 200, 300)
+
+/**
+ * Cover-Adressen: TMDB-Bilder in kleiner Größe; Cover vom Server des Anbieters über images.weserv.nl
+ * (holt das Bild einmal ab, verkleinert es auf Kachelgröße und liefert es von schnellen Servern).
+ * Klappt das nicht, lädt die App das Original direkt (siehe CoverFallback in MainActivity).
+ */
+object CoverUrls {
+    const val PROXY = "https://images.weserv.nl/"
+    @Volatile var proxy = true
+
+    fun small(url: String, w: Int, h: Int): String {
+        if (url.contains("image.tmdb.org/t/p/")) return url.replace(tmdbSize, when { w <= 200 -> "$1w185/"; w <= 400 -> "$1w342/"; else -> "$1w780/" })
+        if (!proxy || !url.startsWith("http")) return url
+        // Adressen mit Zugangsdaten nie an einen fremden Dienst geben
+        val low = url.lowercase()
+        if ("username=" in low || "password=" in low || "token=" in low || url.substringAfter("://").substringBefore("/").contains("@")) return url
+        return PROXY + "?url=" + java.net.URLEncoder.encode(url, "UTF-8") + "&w=$w&h=$h&fit=cover&output=webp&q=70"
+    }
+}
 
 /** Poster in fester, kleiner Größe laden: schneller und passt immer in den Zwischenspeicher. */
 private fun posterRequest(context: android.content.Context, url: String): coil.request.ImageRequest =
@@ -510,7 +529,7 @@ private fun DetailView(
 
     Box(Modifier.fillMaxSize().background(Palette.Ground)) {
         i?.backdrop?.let {
-            AsyncImage(model = it, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            AsyncImage(model = CoverUrls.small(it, 1280, 720), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
         Box(
             Modifier.fillMaxSize().background(
@@ -519,7 +538,7 @@ private fun DetailView(
         )
         Row(Modifier.fillMaxSize().padding(28.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Box(Modifier.width(180.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Palette.Raised)) {
-                if (item.poster != null) AsyncImage(model = item.poster, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                if (item.poster != null) AsyncImage(model = CoverUrls.small(item.poster, 400, 600), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(item.name, color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)

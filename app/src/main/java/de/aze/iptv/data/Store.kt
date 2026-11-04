@@ -184,6 +184,11 @@ class Store(context: Context) {
         set(v) = prefs.edit().putInt("afrDelay", v).apply()
 
     /** Kleine Anzeige zur Fehlersuche im Bild (Frequenz, Bilder, Position). */
+    /** Cover über den schnellen Bilderdienst images.weserv.nl (verkleinert, schnelle Server); sonst direkt vom Anbieter */
+    var coverProxy: Boolean
+        get() = prefs.getBoolean("coverProxy", true)
+        set(v) = prefs.edit().putBoolean("coverProxy", v).apply()
+
     /** Filme & Serien bevorzugt: Cover großzügig vorladen und länger auf dem Gerät behalten (mehr Speicher) */
     var vodFast: Boolean
         get() = prefs.getBoolean("vodFast", false)
