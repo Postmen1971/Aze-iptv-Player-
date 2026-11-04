@@ -27,6 +27,8 @@ http://10.0.2.2:{p}/drop.ts
 http://10.0.2.2:{p}/jump.ts
 #EXTINF:-1 group-title="QA",Test 6 Limit
 http://10.0.2.2:{p}/one.ts
+#EXTINF:-1 group-title="QA",Test 7 Normal B
+http://10.0.2.2:{p}/ok2.ts
 """.format(p=PORT)
 
 
@@ -58,7 +60,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         mode = {"ok.ts": ("ok.ts", None), "stall.ts": ("ok.ts", "stall"),
                 "vstop.ts": ("vstop.ts", None), "drop.ts": ("ok.ts", "drop"), "jump.ts": ("jump.ts", None),
-                "one.ts": ("ok.ts", "one")}.get(path)
+                "one.ts": ("ok.ts", "one"), "ok2.ts": ("ok.ts", None)}.get(path)
         if mode is None:
             self.send_error(404)
             return

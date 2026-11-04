@@ -146,6 +146,25 @@ wait_for "FIRST_FRAME Test 1" $((n+1)) 60 && shot "test5-nach-zappen"
 sleep 20
 alive || fail "App nach dem Zappen nicht mehr da"
 
+log "== Test 5b: Umschaltzeit messen (10× zwischen zwei normalen Sendern)"
+z0=$(count "ZAPTIME")
+for i in $(seq 1 5); do
+  channel 7; wait_for "ZAPTIME" $((z0+1)) 30 >/dev/null; z0=$(count "ZAPTIME"); sleep 4
+  channel 1; wait_for "ZAPTIME" $((z0+1)) 30 >/dev/null; z0=$(count "ZAPTIME"); sleep 4
+done
+vals=$(qa | grep -o "ZAPTIME [0-9]*" | tail -10 | awk '{print $2}' | sort -n)
+n=$(echo "$vals" | grep -c . || true)
+if [ "$n" -ge 6 ]; then
+  med=$(echo "$vals" | awk '{a[NR]=$1} END{print a[int((NR+1)/2)]}')
+  mx=$(echo "$vals" | tail -1)
+  base=$(cat .github/qa/zap_baseline.txt 2>/dev/null | tr -dc 0-9)
+  limit=$(( ${base:-0} > 0 ? base * 13 / 10 + 300 : 4000 ))
+  note "Umschaltzeit" "Median ${med} ms · langsamster ${mx} ms · Messungen: $(echo $vals | tr '\n' ' ') · Grenze ${limit} ms (Basis ${base:-keine})"
+  [ "$med" -le "$limit" ] || fail "Umschalten zu langsam: Median ${med} ms (Grenze ${limit} ms)"
+else
+  fail "Umschaltzeit: zu wenige Messungen ($n)"
+fi
+
 log "== Test 6: Lippensynchron +3000 ms (2000 allgemein + 1000 Sender, Ton später) – Bild darf nicht stehen bleiben"
 adb shell am force-stop $PKG
 sleep 2

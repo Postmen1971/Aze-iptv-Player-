@@ -130,6 +130,8 @@ fun PlayerScreen(
     }
     // Nahtloses Neuverbinden, wenn der Anbieter den Stream beendet (siehe LiveSource)
     val live = remember { de.aze.iptv.player.LiveSource(context, http) }
+    /** Zeitpunkt des letzten Senderwechsels (0 = keiner offen) – für die Messung der Umschaltzeit */
+    val zapStartedAt = remember { longArrayOf(0L) }
     /** Beim Neuverbinden das letzte Bild stehen lassen statt Schwarz (beim Senderwechsel aus) */
     val playerViewRef = remember { arrayOfNulls<PlayerView>(1) }
     // muss VOR player.stop() gesetzt sein – darum direkt an der Bildfläche, nicht über den Compose-Zustand
@@ -428,6 +430,11 @@ fun PlayerScreen(
             override fun onRenderedFirstFrame() {
                 firstFrameSeen = true
                 qaLog("FIRST_FRAME ${app.current?.channel?.name}")
+                // Umschaltzeit: vom Senderwechsel bis zum ersten Bild (für Emulator-Messung und Hänger-Protokoll)
+                if (zapStartedAt[0] > 0) {
+                    qaLog("ZAPTIME ${android.os.SystemClock.elapsedRealtime() - zapStartedAt[0]} ${app.current?.channel?.name}")
+                    zapStartedAt[0] = 0
+                }
                 noPicture = false
                 if (ytError?.startsWith("Anbieter antwortet") == true) ytError = null
                 retries = 0
@@ -559,7 +566,10 @@ fun PlayerScreen(
             return@LaunchedEffect
         }
         retryJob?.cancel()
-        if (startedKey != ch.key) retries = 0
+        if (startedKey != ch.key) {
+            retries = 0
+            zapStartedAt[0] = android.os.SystemClock.elapsedRealtime()
+        }
         // neuer Sender: altes Bild nicht stehen lassen; gleicher Sender (Neustart): letztes Bild halten
         keepFrame(startedKey == ch.key)
         startedKey = ch.key
