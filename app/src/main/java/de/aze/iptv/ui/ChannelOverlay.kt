@@ -450,7 +450,11 @@ internal fun SideMenu(
             modifier = Modifier.padding(start = 10.dp, bottom = 26.dp),
         ) {
             AzeLogo(28.dp)
-            AzeWordmark(18.sp)
+            // unter dem Schriftzug: Uhrzeit mit Datum
+            Column {
+                AzeWordmark(18.sp)
+                AzeClock(13.sp)
+            }
         }
 
         @Composable

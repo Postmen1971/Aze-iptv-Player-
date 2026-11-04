@@ -123,6 +123,12 @@
 - Neues Farbschema „Aurora“ (Nachtblau, Minz-Akzent #3EE6C1, Rot nur LIVE), hinten an `Schemes` angehängt (gespeicherte Indizes bleiben gültig); einmalig automatisch eingestellt (Store `auroraApplied`). Knöpfe runder (14 dp).
 - Sendername beim Umschalten: neue Wahl 3 = „Infoleiste unten“ (`ZapBar`: Nummer, Name, LIVE, Auflösung, Sendung mit Zeit/Fortschritt, „Danach …“, Uhr; 4 s). Standard bleibt die bisherige Anzeige – Wunsch von Aziz.
 
+## Filme/Serien schneller laden + Uhr (1.0.143)
+- Ursache „Kategorien hängen, Cover nach 3 min“: `counts()` lud bei JEDEM Öffnen die komplette Filmliste (viele MB) und verstopfte die Leitung. Jetzt: Gesamtliste einmal je Programmstart (statisch gecacht je Zugang), erst nach der ersten Kategorie + 1,5 s; danach Kategorien sofort aus dem Speicher (VodItem.cat). Fehlermeldung verschwindet bei Erfolg.
+- Cover: Bilderdienst schaltet sich nach 3 langsamen (>3 s) oder fehlgeschlagenen Bildern für den Programmstart ab; OkHttp 8 je Server, Timeouts 6/10 s.
+- Hänger-Protokoll: VOD_CAT (Ladezeit je Kategorie), VOD_ALL (Gesamtliste), COVER (erste 6 Cover mit Zeit/Quelle).
+- Uhr (`AzeClock`, Wochentag/Datum/Zeit) unter dem Logo im Seitenmenü und in den Einstellungen; aktualisiert sich zur vollen Minute.
+
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
 2. **SkorText-Update direkt im Player:** Beim Öffnen von SkorText prüfen, ob es auf GitHub eine neuere Version gibt, und die Seiten selbst nachladen (ohne neuen Player-Build). Der Update-Knopf in SkorText soll das auch auslösen (im Player derzeit ohne Funktion, `SkorBridge.installApk` ist leer).

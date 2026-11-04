@@ -205,3 +205,25 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) {
         letterSpacing = 1.6.sp, modifier = modifier,
     )
 }
+
+/**
+ * Uhrzeit (mit Wochentag/Datum) – aktualisiert sich zur vollen Minute. Zeichnet nur sich selbst neu,
+ * kostet also keine Leistung beim Fernsehen.
+ */
+@androidx.compose.runtime.Composable
+fun AzeClock(fontSize: androidx.compose.ui.unit.TextUnit = 13.sp, withDate: Boolean = true) {
+    var now by androidx.compose.runtime.remember { androidx.compose.runtime.mutableLongStateOf(System.currentTimeMillis()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L + 50)
+            now = System.currentTimeMillis()
+        }
+    }
+    val fmt = androidx.compose.runtime.remember(withDate) {
+        java.text.SimpleDateFormat(if (withDate) "EE dd.MM. · HH:mm" else "HH:mm", java.util.Locale.GERMANY)
+    }
+    androidx.compose.material3.Text(
+        fmt.format(java.util.Date(now)),
+        color = Palette.Highlight, fontSize = fontSize, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+    )
+}

@@ -18,6 +18,8 @@ class VodItem(
     val year: String?,
     /** Dateiendung für Filme (mp4, mkv …) */
     val ext: String,
+    /** Kategorie (für Kategorien aus der einmal geladenen Gesamtliste) */
+    val cat: String? = null,
 )
 
 class VodDetails(
@@ -102,47 +104,38 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
      * Anzahl der Filme bzw. Serien je Kategorie. Liest die Gesamtliste Stück für Stück,
      * damit auch sehr große Anbieter-Listen wenig Speicher brauchen.
      */
+    /**
+     * Anzahl je Kategorie – aus der Gesamtliste, die nur EINMAL je Programmstart geladen wird (vorher bei jedem Öffnen
+     * von Filmen/Serien die komplette Liste: viele MB, die die Leitung zum Anbieter verstopften).
+     */
     override suspend fun counts(series: Boolean): Map<String, Int> = withContext(Dispatchers.IO) {
-        val conn = Http.open("$api&action=${if (series) "get_series" else "get_vod_streams"}")
-        try {
-            android.util.JsonReader(conn.inputStream.bufferedReader()).use { r ->
-                val m = HashMap<String, Int>()
-                if (r.peek() != android.util.JsonToken.BEGIN_ARRAY) return@use m
-                r.beginArray()
-                while (r.hasNext()) {
-                    if (r.peek() != android.util.JsonToken.BEGIN_OBJECT) { r.skipValue(); continue }
-                    r.beginObject()
-                    var cat: String? = null
-                    while (r.hasNext()) {
-                        val n = r.nextName()
-                        val t = r.peek()
-                        if (n == "category_id" && (t == android.util.JsonToken.STRING || t == android.util.JsonToken.NUMBER)) cat = r.nextString()
-                        else r.skipValue()
-                    }
-                    r.endObject()
-                    cat?.let { m[it] = (m[it] ?: 0) + 1 }
-                }
-                m
-            }
-        } finally {
-            conn.disconnect()
-        }
+        all(series).groupingBy { it.cat ?: "" }.eachCount()
     }
 
+    /** Kategorie: sofort aus der Gesamtliste, wenn sie schon da ist – sonst nur diese Kategorie beim Anbieter holen. */
     override suspend fun movies(categoryId: String): List<VodItem> = withContext(Dispatchers.IO) {
-        streamItems("get_vod_streams", "&category_id=${enc(categoryId)}", series = false)
+        cached(false)?.filter { it.cat == categoryId } ?: streamItems("get_vod_streams", "&category_id=${enc(categoryId)}", series = false)
     }
 
     override suspend fun series(categoryId: String): List<VodItem> = withContext(Dispatchers.IO) {
-        streamItems("get_series", "&category_id=${enc(categoryId)}", series = true)
+        cached(true)?.filter { it.cat == categoryId } ?: streamItems("get_series", "&category_id=${enc(categoryId)}", series = true)
     }
 
-    private val allCache = HashMap<Boolean, List<VodItem>>()
+    private fun cached(series: Boolean): List<VodItem>? = synchronized(allCache) { allCache[api to series] }
 
     override suspend fun all(series: Boolean): List<VodItem> = withContext(Dispatchers.IO) {
-        synchronized(allCache) { allCache[series] } ?: streamItems(if (series) "get_series" else "get_vod_streams", "", series)
-            .also { synchronized(allCache) { allCache[series] = it } }
+        cached(series) ?: synchronized(loadLock(series)) {
+            cached(series) ?: run {
+                val t0 = System.currentTimeMillis()
+                streamItems(if (series) "get_series" else "get_vod_streams", "", series).also {
+                    synchronized(allCache) { allCache[api to series] = it }
+                    de.aze.iptv.ui.qaLog("VOD_ALL ${if (series) "Serien" else "Filme"} ${it.size} in ${System.currentTimeMillis() - t0} ms")
+                }
+            }
+        }
     }
+
+    private fun loadLock(series: Boolean): Any = synchronized(locks) { locks.getOrPut(api to series) { Any() } }
 
     /** Liste Stück für Stück lesen (große Anbieter liefern zehntausende Einträge). */
     private fun streamItems(action: String, extra: String, series: Boolean): List<VodItem> {
@@ -176,6 +169,7 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
                                 ?: g("rating_5based")?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "%.1f".format(java.util.Locale.ROOT, it * 2) },
                             year = g("year") ?: g("releaseDate")?.take(4),
                             ext = if (series) "" else g("container_extension") ?: "mp4",
+                            cat = g("category_id"),
                         ),
                     )
                 }
@@ -187,7 +181,10 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
     }
 
     private companion object {
-        val WANTED = setOf("stream_id", "series_id", "name", "stream_icon", "cover", "rating", "rating_5based", "year", "releaseDate", "container_extension")
+        val WANTED = setOf("stream_id", "series_id", "name", "stream_icon", "cover", "rating", "rating_5based", "year", "releaseDate", "container_extension", "category_id")
+        /** Gesamtlisten je Anbieter-Zugang (bleiben, solange die App läuft – auch nach Verlassen von Filme/Serien) */
+        val allCache = HashMap<Pair<String, Boolean>, List<VodItem>>()
+        val locks = HashMap<Pair<String, Boolean>, Any>()
     }
 
     override suspend fun movieDetails(id: String): VodDetails = withContext(Dispatchers.IO) {

@@ -1,5 +1,6 @@
 package de.aze.iptv.ui
 
+import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -198,6 +199,9 @@ private fun Browse(
     }
     // Anzahl je Kategorie im Hintergrund holen (große Listen brauchen ein paar Sekunden)
     LaunchedEffect(api, series) {
+        // erst wenn die erste Kategorie da ist – sonst konkurriert die große Gesamtliste mit ihr (und mit den Covern)
+        androidx.compose.runtime.snapshotFlow { items }.first { it != null }
+        delay(1_500)
         counts = runCatching { api.counts(series) }.getOrDefault(emptyMap())
     }
     // Erwachsenen-Filter: solche Kategorien gar nicht erst zeigen
@@ -214,8 +218,10 @@ private fun Browse(
         val c = catList.getOrNull(selected) ?: return@LaunchedEffect
         items = null
         delay(250) // erst laden, wenn man kurz auf einer Kategorie stehen bleibt
+        val t0 = System.currentTimeMillis()
         items = runCatching { if (series) api.series(c.id) else api.movies(c.id) }
-            .onFailure { error = "Inhalte konnten nicht geladen werden." }
+            .onSuccess { error = null; qaLog("VOD_CAT ${c.name} ${it.size} in ${System.currentTimeMillis() - t0} ms") }
+            .onFailure { error = "Inhalte konnten nicht geladen werden."; qaLog("VOD_CAT_ERROR ${c.name} ${it.javaClass.simpleName}") }
             .getOrDefault(emptyList())
     }
     LaunchedEffect(query) {

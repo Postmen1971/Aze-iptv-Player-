@@ -96,7 +96,10 @@ class MainActivity : ComponentActivity() {
                 // Standard lädt nur 5 Bilder gleichzeitig vom selben Server – Cover standen Schlange
                 .okHttpClient {
                     okhttp3.OkHttpClient.Builder()
-                        .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 64; maxRequestsPerHost = 16 })
+                        .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 48; maxRequestsPerHost = 8 })
+                        // hängt ein Bild, nicht ewig warten (dann Rückfall bzw. nächstes Bild)
+                        .connectTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                         .build()
                 }
                 // Bilderdienst nicht erreichbar oder Bild dort unbekannt → Original direkt vom Anbieter laden
@@ -257,10 +260,28 @@ private class CrashLogger(private val file: java.io.File, private val next: Thre
 
 /** Wenn ein Cover über images.weserv.nl nicht kommt: dasselbe Bild direkt von der Original-Adresse laden. */
 private class CoverFallback : coil.intercept.Interceptor {
+    private val logged = java.util.concurrent.atomic.AtomicInteger(0)
+    private val slow = java.util.concurrent.atomic.AtomicInteger(0)
     override suspend fun intercept(chain: coil.intercept.Interceptor.Chain): coil.request.ImageResult {
+        val t0 = android.os.SystemClock.elapsedRealtime()
         val result = chain.proceed(chain.request)
+        val ms = android.os.SystemClock.elapsedRealtime() - t0
         val data = chain.request.data as? String ?: return result
-        if (result !is coil.request.ErrorResult || !data.startsWith(de.aze.iptv.ui.CoverUrls.PROXY)) return result
+        val viaProxy = data.startsWith(de.aze.iptv.ui.CoverUrls.PROXY)
+        // die ersten Cover je Start mit Ladezeit ins Hänger-Protokoll (nur echte Downloads, nicht aus dem Zwischenspeicher)
+        if (ms > 150 && logged.getAndIncrement() < 6) {
+            de.aze.iptv.ui.qaLog("COVER ${if (viaProxy) "Bilderdienst" else "direkt"} $ms ms ${if (result is coil.request.ErrorResult) "FEHLER" else "ok"} " +
+                runCatching { android.net.Uri.parse(data).host }.getOrNull())
+        }
+        if (!viaProxy) return result
+        // Bilderdienst bei diesem Anbieter langsam oder erfolglos → für diesen Programmstart direkt laden
+        if (result is coil.request.ErrorResult || ms > 3_000) {
+            if (slow.incrementAndGet() >= 3 && de.aze.iptv.ui.CoverUrls.proxy) {
+                de.aze.iptv.ui.CoverUrls.proxy = false
+                de.aze.iptv.ui.qaLog("COVER Bilderdienst zu langsam – lade direkt")
+            }
+        }
+        if (result !is coil.request.ErrorResult) return result
         val original = runCatching { android.net.Uri.parse(data).getQueryParameter("url") }.getOrNull() ?: return result
         return chain.proceed(chain.request.newBuilder().data(original).build())
     }

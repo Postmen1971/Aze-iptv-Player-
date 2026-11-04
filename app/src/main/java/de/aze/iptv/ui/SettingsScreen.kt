@@ -135,6 +135,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 AzeLogo(34.dp)
                 Column {
                     Text("Aze-IPTV", color = Palette.Text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    AzeClock(13.sp)
                     Text("Version ${BuildConfig.VERSION_NAME}", color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
