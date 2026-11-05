@@ -315,7 +315,11 @@ class Store(context: Context) {
         set(v) = prefs.edit().putBoolean("auroraApplied", v).apply()
 
     var nameDisplay: Int
-        get() = prefs.getInt("nameDisplay", 0)
+        // Standard: Infoleiste unten (3). Einmalig auch für bestehende Installationen gesetzt – änderbar in Einstellungen → Bedienung
+        get() {
+            if (!prefs.getBoolean("nameDisplayBar", false)) prefs.edit().putInt("nameDisplay", 3).putBoolean("nameDisplayBar", true).apply()
+            return prefs.getInt("nameDisplay", 3)
+        }
         set(v) = prefs.edit().putInt("nameDisplay", v).apply()
 
     /** Erweiterte Einstellungen anzeigen */
