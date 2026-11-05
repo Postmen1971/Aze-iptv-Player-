@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
         // „Filme & Serien bevorzugt“: größerer Zwischenspeicher (1 GB statt 250 MB), mehr Bilder im Arbeitsspeicher
         val vodFast = app.vodFast
         de.aze.iptv.ui.CoverUrls.proxy = app.coverProxy
+        de.aze.iptv.ui.CoverUrls.tmdbFirst = app.coverTmdbFirst
         // ein gemeinsamer Zwischenspeicher auf dem Gerät für sichtbare und vorgeladene Cover
         val coverDisk = coil.disk.DiskCache.Builder()
             .directory(cacheDir.resolve("bilder"))
@@ -305,6 +306,11 @@ private class CoverFallback : coil.intercept.Interceptor {
                 ?: coil.request.ErrorResult(null, req, IllegalStateException("kein Cover"))
         }
         val provider = originalOf(data)
+        // Schalter „TMDB zuerst“: erst TMDB, Anbieter nur, wenn TMDB nichts hat
+        if (tmdb && de.aze.iptv.ui.CoverUrls.tmdbFirst) {
+            fromTmdb(chain, title!!, series, null)?.let { if (it !is coil.request.ErrorResult) return it }
+            return chain.proceed(req.newBuilder().data(provider).build())
+        }
         // dieses Anbieter-Cover kam schon einmal nicht → gleich den gemerkten Ersatz
         if (tmdb) de.aze.iptv.data.Tmdb.replacementFor(provider)?.let { return chain.proceed(req.newBuilder().data(it).build()) }
 

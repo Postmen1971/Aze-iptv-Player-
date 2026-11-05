@@ -521,6 +521,16 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         de.aze.iptv.ui.CoverUrls.proxy = on
     }
 
+    /** Cover-Quelle: TMDB zuerst (Anbieter nur als Ersatz) statt Anbieter zuerst */
+    var coverTmdbFirst by mutableStateOf(store.coverTmdbFirst)
+        private set
+
+    fun updateCoverTmdbFirst(on: Boolean) {
+        coverTmdbFirst = on
+        store.coverTmdbFirst = on
+        de.aze.iptv.ui.CoverUrls.tmdbFirst = on
+    }
+
     var vodLang by mutableStateOf(store.vodLang)
         private set
 

@@ -444,6 +444,7 @@ internal fun smallPoster(url: String): String = CoverUrls.small(url, 200, 300)
 object CoverUrls {
     const val PROXY = "https://images.weserv.nl/"
     @Volatile var proxy = false
+    @Volatile var tmdbFirst = false
     /** eigener Bildlader nur fürs Vorladen (schmale Leitung, siehe MainActivity) */
     @Volatile var bg: coil.ImageLoader? = null
 

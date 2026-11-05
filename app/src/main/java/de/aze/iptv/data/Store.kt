@@ -188,6 +188,9 @@ class Store(context: Context) {
     var coverProxy: Boolean
         get() = prefs.getBoolean("coverProxy2", false)
         set(v) = prefs.edit().putBoolean("coverProxy2", v).apply()
+    var coverTmdbFirst: Boolean
+        get() = prefs.getBoolean("coverTmdbFirst", false)
+        set(v) = prefs.edit().putBoolean("coverTmdbFirst", v).apply()
 
     /** Bevorzugte Sprache bei Filmen & Serien: 0 = Deutsch, dann Türkisch · 1 = Türkisch, dann Deutsch · 2 = keine */
     var vodLang: Int

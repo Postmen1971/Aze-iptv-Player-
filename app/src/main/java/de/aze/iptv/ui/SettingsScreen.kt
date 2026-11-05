@@ -1368,6 +1368,13 @@ private fun VodCoverSection(app: AppController) {
                 "Servern geladen (der Dienst sieht nur die Bild-Adresse, nie Zugangsdaten). Klappt es dort nicht, kommt das Bild direkt vom Anbieter.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
+        if (de.aze.iptv.data.Tmdb.enabled) {
+            TvSwitch(
+                "Cover zuerst von TMDB",
+                if (app.coverTmdbFirst) "An: Poster von TMDB (schnell), Anbieter nur als Ersatz" else "Aus: Cover vom Anbieter, TMDB nur als Ersatz (fehlt oder über 5 s)",
+                app.coverTmdbFirst,
+            ) { app.updateCoverTmdbFirst(!app.coverTmdbFirst) }
+        }
         TvSwitch("Schneller Bilderdienst", "Cover verkleinert über images.weserv.nl – nur einschalten, wenn es damit schneller ist", app.coverProxy) { app.updateCoverProxy(!app.coverProxy) }
         Text("Bevorzugte Sprache – deren Cover werden zuerst geladen, dann der Rest nach und nach", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
