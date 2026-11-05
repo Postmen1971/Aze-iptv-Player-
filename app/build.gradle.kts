@@ -20,6 +20,8 @@ android {
         versionName = "1.0.$buildNumber"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "UPDATE_REPO", "\"Postmen1971/Aze-iptv-Player-\"")
+        // TMDB-Schlüssel für Ersatz-Cover: kommt aus dem GitHub-Secret TMDB_KEY (leer = aus)
+        buildConfigField("String", "TMDB_KEY", "\"${(System.getenv("TMDB_KEY") ?: "").filter { it.isLetterOrDigit() }}\"")
         // Test-Zugänge (Start-Parameter für die Test-Playlist) – nur im Test-Build "qa" an
         buildConfigField("boolean", "TEST_HOOKS", "false")
     }

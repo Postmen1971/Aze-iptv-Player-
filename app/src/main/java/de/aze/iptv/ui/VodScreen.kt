@@ -410,7 +410,7 @@ private fun Browse(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             gridItemsIndexed(list, key = { _, it -> it.id }) { idx, item ->
-                                PosterCard(item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0) { onOpen(item) }
+                                PosterCard(item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0, series = series) { onOpen(item) }
                             }
                           }
                         }
@@ -468,15 +468,17 @@ object CoverUrls {
 }
 
 /** Poster in fester, kleiner Größe laden: schneller und passt immer in den Zwischenspeicher. */
-private fun posterRequest(context: android.content.Context, url: String): coil.request.ImageRequest =
+private fun posterRequest(context: android.content.Context, url: String?, title: String? = null, series: Boolean = false): coil.request.ImageRequest =
     coil.request.ImageRequest.Builder(context)
-        .data(smallPoster(url))
+        .data(if (url == null) "tmdb:" else smallPoster(url))
         .size(200, 300)
         .crossfade(false)
+        // Titel für den TMDB-Ersatz (nicht Teil des Zwischenspeicher-Schlüssels)
+        .apply { if (title != null) { setParameter("title", title, memoryCacheKey = null); setParameter("series", series, memoryCacheKey = null) } }
         .build()
 
 @Composable
-private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, onClick: () -> Unit) {
+private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boolean = false, onClick: () -> Unit) {
     Focusable(onClick = onClick) { focused ->
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(
@@ -489,9 +491,9 @@ private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, onClick: ()
                 contentAlignment = Alignment.Center,
             ) {
                 Text(item.name, color = Palette.TextMuted, fontSize = 12.sp, maxLines = 4, modifier = Modifier.padding(8.dp))
-                if (item.poster != null) {
+                if (item.poster != null || de.aze.iptv.data.Tmdb.enabled) {
                     AsyncImage(
-                        model = posterRequest(LocalContext.current, item.poster),
+                        model = posterRequest(LocalContext.current, item.poster, item.name, series),
                         contentDescription = item.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),

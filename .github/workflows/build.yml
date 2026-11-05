@@ -58,6 +58,7 @@ jobs:
         env:
           KEYSTORE_FILE: ${{ steps.key.outputs.file }}
           KEYSTORE_PASSWORD: ${{ steps.key.outputs.password }}
+          TMDB_KEY: ${{ secrets.TMDB_KEY }}
         run: |
           set -o pipefail
           # Compiler-Fehler zusätzlich als Hinweise am Lauf anzeigen (Logs sind nicht immer abrufbar)

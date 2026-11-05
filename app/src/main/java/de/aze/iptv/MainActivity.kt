@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         de.aze.iptv.data.HangLog.init(applicationContext)
+        de.aze.iptv.data.Tmdb.init(applicationContext)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
@@ -277,27 +278,63 @@ private class CrashLogger(private val file: java.io.File, private val next: Thre
 private class CoverFallback : coil.intercept.Interceptor {
     private val logged = java.util.concurrent.atomic.AtomicInteger(0)
     private val slow = java.util.concurrent.atomic.AtomicInteger(0)
+
+    private fun originalOf(data: String): String =
+        if (data.startsWith(de.aze.iptv.ui.CoverUrls.PROXY))
+            runCatching { android.net.Uri.parse(data).getQueryParameter("url") }.getOrNull() ?: data
+        else data
+
+    /** Ersatz von TMDB holen und laden; null = keiner gefunden */
+    private suspend fun fromTmdb(chain: coil.intercept.Interceptor.Chain, title: String, series: Boolean, provider: String?): coil.request.ImageResult? {
+        val url = de.aze.iptv.data.Tmdb.poster(title, series) ?: return null
+        if (provider != null) de.aze.iptv.data.Tmdb.rememberReplacement(provider, url)
+        val r = chain.proceed(chain.request.newBuilder().data(url).build())
+        if (logged.getAndIncrement() < 12) de.aze.iptv.ui.qaLog("COVER TMDB-Ersatz ${if (r is coil.request.ErrorResult) "FEHLER" else "ok"}")
+        return r
+    }
+
     override suspend fun intercept(chain: coil.intercept.Interceptor.Chain): coil.request.ImageResult {
+        val req = chain.request
+        val data = req.data as? String ?: return chain.proceed(req)
+        val title = req.parameters.value<String>("title")
+        val series = req.parameters.value<Boolean>("series") ?: false
+        val tmdb = title != null && de.aze.iptv.data.Tmdb.enabled
+        // Anbieter hat gar kein Cover → gleich TMDB
+        if (data == "tmdb:") {
+            return (if (tmdb) fromTmdb(chain, title!!, series, null) else null)
+                ?: coil.request.ErrorResult(null, req, IllegalStateException("kein Cover"))
+        }
+        val provider = originalOf(data)
+        // dieses Anbieter-Cover kam schon einmal nicht → gleich den gemerkten Ersatz
+        if (tmdb) de.aze.iptv.data.Tmdb.replacementFor(provider)?.let { return chain.proceed(req.newBuilder().data(it).build()) }
+
         val t0 = android.os.SystemClock.elapsedRealtime()
-        val result = chain.proceed(chain.request)
+        // mit TMDB als Ersatz: höchstens 5 s auf den Anbieter warten
+        val first = if (tmdb) kotlinx.coroutines.withTimeoutOrNull(5_000) { chain.proceed(req) } else chain.proceed(req)
         val ms = android.os.SystemClock.elapsedRealtime() - t0
-        val data = chain.request.data as? String ?: return result
         val viaProxy = data.startsWith(de.aze.iptv.ui.CoverUrls.PROXY)
         // die ersten Cover je Start mit Ladezeit ins Hänger-Protokoll (nur echte Downloads, nicht aus dem Zwischenspeicher)
         if (ms > 150 && logged.getAndIncrement() < 6) {
-            de.aze.iptv.ui.qaLog("COVER ${if (viaProxy) "Bilderdienst" else "direkt"} $ms ms ${if (result is coil.request.ErrorResult) "FEHLER" else "ok"} " +
+            de.aze.iptv.ui.qaLog("COVER ${if (viaProxy) "Bilderdienst" else "direkt"} $ms ms ${if (first == null) "ZU LANGSAM" else if (first is coil.request.ErrorResult) "FEHLER" else "ok"} " +
                 runCatching { android.net.Uri.parse(data).host }.getOrNull())
         }
-        if (!viaProxy) return result
-        // Bilderdienst bei diesem Anbieter langsam oder erfolglos → für diesen Programmstart direkt laden
-        if (result is coil.request.ErrorResult || ms > 3_000) {
+        if (viaProxy && (first == null || first is coil.request.ErrorResult || ms > 3_000)) {
+            // Bilderdienst bei diesem Anbieter langsam oder erfolglos → für diesen Programmstart direkt laden
             if (slow.incrementAndGet() >= 3 && de.aze.iptv.ui.CoverUrls.proxy) {
                 de.aze.iptv.ui.CoverUrls.proxy = false
                 de.aze.iptv.ui.qaLog("COVER Bilderdienst zu langsam – lade direkt")
             }
         }
-        if (result !is coil.request.ErrorResult) return result
-        val original = runCatching { android.net.Uri.parse(data).getQueryParameter("url") }.getOrNull() ?: return result
-        return chain.proceed(chain.request.newBuilder().data(original).build())
+        if (first != null && first !is coil.request.ErrorResult) return first
+        // Bilderdienst erfolglos → Original direkt vom Anbieter
+        var result = first
+        if (viaProxy && provider != data) {
+            result = if (tmdb) kotlinx.coroutines.withTimeoutOrNull(5_000) { chain.proceed(req.newBuilder().data(provider).build()) }
+                     else chain.proceed(req.newBuilder().data(provider).build())
+            if (result != null && result !is coil.request.ErrorResult) return result
+        }
+        // Anbieter kaputt oder zu langsam → TMDB
+        if (tmdb) fromTmdb(chain, title!!, series, provider)?.let { if (it !is coil.request.ErrorResult) return it }
+        return result ?: coil.request.ErrorResult(null, req, java.io.IOException("Cover zu langsam"))
     }
 }

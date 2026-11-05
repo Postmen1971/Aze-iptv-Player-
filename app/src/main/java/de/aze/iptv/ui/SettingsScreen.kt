@@ -1147,6 +1147,13 @@ private fun AboutSection(app: AppController) {
                 "unverändert eingebunden. SkorText-Schriften: DejaVu Fonts License.",
             color = Palette.TextMuted, fontSize = 14.sp,
         )
+        if (de.aze.iptv.data.Tmdb.enabled) {
+            Text(
+                "Ersatz-Cover: TMDB (The Movie Database, themoviedb.org). " +
+                    "This product uses the TMDB API but is not endorsed or certified by TMDB.",
+                color = Palette.TextMuted, fontSize = 13.sp,
+            )
+        }
     }
 }
 
