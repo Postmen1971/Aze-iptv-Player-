@@ -50,6 +50,8 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     var movingGroup by remember { mutableStateOf<String?>(null) }
     var movingChannel by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<String?>(null) }
+    // Sortier-Modus: OK nimmt den Eintrag auf (▲▼ verschieben, OK legt ab) – ohne langes Drücken
+    var sorting by remember { mutableStateOf(false) }
     BackHandler {
         when {
             movingGroup != null -> movingGroup = null
@@ -72,10 +74,15 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             Column(Modifier.weight(1f)) {
                 Text("Senderliste verwalten", color = Palette.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Text(
-                    "OK = ein-/ausblenden · OK lang = verschieben (▲▼, OK legt ab) · Menü = umbenennen · ◀ ▶ wechselt zwischen Kategorien und Sendern",
-                    color = Palette.TextMuted, fontSize = 12.sp,
+                    if (sorting) "SORTIEREN: OK = Kategorie bzw. Sender aufnehmen · ▲▼ verschieben · OK = ablegen · ▶ zu den Sendern · fertig: „Sortieren beenden“"
+                    else "OK = ein-/ausblenden · OK lang = verschieben (▲▼, OK legt ab) · Menü = umbenennen · ◀ ▶ wechselt zwischen Kategorien und Sendern",
+                    color = if (sorting) Palette.Highlight else Palette.TextMuted, fontSize = 12.sp,
                 )
             }
+            TvButton(if (sorting) "Sortieren beenden" else "Sortieren", selected = sorting, onClick = {
+                sorting = !sorting
+                movingGroup = null; movingChannel = null
+            })
             selected?.let { g ->
                 TvButton("Umbenennen", onClick = { renaming = g.key })
                 TvButton("Zurücksetzen", onClick = { app.resetGroup(g.key) })
@@ -100,7 +107,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                             active = selected?.key == g.key,
                             modifier = if (i == 0) Modifier.focusRequester(firstGroup) else Modifier,
                             onFocus = { if (movingGroup == null) selectedKey = g.key },
-                            onToggle = { app.toggleGroupHidden(g.key) },
+                            onToggle = { if (sorting) movingGroup = g.key else app.toggleGroupHidden(g.key) },
                             onMoveStart = { movingGroup = g.key },
                             onMove = { d -> app.moveGroup(g.key, d) },
                             onMoveEnd = { movingGroup = null },
@@ -133,7 +140,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 moving = movingChannel == ch.key,
                                 active = false,
                                 onFocus = {},
-                                onToggle = { app.toggleChannelHidden(ch.key) },
+                                onToggle = { if (sorting) movingChannel = ch.key else app.toggleChannelHidden(ch.key) },
                                 onMoveStart = { movingChannel = ch.key },
                                 onMove = { d -> app.moveChannel(g.key, ch.key, d) },
                                 onMoveEnd = { movingChannel = null },

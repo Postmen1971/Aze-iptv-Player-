@@ -17,6 +17,7 @@ enum class KeyAction(val label: String) {
     MOVIES("Filme"),
     SERIES("Serien"),
     SETTINGS("Einstellungen"),
+    INFO("Infoleiste ein/aus"),
 }
 
 /** Frei belegbare Tasten der Fernbedienung (Zifferntasten und Zurück bleiben fest). */

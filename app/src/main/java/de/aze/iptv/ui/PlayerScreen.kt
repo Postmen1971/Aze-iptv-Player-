@@ -555,6 +555,14 @@ fun PlayerScreen(
     LaunchedEffect(currentKey) { watchdogRestarts = 0; CoverUrls.lastZap = System.currentTimeMillis() }
     // Sendername beim Umschalten (Einstellung „3 Sekunden mit Sendung“)
     var zapInfo by remember { mutableStateOf(false) }
+    // Infoleiste per Taste (Einstellungen → Bedienung → Tastenbelegung): zeigen bzw. wieder ausblenden
+    var infoForced by remember { mutableStateOf(false) }
+    var infoTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(infoTick) {
+        if (infoTick == 0 || !infoForced) return@LaunchedEffect
+        delay(app.infoSeconds * 1_000L + 2_000L)
+        infoForced = false
+    }
     LaunchedEffect(currentKey) {
         if ((app.nameDisplay == 1 || app.nameDisplay == 3) && currentKey != null) {
             zapInfo = true
@@ -708,6 +716,7 @@ fun PlayerScreen(
             KeyAction.MOVIES -> onOpenVod(false)
             KeyAction.SERIES -> onOpenVod(true)
             KeyAction.SETTINGS -> onOpenSettings()
+            KeyAction.INFO -> { infoForced = !infoForced; infoTick++ }
         }
     }
 
@@ -980,7 +989,7 @@ fun PlayerScreen(
             DiagLine({ diagText }, Modifier.align(Alignment.TopStart))
         }
         // Infoleiste unten beim Umschalten (Einstellung „Infoleiste unten“)
-        if (app.nameDisplay == 3 && zapInfo && cur != null && !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) {
+        if (((app.nameDisplay == 3 && zapInfo) || infoForced) && cur != null && !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) {
             val vf = player.videoFormat
             ZapBar(app, cur, vf?.let { f -> if (f.height > 0) "${f.height}p" else null }, Modifier.align(Alignment.BottomCenter))
         }
