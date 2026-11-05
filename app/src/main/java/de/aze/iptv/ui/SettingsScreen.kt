@@ -112,7 +112,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     // Jeder Bereich hat genau ein Thema – so ist eindeutig, wo was steht.
     val cats = listOfNotNull(
         "Playlists", "Senderliste", "Favoriten", "Filme & Serien", "YouTube Live", "Fußball",
-        "Programm (EPG)", "Wiedergabe", "Bedienung", "Aussehen", "Sicherheit",
+        "Programm (EPG)", "Wiedergabe", "Bedienung", "Aussehen", "Sicherheit", "Sichern",
         if (app.expertMode) "Netzwerk" else null, "Autostart", "App-Update", "Hilfe & Fehlersuche", "Über",
     )
 
@@ -228,6 +228,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     )
                     TvButton("PIN ändern", onClick = { pinStep = 1 })
                 }
+                "Sichern" -> BackupSection(app)
                 "Autostart" -> AutostartSection(app)
                 "App-Update" -> UpdateSection()
                 "Hilfe & Fehlersuche" -> AboutSection(app, help = true)
@@ -1430,5 +1431,75 @@ internal fun TvSwitch(title: String, hint: String?, on: Boolean, onToggle: () ->
                 Box(Modifier.size(22.dp).background(if (on) Palette.OnAccent else Palette.TextSoft, androidx.compose.foundation.shape.CircleShape))
             }
         }
+    }
+}
+
+
+/** Einstellungen sichern / wiederherstellen – per Code, damit es auch ohne Dateimanager am Fernseher geht */
+@Composable
+private fun BackupSection(app: AppController) {
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var code by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf<String?>(null) }
+    var entering by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf(false) }
+    Section("Sichern & Wiederherstellen") {
+        Text(
+            "Sichert alles: Playlists mit Zugangsdaten, Favoriten, Senderliste, ausgeblendete Kategorien und alle Einstellungen. " +
+                "Gut vor einem Neuinstallieren oder für ein neues Gerät (z. B. für die Familie).",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Text(
+            "Die Sicherung wird auf dem Gerät mit einem Zufalls-Code verschlüsselt und erst dann im Internet (paste.rs) abgelegt. " +
+                "Ohne den Code kann niemand sie lesen – den Code also gut aufheben und nicht weitergeben.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton(if (busy == "save") "Wird gesichert …" else "Sicherung erstellen", selected = true, onClick = {
+                if (busy != null) return@TvButton
+                busy = "save"; code = null
+                scope.launch {
+                    try {
+                        code = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.Backup.create(context) }
+                    } catch (e: Exception) {
+                        app.message = "Sichern hat nicht geklappt: ${e.message ?: "keine Verbindung"}"
+                    } finally { busy = null }
+                }
+            })
+            TvButton(if (busy == "load") "Wird eingespielt …" else "Wiederherstellen", onClick = { if (busy == null) entering = true })
+        }
+        code?.let {
+            Text("Dein Sicherungs-Code – bitte abschreiben oder abfotografieren:", color = Palette.TextSoft, fontSize = 14.sp)
+            Text(it, color = Palette.Highlight, fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+        }
+        if (done) Text("Fertig – die App startet gleich neu.", color = Palette.Highlight, fontSize = 15.sp)
+    }
+    if (entering) {
+        InputDialog(
+            label = "Sicherungs-Code (z. B. AbC12-KLMNP-QRS7T)",
+            initial = "",
+            password = false,
+            keyboard = KeyboardType.Text,
+            onDone = { input ->
+                entering = false
+                busy = "load"
+                scope.launch {
+                    try {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.Backup.restore(context, input) }
+                        done = true
+                        kotlinx.coroutines.delay(1_500)
+                        // neu starten, damit alles aus der Sicherung geladen wird
+                        val i = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                            ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        if (i != null) context.startActivity(i)
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                    } catch (e: Exception) {
+                        app.message = "Wiederherstellen hat nicht geklappt: ${e.message ?: "keine Verbindung"}"
+                    } finally { busy = null }
+                }
+            },
+            onCancel = { entering = false },
+        )
     }
 }
