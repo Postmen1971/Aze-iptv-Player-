@@ -1,6 +1,7 @@
 package de.aze.iptv.ui
 
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
@@ -217,8 +218,11 @@ private fun Browse(
         val visible = all.filter { it.cat !in skip }
         val langOf = cats.orEmpty().associate { it.id to vodLanguage(it.name) }
         val order = if (pref == 0) listOf("de", "tr") else listOf("tr", "de")
-        val queue = (order.flatMap { l -> visible.filter { langOf[it.cat] == l } } + visible.filter { langOf[it.cat] == null })
-            .mapNotNull { it.poster }.distinct().take(if (app.vodFast) 3_000 else 600)
+        // Nicht die ganze Bibliothek vorladen (überlastet Leitung und Anbieter-Server):
+        // nur die ersten Reihen (24 Cover) jeder Kategorie der bevorzugten Sprache, höchstens 240.
+        delay(8_000)
+        val queue = order.flatMap { l -> visible.filter { langOf[it.cat] == l }.groupBy { it.cat }.values.flatMap { it.take(24) } }
+            .mapNotNull { it.poster }.distinct().take(240)
         qaLog("VOD_PREFETCH ${queue.size} Cover (${order.joinToString(" → ")} zuerst)")
         CoverUrls.prefetch(ctx, queue) { posterRequest(ctx, it) }
     }
@@ -387,19 +391,14 @@ private fun Browse(
                           LaunchedEffect(list, gridState) {
                               val requested = HashSet<String>()
                               val loader = coil.Coil.imageLoader(ctx)
-                              // „Filme & Serien bevorzugt“: gleich die ganze Kategorie (bis 400 Cover) im Hintergrund holen
-                              // Standard: die ersten 150 Cover der Kategorie (bleibt im 250-MB-Rahmen); bevorzugt: bis 400
-                              // ganze Kategorie über die schmale Hintergrund-Leitung (stört die sichtbaren Cover nicht)
-                              launch {
-                                  kotlinx.coroutines.delay(if (vodFast) 800 else 1_200) // erst die sichtbaren Cover
-                                  CoverUrls.prefetch(ctx, list.asSequence().take(if (vodFast) 400 else 150).mapNotNull { it.poster }.distinct().toList()) { posterRequest(ctx, it) }
-                              }
-                              androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }.collect { first ->
-                                  // kurz warten, bis das Blättern ruht – sonst drängeln sich vorgeladene Cover vor die sichtbaren
-                                  kotlinx.coroutines.delay(250)
-                                  list.subList(first.coerceAtMost(list.size), list.size).take(if (vodFast) 30 else 18).forEach { item ->
+                              // Nur wenige Cover direkt hinter dem sichtbaren Bereich vorladen, nie die ganze Kategorie.
+                              // collectLatest: erst wenn das Blättern 300 ms ruht (sonst drängeln sie sich vor die sichtbaren)
+                              androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }.collectLatest {
+                                  kotlinx.coroutines.delay(300)
+                                  val from = ((gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0) + 1).coerceAtMost(list.size)
+                                  list.subList(from, list.size).take(if (vodFast) 24 else 12).forEach { item ->
                                       val url = item.poster ?: return@forEach
-                                      if (requested.add(url)) loader.enqueue(posterRequest(ctx, url))
+                                      if (requested.add(url)) loader.enqueue(posterRequest(ctx, url, item.name, series))
                                   }
                               }
                           }

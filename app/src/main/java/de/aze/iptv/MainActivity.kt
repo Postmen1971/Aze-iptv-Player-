@@ -98,7 +98,7 @@ class MainActivity : ComponentActivity() {
             .diskCache(coverDisk)
             .okHttpClient {
                 okhttp3.OkHttpClient.Builder()
-                    .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 2; maxRequestsPerHost = 2 })
+                    .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 1; maxRequestsPerHost = 1 })
                     .connectTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
                     .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
                 // Standard lädt nur 5 Bilder gleichzeitig vom selben Server – Cover standen Schlange
                 .okHttpClient {
                     okhttp3.OkHttpClient.Builder()
-                        .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 48; maxRequestsPerHost = 12 })
+                        .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 16; maxRequestsPerHost = 6 })
                         // hängt ein Bild, nicht ewig warten (dann Rückfall bzw. nächstes Bild)
                         .connectTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
                         .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
