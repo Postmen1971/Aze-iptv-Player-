@@ -154,7 +154,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                         color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp),
                     )
                     LazyColumn(state = channelState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        itemsIndexed(g.channels, key = { _, c -> c.key }) { _, ch ->
+                        itemsIndexed(g.channels, key = { _, c -> c.key }) { ci, ch ->
                             val nr = app.lineup.byKey[ch.key]?.number
                             ManageRow(
                                 title = ch.name,
@@ -168,14 +168,17 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 moving = movingChannel == ch.key,
                                 active = false,
                                 modifier = if (movingChannel == ch.key) Modifier.focusRequester(movingReq) else Modifier,
-                                onFocus = {},
+                                onFocus = { qaLog("SORT_CH_FOCUS $ci") },
                                 onToggle = { if (sorting) movingChannel = ch.key else app.toggleChannelHidden(ch.key) },
-                                onMoveStart = { movingChannel = ch.key },
+                                onMoveStart = { movingChannel = ch.key; qaLog("SORT_CH_START ${ch.name} $ci") },
                                 onMove = { d ->
                                     app.moveChannel(g.key, ch.key, d)
                                     follow(channelState, app.editGroups.firstOrNull { it.key == g.key }?.channels?.indexOfFirst { it.key == ch.key } ?: -1)
                                 },
-                                onMoveEnd = { movingChannel = null },
+                                onMoveEnd = {
+                                    movingChannel = null
+                                    qaLog("SORT_CH_END ${ch.name} ${app.editGroups.firstOrNull { it.key == g.key }?.channels?.indexOfFirst { it.key == ch.key }}")
+                                },
                                 onOpen = null,
                                 onRename = null,
                             )

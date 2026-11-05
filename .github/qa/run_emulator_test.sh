@@ -276,6 +276,27 @@ sleep 2
 shot "test9-sortiert"
 note "Sortieren" "$(qa | grep -E "SORT_" | head -5; qa | grep -E "SORT_" | tail -5)"
 qa | grep -q "SORT_END .* 0$" || fail "Sortieren: Gruppe kam nicht ganz nach oben (Fokus verloren / Liste scrollt nicht mit)"
+
+log "== Test 9b: Sender von ganz unten nach ganz oben verschieben (Gruppe „Viele Sender“, 35 Sender)"
+# die eben nach oben verschobene Gruppe ist „Viele Sender“ und hat den Fokus → ▶ zu ihren Sendern
+for i in 1 2 3; do
+  [ "$(count "SORT_CH_FOCUS")" -ge 1 ] && break
+  adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+done
+wait_for "SORT_CH_FOCUS" 1 5 || fail "Sortieren: ▶ kommt nicht zu den Sendern"
+for i in $(seq 1 40); do adb shell input keyevent KEYCODE_DPAD_DOWN; done
+sleep 1
+adb shell input keyevent --longpress KEYCODE_DPAD_CENTER
+sleep 2
+wait_for "SORT_CH_START" 1 10 || fail "Sortieren: langes OK auf dem Sender hat das Verschieben nicht gestartet"
+qa | grep -q "SORT_CH_START .* 34$" || fail "Sortieren: ▼ kam nicht bis zum letzten Sender"
+for i in $(seq 1 40); do adb shell input keyevent KEYCODE_DPAD_UP; done
+sleep 1
+adb shell input keyevent KEYCODE_DPAD_CENTER
+sleep 2
+shot "test9b-sender-sortiert"
+note "Sender sortieren" "$(qa | grep -E "SORT_CH_(START|END)")"
+qa | grep -q "SORT_CH_END .* 0$" || fail "Sortieren: Sender kam nicht ganz nach oben (Fokus verloren / Liste scrollt nicht mit)"
 alive || fail "App nach dem Sortieren nicht mehr da"
 
 log "== Absturz-Prüfung"
