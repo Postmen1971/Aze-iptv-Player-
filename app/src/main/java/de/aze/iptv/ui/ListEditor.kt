@@ -74,6 +74,8 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                 idx >= last -> state.scrollToItem((idx - count + 2).coerceAtLeast(0))
             }
             androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
+            kotlinx.coroutines.delay(30)
             runCatching { movingReq.requestFocus() }
         }
     }
@@ -96,6 +98,8 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     }
 
     val groups = app.editGroups
+    // andere Kategorie gewählt → Senderliste wieder von oben (dann ist der erste Sender sofort fokussierbar)
+    LaunchedEffect(selectedKey) { runCatching { channelState.scrollToItem(0) } }
     val selected = groups.firstOrNull { it.key == selectedKey } ?: groups.firstOrNull()
     val hidden = app.hiddenChannels
 
@@ -132,8 +136,12 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                     modifier = Modifier.onPreviewKeyEvent { e ->
                         if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight && movingGroup == null) {
                             moveScope.launch {
-                                channelState.scrollToItem(0)
+                                // nur scrollen, wenn nötig – und erst fokussieren, wenn alles platziert ist
+                                // (sonst Absturz „BringIntoViewRequester … before parents are placed“)
+                                if (channelState.firstVisibleItemIndex > 0) channelState.scrollToItem(0)
                                 androidx.compose.runtime.withFrameNanos { }
+                                androidx.compose.runtime.withFrameNanos { }
+                                kotlinx.coroutines.delay(30)
                                 runCatching { firstChannelReq.requestFocus() }
                             }
                             true
