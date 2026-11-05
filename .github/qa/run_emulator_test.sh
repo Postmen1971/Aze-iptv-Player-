@@ -303,7 +303,10 @@ alive || fail "App nach dem Sortieren nicht mehr da"
 
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
-if adb logcat -d -b crash | grep -q "$PKG"; then fail "Absturz im Protokoll gefunden"; fi
+if adb logcat -d -b crash | grep -q "$PKG"; then
+  fail "Absturz im Protokoll gefunden"
+  log "Absturz-Protokoll:"; adb logcat -d -b crash | grep -v "^---" | head -60
+fi
 
 adb logcat -d > "$OUT/logcat.txt"
 qa > "$OUT/azeqa.txt"; ticks > "$OUT/ticks.txt"
