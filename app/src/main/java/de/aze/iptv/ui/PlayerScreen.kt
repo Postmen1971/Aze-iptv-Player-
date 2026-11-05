@@ -417,6 +417,9 @@ fun PlayerScreen(
     var retries by remember { mutableIntStateOf(0) }
     var okLong by remember { mutableStateOf(false) }
     var arrowLong by remember { mutableStateOf(false) }
+    // welche Pfeiltaste hier gedrückt wurde – das Loslassen zählt nur dann (sonst öffnete z. B. das Loslassen von ▶,
+    // mit dem die Senderliste gerade geschlossen wurde, die Liste gleich wieder)
+    var arrowDown by remember { mutableIntStateOf(0) }
     // Abspiel-Adresse (bei Portal + MAC erst beim Umschalten angefordert)
     var resolvedUrl by remember { mutableStateOf<String?>(null) }
     var relinkTick by remember { mutableIntStateOf(0) }
@@ -805,9 +808,9 @@ fun PlayerScreen(
                 }
                 if (arrow != null && app.keyAction(arrow.second) != KeyAction.NONE) {
                     when (e.type) {
-                        KeyEventType.KeyDown -> if (e.nativeKeyEvent.repeatCount == 0) arrowLong = false
-                            else if (!arrowLong) { arrowLong = true; perform(app.keyAction(arrow.second)) }
-                        KeyEventType.KeyUp -> { if (!arrowLong) perform(app.keyAction(arrow.first)); arrowLong = false }
+                        KeyEventType.KeyDown -> if (e.nativeKeyEvent.repeatCount == 0) { arrowLong = false; arrowDown = code }
+                            else if (!arrowLong && arrowDown == code) { arrowLong = true; perform(app.keyAction(arrow.second)) }
+                        KeyEventType.KeyUp -> { if (!arrowLong && arrowDown == code) perform(app.keyAction(arrow.first)); arrowLong = false; arrowDown = 0 }
                     }
                     return@onKeyEvent true
                 }
