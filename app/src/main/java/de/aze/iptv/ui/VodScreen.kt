@@ -463,9 +463,9 @@ object CoverUrls {
         }
     }
 
-    fun small(url: String, w: Int, h: Int): String {
+    fun small(url: String, w: Int, h: Int, force: Boolean = false): String {
         if (url.contains("image.tmdb.org/t/p/")) return url.replace(tmdbSize, when { w <= 200 -> "$1w185/"; w <= 400 -> "$1w342/"; else -> "$1w780/" })
-        if (!proxy || !url.startsWith("http")) return url
+        if (!(proxy || force) || !url.startsWith("http")) return url
         // Adressen mit Zugangsdaten nie an einen fremden Dienst geben
         val low = url.lowercase()
         if ("username=" in low || "password=" in low || "token=" in low || url.substringAfter("://").substringBefore("/").contains("@")) return url
@@ -474,9 +474,9 @@ object CoverUrls {
 }
 
 /** Poster in fester, kleiner Größe laden: schneller und passt immer in den Zwischenspeicher. */
-private fun posterRequest(context: android.content.Context, url: String?, title: String? = null, series: Boolean = false): coil.request.ImageRequest =
+private fun posterRequest(context: android.content.Context, url: String?, title: String? = null, series: Boolean = false, shrinkOnServer: Boolean = false): coil.request.ImageRequest =
     coil.request.ImageRequest.Builder(context)
-        .data(if (url == null) "tmdb:" else smallPoster(url))
+        .data(if (url == null) "tmdb:" else CoverUrls.small(url, 200, 300, force = shrinkOnServer))
         .size(200, 300)
         .crossfade(false)
         // Titel für den TMDB-Ersatz (nicht Teil des Zwischenspeicher-Schlüssels)
@@ -1189,7 +1189,7 @@ internal fun vodLanguage(name: String): String? = when {
  */
 internal suspend fun runCoverStock(app: AppController, ctx: android.content.Context) {
     val loader = CoverUrls.bg ?: return
-    delay(60_000) // erst nach dem Start (Sender soll in Ruhe anlaufen)
+    delay(20_000) // erst nach dem Start (Sender soll in Ruhe anlaufen)
     while (true) {
         var fetched = 0
         for (src in app.vodSources) for (series in listOf(false, true)) {
@@ -1203,15 +1203,18 @@ internal suspend fun runCoverStock(app: AppController, ctx: android.content.Cont
             val langOf = cats.associate { it.id to vodLanguage(it.name) }
             val order = if (app.vodLang == 1) listOf("tr", "de") else listOf("de", "tr")
             val visible = all.filter { it.cat !in skip }
-            val queue = order.flatMap { l -> visible.filter { langOf[it.cat] == l } } + visible.filter { langOf[it.cat] !in order }
-            for (item in queue) {
+            val queue = (order.flatMap { l -> visible.filter { langOf[it.cat] == l } } + visible.filter { langOf[it.cat] !in order })
+                .filter { (it.poster != null || de.aze.iptv.data.Tmdb.enabled) && !de.aze.iptv.data.CoverStore.has(it.poster ?: ("tmdb:" + it.name)) }
+            // 4 gleichzeitig; verkleinert schon beim Bilderdienst (lädt ~10 KB statt des großen Originals),
+            // klappt das nicht, holt die App das Original direkt vom Anbieter
+            for (chunk in queue.chunked(4)) {
                 if (de.aze.iptv.data.CoverStore.full) return
-                val key = item.poster ?: ("tmdb:" + item.name)
-                if (item.poster == null && !de.aze.iptv.data.Tmdb.enabled) continue
-                if (de.aze.iptv.data.CoverStore.has(key)) continue
                 while (CoverUrls.vodOpen) delay(5_000)
-                runCatching { loader.execute(posterRequest(ctx, item.poster, item.name, series)) }
-                fetched++
+                kotlinx.coroutines.coroutineScope {
+                    chunk.map { item -> async { runCatching { loader.execute(posterRequest(ctx, item.poster, item.name, series, shrinkOnServer = true)) } } }
+                        .forEach { it.await() }
+                }
+                fetched += chunk.size
             }
         }
         qaLog("COVER_STOCK Runde fertig: $fetched neu, ${de.aze.iptv.data.CoverStore.count} im Vorrat")

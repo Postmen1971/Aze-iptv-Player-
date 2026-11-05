@@ -100,7 +100,7 @@ class MainActivity : ComponentActivity() {
             .diskCache(coverDisk)
             .okHttpClient {
                 okhttp3.OkHttpClient.Builder()
-                    .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 1; maxRequestsPerHost = 1 })
+                    .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 4; maxRequestsPerHost = 4 })
                     .connectTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
                     .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
                     .build()
