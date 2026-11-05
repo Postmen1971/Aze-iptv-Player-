@@ -109,9 +109,11 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
     var cat by remember { mutableStateOf(0) }
     // Standard: das Wichtigste. „Erweitert“ blendet Technik (Netzwerk, Puffer, Player …) zusätzlich ein.
+    // Jeder Bereich hat genau ein Thema – so ist eindeutig, wo was steht.
     val cats = listOfNotNull(
-        "Playlists", "YouTube Live", "Senderliste", "Bedienung", "Wiedergabe", "Programm (EPG)",
-        if (app.expertMode) "Netzwerk" else null, "Sicherheit", "Autostart", "App-Update", "Über",
+        "Playlists", "Senderliste", "Favoriten", "Filme & Serien", "YouTube Live", "Fußball",
+        "Programm (EPG)", "Wiedergabe", "Bedienung", "Aussehen", "Sicherheit",
+        if (app.expertMode) "Netzwerk" else null, "Autostart", "App-Update", "Hilfe & Fehlersuche", "Über",
     )
 
     // Kompakt: links die Bereiche, rechts nur der gewählte Bereich.
@@ -174,12 +176,22 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     ListEditSection(app, onEditList = { editingList = true })
                     RefreshSection(app)
                     PlaybackSection(app, onEditList = { editingList = true }, part = 1)
-                    FavoritesSection(app)
                 }
-                "Bedienung" -> {
-                    ControlsSection(app)
-                    AppearanceSection(app)
+                "Favoriten" -> FavoritesSection(app)
+                "Filme & Serien" -> {
+                    VodCoverSection(app)
+                    Section("Kategorien ausblenden") {
+                        Text(
+                            "Kategorien, die du nicht brauchst, verschwinden aus der Liste – ihre Cover werden auch nicht geladen.",
+                            color = Palette.TextMuted, fontSize = 13.sp,
+                        )
+                        VodHideButtons(app)
+                    }
+                    PlaybackSection(app, onEditList = { editingList = true }, part = 3)
                 }
+                "Fußball" -> LearnedChannelsSection(app)
+                "Bedienung" -> ControlsSection(app)
+                "Aussehen" -> AppearanceSection(app)
                 "Wiedergabe" -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
                 "Programm (EPG)" -> EpgSection(app)
                 "Netzwerk" -> NetworkSection(app)
@@ -218,6 +230,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 }
                 "Autostart" -> AutostartSection(app)
                 "App-Update" -> UpdateSection()
+                "Hilfe & Fehlersuche" -> AboutSection(app, help = true)
                 else -> AboutSection(app)
             }
         }
@@ -827,19 +840,17 @@ private fun VodHideButtons(app: AppController) {
 private fun ListEditSection(app: AppController, onEditList: () -> Unit) {
     Section("Senderliste bearbeiten") {
         Text(
-            "Gruppen und Sender sortieren, umbenennen, ein- und ausblenden – direkt hier am Fernseher. " +
-                "Bei Filmen und Serien Kategorien ausblenden, die du nicht brauchst.",
+            "Gruppen und Sender sortieren, umbenennen, ein- und ausblenden – direkt hier am Fernseher.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         TvButton("Senderliste bearbeiten öffnen", selected = true, onClick = onEditList)
-        VodHideButtons(app)
     }
 }
 
 @Composable
 private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: Int = 0) {
-    if (part != 2) WebEditSection(app)
-    if (part != 2) Section("Filme: IMDb-Bewertung") {
+    if (part == 0 || part == 1) WebEditSection(app)
+    if (part == 0 || part == 3) Section("IMDb-Bewertung") {
         Text(
             "Die Bewertung des Anbieters (★ von 10) wird immer angezeigt. Für die echte IMDb-Bewertung einen kostenlosen " +
                 "Schlüssel auf omdbapi.com holen (\"API Key\" → FREE, kommt per E-Mail) und hier eintragen.",
@@ -847,7 +858,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
         )
         InputRow("OMDb-Schlüssel", app.omdbKey, placeholder = "z. B. a1b2c3d4") { app.updateOmdbKey(it) }
     }
-    if (part != 1) Section("Ton-Bild-Synchron (alle Sender)") {
+    if (part == 0 || part == 2) Section("Ton-Bild-Synchron (alle Sender)") {
         Text(
             "Ist der Ton bei allen Sendern versetzt (z. B. durch Soundbar oder AV-Receiver), hier einstellen. " +
                 "Für einzelne Sender: im Bild OK lang → „Lippensynchron“ – das gilt dann zusätzlich nur für diesen Sender.",
@@ -869,7 +880,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
             }
         }
     }
-    if (part != 1) Section("Wiedergabe") {
+    if (part == 0 || part == 2) Section("Wiedergabe") {
       // Puffer, Player, Bildqualität und Bildwiederholrate immer sichtbar (auf Wunsch von Aziz)
       run {
         Text("Puffer", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -1101,13 +1112,13 @@ private fun UpdateSection() {
 }
 
 @Composable
-private fun AboutSection(app: AppController) {
+private fun AboutSection(app: AppController, help: Boolean = false) {
     val context = LocalContext.current
     var size by remember { mutableStateOf<Long?>(null) }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var clearing by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { size = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.CacheCleaner.sizeMb(context) } }
-    Section("Zwischenspeicher") {
+    if (help) Section("Zwischenspeicher") {
         Text(
             "Wird bei jedem Start automatisch aufgeräumt (Reste von YouTube, Videotext, Updates). " +
                 "Senderlogos und Filmplakate bleiben gespeichert (höchstens 250 MB), damit die Listen schnell aufgehen. " +
@@ -1131,9 +1142,7 @@ private fun AboutSection(app: AppController) {
             })
         }
     }
-    VodCoverSection(app)
-    HangLogSection(app)
-    LearnedChannelsSection(app)
+    if (help) { HangLogSection(app); return }
     Section("Über") {
         Text(
             "Aze-IPTV-Player ist ein Player und liefert selbst keine Sender oder Inhalte. " +
@@ -1316,7 +1325,7 @@ private fun LearnedChannelsSection(app: AppController) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var link by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    Section("Fußball: gelernte Sender") {
+    Section("Gelernte Sender") {
         Text(
             "Was du bei „Fußball heute → TV-Plan durchgehen“ mit OK bestätigst, merkt sich die App. " +
                 "„Teilen“ legt deine Zuordnungen als Text ab (nur liveonsat-Sendernamen und deine Sendernamen) und zeigt einen Link – " +
@@ -1355,7 +1364,10 @@ private fun LearnedChannelsSection(app: AppController) {
 /** Filme & Serien: Cover schneller (mehr Speicher) oder Standard */
 @Composable
 private fun VodCoverSection(app: AppController) {
-    Section("Filme & Serien – Cover") {
+    Section("Cover") {
+        var stats by remember { mutableStateOf(de.aze.iptv.CoverStats.text()) }
+        LaunchedEffect(Unit) { while (true) { stats = de.aze.iptv.CoverStats.text(); kotlinx.coroutines.delay(1_000) } }
+        Text("Messung: $stats", color = Palette.Highlight, fontSize = 13.sp)
         Text(
             "Cover werden immer in kleiner Auflösung geladen (reicht für die Kacheln und ist viel schneller). " +
                 "Standard lädt beim Öffnen einer Kategorie die ersten 150 Cover vor und behält bis zu 250 MB. " +

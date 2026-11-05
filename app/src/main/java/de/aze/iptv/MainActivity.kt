@@ -276,6 +276,23 @@ private class CrashLogger(private val file: java.io.File, private val next: Thre
 }
 
 /** Wenn ein Cover über images.weserv.nl nicht kommt: dasselbe Bild direkt von der Original-Adresse laden. */
+/** Messwerte der Cover seit dem App-Start – stehen in Einstellungen → Filme & Serien (für ein Foto an Claude) */
+object CoverStats {
+    val loaded = java.util.concurrent.atomic.AtomicInteger(0)
+    val totalMs = java.util.concurrent.atomic.AtomicLong(0)
+    val slowest = java.util.concurrent.atomic.AtomicLong(0)
+    val over3s = java.util.concurrent.atomic.AtomicInteger(0)
+    val failed = java.util.concurrent.atomic.AtomicInteger(0)
+    val tmdb = java.util.concurrent.atomic.AtomicInteger(0)
+    @Volatile var host: String = "–"
+    fun text(): String {
+        val n = loaded.get()
+        if (n == 0 && failed.get() == 0) return "Noch keine Cover geladen – einmal Filme oder Serien öffnen."
+        return "Cover aus dem Netz: $n · Ø ${if (n > 0) totalMs.get() / n else 0} ms · langsamstes ${slowest.get()} ms · " +
+            "über 3 s: ${over3s.get()} · nicht gekommen: ${failed.get()} · von TMDB: ${tmdb.get()} · Server: $host"
+    }
+}
+
 private class CoverFallback : coil.intercept.Interceptor {
     private val logged = java.util.concurrent.atomic.AtomicInteger(0)
     private val slow = java.util.concurrent.atomic.AtomicInteger(0)
@@ -290,6 +307,7 @@ private class CoverFallback : coil.intercept.Interceptor {
         val url = de.aze.iptv.data.Tmdb.poster(title, series) ?: return null
         if (provider != null) de.aze.iptv.data.Tmdb.rememberReplacement(provider, url)
         val r = chain.proceed(chain.request.newBuilder().data(url).build())
+        if (r !is coil.request.ErrorResult) CoverStats.tmdb.incrementAndGet()
         if (logged.getAndIncrement() < 12) de.aze.iptv.ui.qaLog("COVER TMDB-Ersatz ${if (r is coil.request.ErrorResult) "FEHLER" else "ok"}")
         return r
     }
@@ -318,6 +336,13 @@ private class CoverFallback : coil.intercept.Interceptor {
         // mit TMDB als Ersatz: höchstens 5 s auf den Anbieter warten
         val first = if (tmdb) kotlinx.coroutines.withTimeoutOrNull(5_000) { chain.proceed(req) } else chain.proceed(req)
         val ms = android.os.SystemClock.elapsedRealtime() - t0
+        if (ms > 80) { // echter Download (nicht aus dem Zwischenspeicher)
+            if (first == null || first is coil.request.ErrorResult) CoverStats.failed.incrementAndGet()
+            else { CoverStats.loaded.incrementAndGet(); CoverStats.totalMs.addAndGet(ms) }
+            if (ms > CoverStats.slowest.get()) CoverStats.slowest.set(ms)
+            if (ms > 3_000) CoverStats.over3s.incrementAndGet()
+            runCatching { android.net.Uri.parse(provider).host }.getOrNull()?.let { CoverStats.host = it }
+        }
         val viaProxy = data.startsWith(de.aze.iptv.ui.CoverUrls.PROXY)
         // die ersten Cover je Start mit Ladezeit ins Hänger-Protokoll (nur echte Downloads, nicht aus dem Zwischenspeicher)
         if (ms > 150 && logged.getAndIncrement() < 6) {
