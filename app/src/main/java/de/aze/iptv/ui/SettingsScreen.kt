@@ -73,7 +73,7 @@ private val intervals = listOf(0 to "Nur manuell", 24 to "24 Std.", 48 to "48 St
 
 @Composable
 fun SettingsScreen(app: AppController, onClose: () -> Unit) {
-    var editingList by remember { mutableStateOf(false) }
+    var editingList by remember { mutableStateOf(app.testListEditor.also { app.testListEditor = false }) }
     if (editingList) {
         ListEditor(app, onClose = { editingList = false })
         return

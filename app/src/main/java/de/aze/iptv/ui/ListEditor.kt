@@ -131,12 +131,14 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 .then(if (movingGroup == g.key) Modifier.focusRequester(movingReq) else Modifier),
                             onFocus = { if (movingGroup == null) selectedKey = g.key },
                             onToggle = { if (sorting) movingGroup = g.key else app.toggleGroupHidden(g.key) },
-                            onMoveStart = { movingGroup = g.key },
+                            onMoveStart = { movingGroup = g.key; qaLog("SORT_START ${g.name} $i") },
                             onMove = { d ->
                                 app.moveGroup(g.key, d)
-                                follow(groupState, app.editGroups.indexOfFirst { it.key == g.key })
+                                val idx = app.editGroups.indexOfFirst { it.key == g.key }
+                                qaLog("SORT_MOVE ${g.name} $idx")
+                                follow(groupState, idx)
                             },
-                            onMoveEnd = { movingGroup = null },
+                            onMoveEnd = { movingGroup = null; qaLog("SORT_END ${g.name} ${app.editGroups.indexOfFirst { it.key == g.key }}") },
                             onOpen = { selectedKey = g.key },
                             onRename = { renaming = g.key },
                         )

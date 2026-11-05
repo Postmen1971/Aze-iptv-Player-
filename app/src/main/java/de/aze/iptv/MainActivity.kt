@@ -64,6 +64,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             if (intent?.getBooleanExtra("aze_test_multiview", false) == true) app.testMultiView = true
+            if (intent?.getBooleanExtra("aze_test_listeditor", false) == true) app.testListEditor = true
             // Lippensynchron-Wert für den Test setzen
             intent?.getIntExtra("aze_test_audio_delay", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE }?.let { app.updateAudioDelay(it) }
             // zusätzlicher Versatz für einen Sender (Schlüssel = Adresse)
@@ -146,7 +147,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 // Einstellungen sind mit PIN geschützt (Standard 0000).
                 // Erster Start ohne Playlist: direkt in die Einstellungen (ohne PIN) – die App schließt sich dabei nie von selbst
-                var screen by remember { mutableStateOf(if (!app.hasAnySource) Screen.SETTINGS else Screen.PLAYER) }
+                var screen by remember { mutableStateOf(if (!app.hasAnySource || app.testListEditor) Screen.SETTINGS else Screen.PLAYER) }
                 var vodSeries by remember { mutableStateOf(false) }
                 val openSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS }
                 // Startbildschirm mit Logo, solange die Senderliste beim Start noch lädt (mind. 1,2 s, höchstens 25 s)

@@ -29,7 +29,10 @@ http://10.0.2.2:{p}/jump.ts
 http://10.0.2.2:{p}/one.ts
 #EXTINF:-1 group-title="QA",Test 7 Normal B
 http://10.0.2.2:{p}/ok2.ts
-""".format(p=PORT)
+""".format(p=PORT) + "".join(
+    # 25 weitere Gruppen (je 1 Sender) – damit „Senderliste verwalten“ scrollen muss (Sortier-Test)
+    '#EXTINF:-1 group-title="Gruppe {n:02d}",Extra {n:02d}\nhttp://10.0.2.2:{p}/ok2.ts\n'.format(n=n, p=PORT) for n in range(1, 26)
+)
 
 
 def log(msg):

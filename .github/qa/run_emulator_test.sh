@@ -261,6 +261,23 @@ adb shell input keyevent KEYCODE_BACK
 sleep 3
 alive || fail "App nach Verlassen von Multi-View nicht mehr da"
 
+log "== Test 9: Senderliste verwalten – Gruppe von ganz unten nach ganz oben verschieben (Liste muss mitscrollen)"
+adb shell am start -S -n $PKG/.MainActivity --ez aze_test_listeditor true >/dev/null
+sleep 6
+for i in $(seq 1 30); do adb shell input keyevent KEYCODE_DPAD_DOWN; done
+sleep 1
+adb shell input keyevent --longpress KEYCODE_DPAD_CENTER
+sleep 2
+wait_for "SORT_START" 1 10 || fail "Sortieren: langes OK hat das Verschieben nicht gestartet"
+for i in $(seq 1 30); do adb shell input keyevent KEYCODE_DPAD_UP; done
+sleep 1
+adb shell input keyevent KEYCODE_DPAD_CENTER
+sleep 2
+shot "test9-sortiert"
+note "Sortieren" "$(qa | grep -E "SORT_" | head -5; qa | grep -E "SORT_" | tail -5)"
+qa | grep -q "SORT_END .* 0$" || fail "Sortieren: Gruppe kam nicht ganz nach oben (Fokus verloren / Liste scrollt nicht mit)"
+alive || fail "App nach dem Sortieren nicht mehr da"
+
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
 if adb logcat -d -b crash | grep -q "$PKG"; then fail "Absturz im Protokoll gefunden"; fi
