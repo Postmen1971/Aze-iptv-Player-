@@ -264,6 +264,7 @@ alive || fail "App nach Verlassen von Multi-View nicht mehr da"
 log "== Test 9: Senderliste verwalten – Gruppe von ganz unten nach ganz oben verschieben (Liste muss mitscrollen)"
 adb shell am start -S -n $PKG/.MainActivity --ez aze_test_listeditor true >/dev/null
 sleep 6
+wait_for "SORT_OPEN" 1 15 || fail "Senderliste verwalten ging nicht auf"
 for i in $(seq 1 30); do adb shell input keyevent KEYCODE_DPAD_DOWN; done
 sleep 1
 adb shell input keyevent --longpress KEYCODE_DPAD_CENTER
@@ -274,7 +275,7 @@ sleep 1
 adb shell input keyevent KEYCODE_DPAD_CENTER
 sleep 2
 shot "test9-sortiert"
-note "Sortieren" "$(qa | grep -E "SORT_" | head -5; qa | grep -E "SORT_" | tail -5)"
+note "Sortieren" "$(qa | grep -E "SORT_" | head -8; echo ...; qa | grep -E "SORT_" | tail -8; echo; qa | grep -vE "TICK|SORT_" | tail -6)"
 qa | grep -q "SORT_END .* 0$" || fail "Sortieren: Gruppe kam nicht ganz nach oben (Fokus verloren / Liste scrollt nicht mit)"
 
 log "== Test 9b: Sender von ganz unten nach ganz oben verschieben (Gruppe „Viele Sender“, 35 Sender)"

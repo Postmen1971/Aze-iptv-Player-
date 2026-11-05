@@ -85,6 +85,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     LaunchedEffect(Unit) {
         withFrameNanos { }
         runCatching { firstGroup.requestFocus() }
+        qaLog("SORT_OPEN ${app.editGroups.size} Gruppen")
     }
 
     val groups = app.editGroups
@@ -129,7 +130,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                             active = selected?.key == g.key,
                             modifier = (if (i == 0) Modifier.focusRequester(firstGroup) else Modifier)
                                 .then(if (movingGroup == g.key) Modifier.focusRequester(movingReq) else Modifier),
-                            onFocus = { if (movingGroup == null) selectedKey = g.key },
+                            onFocus = { if (movingGroup == null) selectedKey = g.key; qaLog("SORT_G_FOCUS $i") },
                             onToggle = { if (sorting) movingGroup = g.key else app.toggleGroupHidden(g.key) },
                             onMoveStart = { movingGroup = g.key; qaLog("SORT_START ${g.name} $i") },
                             onMove = { d ->
