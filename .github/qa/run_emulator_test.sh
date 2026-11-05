@@ -16,7 +16,8 @@ ticks() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F " TICK " ; }
 count() { qa | grep -cF -- "$1" || true; }
 shot() { STEP=$((STEP+1)); adb exec-out screencap -p > "$OUT/$(printf %02d $STEP)-$1.png" 2>/dev/null || true; }
 alive() { [ -n "$(adb shell pidof $PKG | tr -d '\r')" ]; }
-fail() { log "FEHLER: $*"; echo "::error title=Emulator-Test::$*"; FAILS=$((FAILS+1)); shot "fehler"; }
+FAILLIST=""
+fail() { log "FEHLER: $*"; echo "::error title=Emulator-Test::$*"; FAILS=$((FAILS+1)); FAILLIST="$FAILLIST | $*"; shot "fehler"; }
 # Mehrzeiligen Text als einen Hinweis am Lauf zeigen (Logs/Artefakte sind von außen nicht immer abrufbar)
 note() { local t="$1"; shift; local m; m=$(printf '%s' "$*" | tail -c 30000 | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g'); echo "::notice title=$t::$m"; }
 
@@ -257,6 +258,6 @@ qa > "$OUT/azeqa.txt"; ticks > "$OUT/ticks.txt"
 log "Protokoll (AzeQA):"; cat "$OUT/azeqa.txt"
 note "AzeQA-Protokoll" "$(cat "$OUT/azeqa.txt")"
 note "App-Fehler im Protokoll" "$(grep -E 'AndroidRuntime|FATAL|de\.aze|ExoPlayerImpl|MediaCodec.*(rror|xception)' "$OUT/logcat.txt" | grep -v 'AzeQA' | tail -60)"
-if [ $FAILS -gt 0 ]; then log "ERGEBNIS: $FAILS Fehler"; exit 1; fi
+if [ $FAILS -gt 0 ]; then log "ERGEBNIS: $FAILS Fehler:$FAILLIST"; echo "::notice title=Fehlerliste::$FAILLIST"; exit 1; fi
 log "ERGEBNIS: alle Tests bestanden"
 echo "::notice title=Emulator-Test::Alle Tests bestanden"
