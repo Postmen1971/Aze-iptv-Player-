@@ -512,6 +512,9 @@ private fun ListingZap(
 ) {
     BackHandler(onBack = onBack)
     var sel by remember { mutableIntStateOf(0) }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val ctxTouch = androidx.compose.ui.platform.LocalContext.current
+    val touchDevice = remember(ctxTouch) { !de.aze.iptv.player.FrameRate.isTv(ctxTouch) }
     // Fokus bleibt immer in den beiden Spalten (vorher rutschte er unten ins Leere → ◀ ging nicht mehr)
     val leftReqs = remember(listed.size) { List(listed.size) { FocusRequester() } }
     var leftFocus by remember { mutableIntStateOf(0) }
@@ -565,8 +568,11 @@ private fun ListingZap(
                             modifier = Modifier.fillMaxWidth().focusRequester(leftReqs[i]),
                             // Tablet: Antippen wählt den Sender (dort gibt es keinen Fokus); Fernbedienung: OK springt nach rechts
                             onClick = {
-                                if (sel != i) { sel = i; leftFocus = i }
-                                else runCatching { rightReqs.firstOrNull()?.requestFocus() }
+                                if (sel != i) {
+                                    sel = i; leftFocus = i
+                                    // Tablet: alte Fokus-Markierung (oben) weg, damit die Auswahl sichtbar wandert
+                                    if (touchDevice) focusManager.clearFocus()
+                                } else runCatching { rightReqs.firstOrNull()?.requestFocus() }
                             },
                             onFocus = { sel = i; leftFocus = i },
                         ) { focused ->
@@ -576,7 +582,7 @@ private fun ListingZap(
                                 color = if (focused) Palette.OnAccent else if (i == sel) Palette.Highlight else Palette.TextSoft,
                                 fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.fillMaxWidth()
-                                    .background(if (focused) Palette.Accent else if (i == sel) Palette.Raised else Palette.PanelDark, RoundedCornerShape(7.dp))
+                                    .background(if (focused) Palette.Accent else if (i == sel) Palette.Accent.copy(alpha = 0.28f) else Palette.PanelDark, RoundedCornerShape(7.dp))
                                     .padding(horizontal = 10.dp, vertical = 7.dp),
                             )
                         }
@@ -591,7 +597,10 @@ private fun ListingZap(
                 Text("In deiner Liste", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text("★ gemerkt · ✓ von anderen bestätigt · ◀ zurück", color = Palette.TextMuted, fontSize = 11.sp)
                 if (candidates.isEmpty()) {
-                    Text("Nichts Ähnliches gefunden.", color = Palette.TextMuted, fontSize = 13.sp)
+                    Text(
+                        "„${name ?: ""}“ gibt es in deiner Liste nicht – links einen anderen Sender wählen.",
+                        color = Palette.TextSoft, fontSize = 13.sp,
+                    )
                 }
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
