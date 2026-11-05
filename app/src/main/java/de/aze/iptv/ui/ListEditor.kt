@@ -82,7 +82,11 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
         }
     }
     val firstGroup = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
+    // Fokus auf die erste Gruppe – auch wenn die Senderliste erst nach dem Öffnen fertig geladen ist
+    val hasGroups = app.editGroups.isNotEmpty()
+    LaunchedEffect(hasGroups) {
+        if (!hasGroups) return@LaunchedEffect
+        withFrameNanos { }
         withFrameNanos { }
         runCatching { firstGroup.requestFocus() }
         qaLog("SORT_OPEN ${app.editGroups.size} Gruppen")
