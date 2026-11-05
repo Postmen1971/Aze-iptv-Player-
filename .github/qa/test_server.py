@@ -31,10 +31,10 @@ http://10.0.2.2:{p}/one.ts
 http://10.0.2.2:{p}/ok2.ts
 """.format(p=PORT) + "".join(
     # 25 weitere Gruppen (je 1 Sender) – damit „Senderliste verwalten“ scrollen muss (Sortier-Test)
-    '#EXTINF:-1 group-title="Gruppe {n:02d}",Extra {n:02d}\nhttp://10.0.2.2:{p}/ok2.ts\n'.format(n=n, p=PORT) for n in range(1, 26)
+    '#EXTINF:-1 group-title="Gruppe {n:02d}",Extra {n:02d}\nhttp://10.0.2.2:{p}/ok2.ts?g={n}\n'.format(n=n, p=PORT) for n in range(1, 26)
 ) + "".join(
     # letzte Gruppe mit 35 Sendern – für den Sender-Sortier-Test (Liste muss scrollen)
-    '#EXTINF:-1 group-title="Viele Sender",Viel {n:02d}\nhttp://10.0.2.2:{p}/ok2.ts\n'.format(n=n, p=PORT) for n in range(1, 36)
+    '#EXTINF:-1 group-title="Viele Sender",Viel {n:02d}\nhttp://10.0.2.2:{p}/ok2.ts?v={n}\n'.format(n=n, p=PORT) for n in range(1, 36)
 )
 
 
