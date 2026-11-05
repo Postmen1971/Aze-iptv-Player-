@@ -416,6 +416,7 @@ fun PlayerScreen(
     var retryJob by remember { mutableStateOf<Job?>(null) }
     var retries by remember { mutableIntStateOf(0) }
     var okLong by remember { mutableStateOf(false) }
+    var arrowLong by remember { mutableStateOf(false) }
     // Abspiel-Adresse (bei Portal + MAC erst beim Umschalten angefordert)
     var resolvedUrl by remember { mutableStateOf<String?>(null) }
     var relinkTick by remember { mutableIntStateOf(0) }
@@ -789,6 +790,22 @@ fun PlayerScreen(
                             }
                             okLong = false
                         }
+                    }
+                    return@onKeyEvent true
+                }
+                // Pfeiltasten mit eigener Belegung für „lang gedrückt“: kurz = beim Loslassen, lang = nach ~0,5 s
+                val arrow = when (code) {
+                    AndroidKeyEvent.KEYCODE_DPAD_UP -> RemoteKey.UP to RemoteKey.UP_LONG
+                    AndroidKeyEvent.KEYCODE_DPAD_DOWN -> RemoteKey.DOWN to RemoteKey.DOWN_LONG
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> RemoteKey.LEFT to RemoteKey.LEFT_LONG
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> RemoteKey.RIGHT to RemoteKey.RIGHT_LONG
+                    else -> null
+                }
+                if (arrow != null && app.keyAction(arrow.second) != KeyAction.NONE) {
+                    when (e.type) {
+                        KeyEventType.KeyDown -> if (e.nativeKeyEvent.repeatCount == 0) arrowLong = false
+                            else if (!arrowLong) { arrowLong = true; perform(app.keyAction(arrow.second)) }
+                        KeyEventType.KeyUp -> { if (!arrowLong) perform(app.keyAction(arrow.first)); arrowLong = false }
                     }
                     return@onKeyEvent true
                 }

@@ -17,7 +17,7 @@ enum class KeyAction(val label: String) {
     MOVIES("Filme"),
     SERIES("Serien"),
     SETTINGS("Einstellungen"),
-    INFO("Infoleiste ein/aus"),
+    INFO("Infoleiste anzeigen"),
 }
 
 /** Frei belegbare Tasten der Fernbedienung (Zifferntasten und Zurück bleiben fest). */
@@ -28,6 +28,11 @@ enum class RemoteKey(val label: String, val default: KeyAction) {
     DOWN("Runter", KeyAction.PREV_CH),
     LEFT("Links", KeyAction.LIST),
     RIGHT("Rechts", KeyAction.LIST),
+    // lang gedrückt (Standard: nichts – dann reagiert die Taste wie bisher sofort)
+    UP_LONG("Hoch lang", KeyAction.NONE),
+    DOWN_LONG("Runter lang", KeyAction.NONE),
+    LEFT_LONG("Links lang", KeyAction.NONE),
+    RIGHT_LONG("Rechts lang", KeyAction.INFO),
     MENU("Menü-Taste", KeyAction.QUICK),
     RED("Rot", KeyAction.LIST),
     GREEN("Grün", KeyAction.QUICK),
