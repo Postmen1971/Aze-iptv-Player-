@@ -99,7 +99,8 @@ jobs:
   # Nur wenn alles besteht, wird die neue Version veröffentlicht.
   emulator-test:
     needs: build
-    runs-on: ubuntu-latest
+    # feste Ubuntu-Version: auf dem neuen Abbild hing die ffmpeg-Installation (Lauf brach nach 40 min ab)
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
@@ -116,8 +117,13 @@ jobs:
           path: qa
 
       - name: Test-Sender erzeugen und Test-Server starten
+        timeout-minutes: 12
         run: |
-          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+          # ffmpeg: höchstens 2 Versuche à 4 min (Paketserver hängen manchmal)
+          for i in 1 2; do
+            command -v ffmpeg >/dev/null && break
+            timeout 240 bash -c 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg' || echo "ffmpeg-Installation Versuch $i fehlgeschlagen"
+          done
           bash .github/qa/make_media.sh
           nohup python3 .github/qa/test_server.py 8090 > qa-server.log 2>&1 &
           sleep 2
