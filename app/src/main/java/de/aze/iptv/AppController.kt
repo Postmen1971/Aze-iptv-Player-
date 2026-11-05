@@ -774,6 +774,15 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         store.nameDisplay = v
     }
 
+    /** wie lange die Infoleiste bzw. der Sendername stehen bleibt (1–7 s) */
+    var infoSeconds by mutableStateOf(store.infoSeconds)
+        private set
+
+    fun updateInfoSeconds(v: Int) {
+        infoSeconds = v.coerceIn(1, 7)
+        store.infoSeconds = infoSeconds
+    }
+
     var expertMode by mutableStateOf(store.expertMode)
         private set
 

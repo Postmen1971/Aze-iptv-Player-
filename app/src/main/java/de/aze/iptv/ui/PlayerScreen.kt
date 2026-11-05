@@ -558,7 +558,7 @@ fun PlayerScreen(
     LaunchedEffect(currentKey) {
         if ((app.nameDisplay == 1 || app.nameDisplay == 3) && currentKey != null) {
             zapInfo = true
-            delay(if (app.nameDisplay == 3) 4_000 else 3_000)
+            delay(app.infoSeconds * 1_000L)
             zapInfo = false
         }
     }

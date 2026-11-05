@@ -312,14 +312,23 @@ private fun ControlsSection(app: AppController) {
     Section("Sendername beim Umschalten") {
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Nur bei schwarzem Bild", selected = app.nameDisplay == 0, onClick = { app.updateNameDisplay(0) })
-            TvButton("3 Sekunden mit Sendung", selected = app.nameDisplay == 1, onClick = { app.updateNameDisplay(1) })
+            TvButton("Name mit Sendung", selected = app.nameDisplay == 1, onClick = { app.updateNameDisplay(1) })
             TvButton("Infoleiste unten", selected = app.nameDisplay == 3, onClick = { app.updateNameDisplay(3) })
             TvButton("Aus", selected = app.nameDisplay == 2, onClick = { app.updateNameDisplay(2) })
         }
         Text(
-            "„Infoleiste unten“: beim Umschalten 4 Sekunden eine Leiste mit Sender, Sendung, Fortschritt und was danach kommt.",
+            "„Infoleiste unten“: beim Umschalten eine Leiste mit Sender, Sendung, Fortschritt und was danach kommt.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
+        if (app.nameDisplay == 1 || app.nameDisplay == 3) {
+            Text("Anzeigedauer", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                TvButton("  −  ", onClick = { app.updateInfoSeconds(app.infoSeconds - 1) })
+                Text("${app.infoSeconds} Sekunde${if (app.infoSeconds == 1) "" else "n"}", color = Palette.Highlight, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                TvButton("  +  ", onClick = { app.updateInfoSeconds(app.infoSeconds + 1) })
+            }
+            Text("1 bis 7 Sekunden", color = Palette.TextMuted, fontSize = 12.sp)
+        }
     }
     Section("Tastenbelegung der Fernbedienung") {
         Text(

@@ -314,6 +314,9 @@ class Store(context: Context) {
         get() = prefs.getBoolean("auroraApplied", false)
         set(v) = prefs.edit().putBoolean("auroraApplied", v).apply()
 
+    var infoSeconds: Int
+        get() = prefs.getInt("infoSeconds", 4)
+        set(v) = prefs.edit().putInt("infoSeconds", v).apply()
     var nameDisplay: Int
         // Standard: Infoleiste unten (3). Einmalig auch für bestehende Installationen gesetzt – änderbar in Einstellungen → Bedienung
         get() {
