@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +53,27 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     var renaming by remember { mutableStateOf<String?>(null) }
     // Sortier-Modus: OK nimmt den Eintrag auf (▲▼ verschieben, OK legt ab) – ohne langes Drücken
     var sorting by remember { mutableStateOf(false) }
+    // Beim Verschieben mitscrollen und den Fokus auf dem verschobenen Eintrag halten
+    // (sonst rutschte er oben aus dem Bild, der Fokus sprang auf die Knöpfe und es wirkte wie ein Hänger)
+    val groupState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val channelState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val moveScope = androidx.compose.runtime.rememberCoroutineScope()
+    val movingReq = remember { FocusRequester() }
+    fun follow(state: androidx.compose.foundation.lazy.LazyListState, idx: Int) {
+        if (idx < 0) return
+        moveScope.launch {
+            val info = state.layoutInfo.visibleItemsInfo
+            val first = info.firstOrNull()?.index ?: 0
+            val last = info.lastOrNull()?.index ?: 0
+            val count = (last - first + 1).coerceAtLeast(1)
+            when {
+                idx <= first -> state.scrollToItem((idx - 1).coerceAtLeast(0))
+                idx >= last -> state.scrollToItem((idx - count + 2).coerceAtLeast(0))
+            }
+            androidx.compose.runtime.withFrameNanos { }
+            runCatching { movingReq.requestFocus() }
+        }
+    }
     BackHandler {
         when {
             movingGroup != null -> movingGroup = null
@@ -97,7 +119,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             // ---- Kategorien ----
             Column(Modifier.width(380.dp).fillMaxHeight().background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp)) {
                 Text("Kategorien (${groups.count { !it.hidden }}/${groups.size} sichtbar)", color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp))
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                LazyColumn(state = groupState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     itemsIndexed(groups, key = { _, g -> g.key }) { i, g ->
                         ManageRow(
                             title = g.name,
@@ -105,11 +127,15 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                             visible = !g.hidden,
                             moving = movingGroup == g.key,
                             active = selected?.key == g.key,
-                            modifier = if (i == 0) Modifier.focusRequester(firstGroup) else Modifier,
+                            modifier = (if (i == 0) Modifier.focusRequester(firstGroup) else Modifier)
+                                .then(if (movingGroup == g.key) Modifier.focusRequester(movingReq) else Modifier),
                             onFocus = { if (movingGroup == null) selectedKey = g.key },
                             onToggle = { if (sorting) movingGroup = g.key else app.toggleGroupHidden(g.key) },
                             onMoveStart = { movingGroup = g.key },
-                            onMove = { d -> app.moveGroup(g.key, d) },
+                            onMove = { d ->
+                                app.moveGroup(g.key, d)
+                                follow(groupState, app.editGroups.indexOfFirst { it.key == g.key })
+                            },
                             onMoveEnd = { movingGroup = null },
                             onOpen = { selectedKey = g.key },
                             onRename = { renaming = g.key },
@@ -125,7 +151,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                         "${g.name} – ${g.channels.count { it.key !in hidden }}/${g.channels.size} Sender sichtbar" + if (g.hidden) " (Kategorie ausgeblendet)" else "",
                         color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp),
                     )
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    LazyColumn(state = channelState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         itemsIndexed(g.channels, key = { _, c -> c.key }) { _, ch ->
                             val nr = app.lineup.byKey[ch.key]?.number
                             ManageRow(
@@ -139,10 +165,14 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 visible = ch.key !in hidden,
                                 moving = movingChannel == ch.key,
                                 active = false,
+                                modifier = if (movingChannel == ch.key) Modifier.focusRequester(movingReq) else Modifier,
                                 onFocus = {},
                                 onToggle = { if (sorting) movingChannel = ch.key else app.toggleChannelHidden(ch.key) },
                                 onMoveStart = { movingChannel = ch.key },
-                                onMove = { d -> app.moveChannel(g.key, ch.key, d) },
+                                onMove = { d ->
+                                    app.moveChannel(g.key, ch.key, d)
+                                    follow(channelState, app.editGroups.firstOrNull { it.key == g.key }?.channels?.indexOfFirst { it.key == ch.key } ?: -1)
+                                },
                                 onMoveEnd = { movingChannel = null },
                                 onOpen = null,
                                 onRename = null,
