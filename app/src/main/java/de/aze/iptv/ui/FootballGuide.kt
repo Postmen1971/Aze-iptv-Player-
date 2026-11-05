@@ -563,7 +563,11 @@ private fun ListingZap(
                     itemsIndexed(listed) { i, l ->
                         Focusable(
                             modifier = Modifier.fillMaxWidth().focusRequester(leftReqs[i]),
-                            onClick = { runCatching { rightReqs.firstOrNull()?.requestFocus() } },
+                            // Tablet: Antippen wählt den Sender (dort gibt es keinen Fokus); Fernbedienung: OK springt nach rechts
+                            onClick = {
+                                if (sel != i) { sel = i; leftFocus = i }
+                                else runCatching { rightReqs.firstOrNull()?.requestFocus() }
+                            },
                             onFocus = { sel = i; leftFocus = i },
                         ) { focused ->
                             val known = app.losLearned.containsKey(l.lowercase())
