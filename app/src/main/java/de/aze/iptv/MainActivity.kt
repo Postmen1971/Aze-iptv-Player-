@@ -106,9 +106,12 @@ class MainActivity : ComponentActivity() {
                     .build()
             }
             .components { add(CoverFallback()) }
+            // Cover-Prüfungen (Dateien, Merkliste) nicht im Haupt-Thread
+            .interceptorDispatcher(kotlinx.coroutines.Dispatchers.IO)
             .respectCacheHeaders(false)
             .build()
-        lifecycleScope.launch { de.aze.iptv.ui.runCoverStock(app, applicationContext) }
+        // Cover-Vorrat NIE im Haupt-Thread (Listen mit zehntausenden Einträgen + Dateiprüfungen → Hänger/Abstürze)
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { de.aze.iptv.ui.runCoverStock(app, applicationContext) } }
         coil.Coil.setImageLoader(
             coil.ImageLoader.Builder(this)
                 .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (vodFast) 0.25 else 0.15).build() }
@@ -124,6 +127,8 @@ class MainActivity : ComponentActivity() {
                 }
                 // Bilderdienst nicht erreichbar oder Bild dort unbekannt → Original direkt vom Anbieter laden
                 .components { add(CoverFallback()) }
+            // Cover-Prüfungen (Dateien, Merkliste) nicht im Haupt-Thread
+            .interceptorDispatcher(kotlinx.coroutines.Dispatchers.IO)
                 .respectCacheHeaders(false)
                 .crossfade(false)
                 .build(),
