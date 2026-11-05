@@ -274,6 +274,13 @@ private class CrashLogger(private val file: java.io.File, private val next: Thre
                     e.stackTraceToString().take(8_000),
             )
         }
+        // auch ins Hänger-Protokoll (Einstellungen → Hilfe & Fehlersuche → Anzeigen)
+        runCatching {
+            val root = generateSequence(e) { it.cause }.last()
+            de.aze.iptv.data.HangLog.add("ABSTURZ ${root.javaClass.simpleName}: ${root.message.orEmpty().take(120)} @ " +
+                (root.stackTrace.firstOrNull { it.className.startsWith("de.aze") }?.let { "${it.fileName}:${it.lineNumber}" } ?: "?") +
+                " · Speicher frei ${Runtime.getRuntime().let { r -> (r.maxMemory() - (r.totalMemory() - r.freeMemory())) / 1048576 }} MB")
+        }
         next?.uncaughtException(t, e)
     }
 }

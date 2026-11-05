@@ -462,6 +462,8 @@ object CoverUrls {
     @Volatile var focusList: List<VodItem>? = null
     @Volatile var focusSeries = false
     @Volatile var focusFrom = 0
+    /** Zeitpunkt des letzten Umschaltens – der Vorrat pausiert danach kurz */
+    @Volatile var lastZap = 0L
     /** eigener Bildlader nur fürs Vorladen (schmale Leitung, siehe MainActivity) */
     @Volatile var bg: coil.ImageLoader? = null
 
@@ -1201,17 +1203,58 @@ private val stockTried = java.util.Collections.synchronizedSet(HashSet<String>()
 private fun stockWanted(it: VodItem) =
     (it.poster != null || de.aze.iptv.data.Tmdb.enabled) && stockKey(it) !in stockTried && !de.aze.iptv.data.CoverStore.has(stockKey(it))
 
-/** 4 Cover gleichzeitig holen – schon beim Bilderdienst verkleinert (~10 KB), sonst Original direkt */
-private suspend fun stockFetch(loader: coil.ImageLoader, ctx: android.content.Context, items: List<VodItem>, series: Boolean) {
+private val stockHttp by lazy {
+    okhttp3.OkHttpClient.Builder()
+        .connectTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+}
+
+/** Bild holen, höchstens 3 MB (sonst auslassen) */
+private fun stockBytes(url: String): ByteArray? = runCatching {
+    stockHttp.newCall(okhttp3.Request.Builder().url(url).build()).execute().use { r ->
+        if (!r.isSuccessful) return null
+        val input = r.body?.byteStream() ?: return null
+        val out = java.io.ByteArrayOutputStream()
+        val buf = ByteArray(16 * 1024)
+        while (true) {
+            val n = input.read(buf); if (n < 0) break
+            out.write(buf, 0, n)
+            if (out.size() > 3_000_000) return null
+        }
+        out.toByteArray()
+    }
+}.getOrNull()
+
+/** ein Cover für den Vorrat: verkleinert vom Bilderdienst, sonst Original vom Anbieter, sonst TMDB */
+private suspend fun stockOne(item: VodItem, series: Boolean) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    val key = stockKey(item)
+    item.poster?.let { p ->
+        val small = CoverUrls.small(p, 200, 300, force = true)
+        for (u in if (small != p) listOf(small, p) else listOf(p)) {
+            val b = stockBytes(u) ?: continue
+            if (de.aze.iptv.data.CoverStore.saveFrom(b, key)) return@withContext
+        }
+    }
+    if (de.aze.iptv.data.Tmdb.enabled) de.aze.iptv.data.Tmdb.poster(item.name, series)?.let { u ->
+        stockBytes(u)?.let { de.aze.iptv.data.CoverStore.saveFrom(it, key) }
+    }
+}
+
+/**
+ * 2 Cover gleichzeitig holen – ohne die Bildbibliothek (kein Zwischenspeicher, kein großes Bild im Speicher).
+ * Direkt nach dem Umschalten 15 s Pause, damit der neue Sender in Ruhe anläuft.
+ */
+private suspend fun stockFetch(@Suppress("UNUSED_PARAMETER") loader: Any?, @Suppress("UNUSED_PARAMETER") ctx: android.content.Context, items: List<VodItem>, series: Boolean) {
     items.forEach { stockTried.add(stockKey(it)) }
+    while (System.currentTimeMillis() - CoverUrls.lastZap < 15_000) delay(1_000)
     kotlinx.coroutines.coroutineScope {
-        items.map { item -> async { runCatching { loader.execute(posterRequest(ctx, item.poster, item.name, series, shrinkOnServer = true)) } } }
-            .forEach { it.await() }
+        items.chunked(2).forEach { pair -> pair.map { item -> async { runCatching { stockOne(item, series) } } }.forEach { it.await() } }
     }
 }
 
 /** Filme & Serien offen: Cover der offenen Kategorie ab der sichtbaren Stelle holen; true = es gab etwas zu tun */
-private suspend fun stockFocus(loader: coil.ImageLoader, ctx: android.content.Context): Boolean {
+private suspend fun stockFocus(loader: Any?, ctx: android.content.Context): Boolean {
     val list = CoverUrls.focusList ?: return false
     // die sichtbaren (~12) lädt das Raster selbst – der Vorrat macht direkt dahinter weiter
     val from = (CoverUrls.focusFrom + 12).coerceIn(0, list.size)
@@ -1228,7 +1271,7 @@ private suspend fun stockFocus(loader: coil.ImageLoader, ctx: android.content.Co
  * so hilft der Vorrat auch direkt nach der Installation.
  */
 internal suspend fun runCoverStock(app: AppController, ctx: android.content.Context) {
-    val loader = CoverUrls.bg ?: return
+    val loader: Any? = null
     // erst nach dem Start (Sender soll in Ruhe anlaufen) – außer Filme werden gleich geöffnet
     for (i in 0 until 20) { if (CoverUrls.vodOpen) break; delay(1_000) }
     while (true) {

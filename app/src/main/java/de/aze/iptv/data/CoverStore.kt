@@ -31,15 +31,20 @@ object CoverStore {
     val full: Boolean get() = count >= MAX_FILES
 
     /** großes Original verkleinern und als kleines WebP ablegen */
-    fun saveFrom(src: File, key: String): Boolean = runCatching {
+    fun saveFrom(src: File, key: String): Boolean = save(key) { o -> BitmapFactory.decodeFile(src.path, o) }
+    fun saveFrom(bytes: ByteArray, key: String): Boolean = save(key) { o -> BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o) }
+
+    @Synchronized
+    private fun save(key: String, decode: (BitmapFactory.Options) -> Bitmap?): Boolean = runCatching {
         val out = file(key) ?: return false
         if (out.exists()) return true
         val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeFile(src.path, o)
+        decode(o)
         if (o.outWidth <= 0 || o.outHeight <= 0) return false
         var sample = 1
         while (o.outWidth / (sample * 2) >= 200 && o.outHeight / (sample * 2) >= 300) sample *= 2
-        val raw = BitmapFactory.decodeFile(src.path, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return false
+        // RGB_565: halber Speicher beim Verkleinern (Cover brauchen keine Transparenz)
+        val raw = decode(BitmapFactory.Options().apply { inSampleSize = sample; inPreferredConfig = Bitmap.Config.RGB_565 }) ?: return false
         val scale = maxOf(200f / raw.width, 300f / raw.height).coerceAtMost(1f)
         val bmp = if (scale < 1f) Bitmap.createScaledBitmap(raw, (raw.width * scale).toInt().coerceAtLeast(1), (raw.height * scale).toInt().coerceAtLeast(1), true) else raw
         val tmp = File(out.path + ".tmp")
@@ -51,7 +56,7 @@ object CoverStore {
         if (bmp !== raw) bmp.recycle()
         raw.recycle()
         tmp.renameTo(out).also { if (it) count++ }
-    }.getOrDefault(false)
+    }.getOrElse { false } // auch OutOfMemoryError: Cover auslassen, nie abstürzen
 
     fun sizeMb(): Long = (dir?.listFiles()?.sumOf { it.length() } ?: 0L) / (1024 * 1024)
     fun clear() { dir?.listFiles()?.forEach { it.delete() }; count = 0 }

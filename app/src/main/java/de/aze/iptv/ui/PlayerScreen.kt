@@ -552,7 +552,7 @@ fun PlayerScreen(
     val currentKey = app.current?.channel?.key
     // YouTube-App: nur beim Wählen des Senders öffnen, nicht erneut beim Zurückkommen in die App
     var startedYt by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(currentKey) { watchdogRestarts = 0 }
+    LaunchedEffect(currentKey) { watchdogRestarts = 0; CoverUrls.lastZap = System.currentTimeMillis() }
     // Sendername beim Umschalten (Einstellung „3 Sekunden mit Sendung“)
     var zapInfo by remember { mutableStateOf(false) }
     LaunchedEffect(currentKey) {
