@@ -59,6 +59,9 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     val channelState = androidx.compose.foundation.lazy.rememberLazyListState()
     val moveScope = androidx.compose.runtime.rememberCoroutineScope()
     val movingReq = remember { FocusRequester() }
+    // ▶ von den Kategorien direkt zum ersten Sender, ◀ zurück zur gewählten Kategorie
+    val firstChannelReq = remember { FocusRequester() }
+    val selectedGroupReq = remember { FocusRequester() }
     fun follow(state: androidx.compose.foundation.lazy.LazyListState, idx: Int) {
         if (idx < 0) return
         moveScope.launch {
@@ -124,7 +127,19 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             // ---- Kategorien ----
             Column(Modifier.width(380.dp).fillMaxHeight().background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp)) {
                 Text("Kategorien (${groups.count { !it.hidden }}/${groups.size} sichtbar)", color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp))
-                LazyColumn(state = groupState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                LazyColumn(
+                    state = groupState, verticalArrangement = Arrangement.spacedBy(3.dp),
+                    modifier = Modifier.onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight && movingGroup == null) {
+                            moveScope.launch {
+                                channelState.scrollToItem(0)
+                                androidx.compose.runtime.withFrameNanos { }
+                                runCatching { firstChannelReq.requestFocus() }
+                            }
+                            true
+                        } else false
+                    },
+                ) {
                     itemsIndexed(groups, key = { _, g -> g.key }) { i, g ->
                         ManageRow(
                             title = g.name,
@@ -133,7 +148,8 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                             moving = movingGroup == g.key,
                             active = selected?.key == g.key,
                             modifier = (if (i == 0) Modifier.focusRequester(firstGroup) else Modifier)
-                                .then(if (movingGroup == g.key) Modifier.focusRequester(movingReq) else Modifier),
+                                .then(if (movingGroup == g.key) Modifier.focusRequester(movingReq) else Modifier)
+                                .then(if (selected?.key == g.key && movingGroup == null) Modifier.focusRequester(selectedGroupReq) else Modifier),
                             onFocus = { if (movingGroup == null) selectedKey = g.key; qaLog("SORT_G_FOCUS $i") },
                             onToggle = { if (sorting) movingGroup = g.key else app.toggleGroupHidden(g.key) },
                             onMoveStart = { movingGroup = g.key; qaLog("SORT_START ${g.name} $i") },
@@ -158,7 +174,15 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                         "${g.name} – ${g.channels.count { it.key !in hidden }}/${g.channels.size} Sender sichtbar" + if (g.hidden) " (Kategorie ausgeblendet)" else "",
                         color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp),
                     )
-                    LazyColumn(state = channelState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    LazyColumn(
+                        state = channelState, verticalArrangement = Arrangement.spacedBy(3.dp),
+                        modifier = Modifier.onPreviewKeyEvent { e ->
+                            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && movingChannel == null) {
+                                runCatching { selectedGroupReq.requestFocus() }
+                                true
+                            } else false
+                        },
+                    ) {
                         itemsIndexed(g.channels, key = { _, c -> c.key }) { ci, ch ->
                             val nr = app.lineup.byKey[ch.key]?.number
                             ManageRow(
@@ -172,7 +196,8 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 visible = ch.key !in hidden,
                                 moving = movingChannel == ch.key,
                                 active = false,
-                                modifier = if (movingChannel == ch.key) Modifier.focusRequester(movingReq) else Modifier,
+                                modifier = (if (movingChannel == ch.key) Modifier.focusRequester(movingReq) else Modifier)
+                                    .then(if (ci == 0) Modifier.focusRequester(firstChannelReq) else Modifier),
                                 onFocus = { qaLog("SORT_CH_FOCUS $ci") },
                                 onToggle = { if (sorting) movingChannel = ch.key else app.toggleChannelHidden(ch.key) },
                                 onMoveStart = { movingChannel = ch.key; qaLog("SORT_CH_START ${ch.name} $ci") },
