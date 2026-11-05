@@ -92,12 +92,20 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
     override suspend fun movieCategories(): List<VodCategory> = withContext(Dispatchers.IO) { cats("get_vod_categories") }
     override suspend fun seriesCategories(): List<VodCategory> = withContext(Dispatchers.IO) { cats("get_series_categories") }
 
+    /** Kategorien: sofort aus der Kopie auf dem Gerät, im Hintergrund vom Anbieter auffrischen */
     private fun cats(action: String): List<VodCategory> {
-        val a = arr(action)
-        return (0 until a.length()).map { i ->
-            val o = a.getJSONObject(i)
-            VodCategory(o.optString("category_id"), o.optString("category_name"))
+        val f = VodDisk.file(api, action)
+        val disk = VodDisk.readCats(f)
+        fun fetch(): List<VodCategory> {
+            val a = arr(action)
+            return (0 until a.length()).map { i ->
+                val o = a.getJSONObject(i)
+                VodCategory(o.optString("category_id"), o.optString("category_name"))
+            }.also { if (it.isNotEmpty()) VodDisk.writeCats(f, it) }
         }
+        if (disk == null) return fetch()
+        if (VodDisk.stale(f)) VodDisk.refresh(f.path) { fetch() }
+        return disk
     }
 
     /**
@@ -121,17 +129,30 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
         cached(true)?.filter { it.cat == categoryId } ?: streamItems("get_series", "&category_id=${enc(categoryId)}", series = true)
     }
 
-    private fun cached(series: Boolean): List<VodItem>? = synchronized(allCache) { allCache[api to series] }
+    /** Gesamtliste: im Speicher, sonst sofort aus der Kopie auf dem Gerät (wie TiviMate) – alt? dann im Hintergrund neu laden */
+    private fun cached(series: Boolean): List<VodItem>? {
+        synchronized(allCache) { allCache[api to series] }?.let { return it }
+        val f = VodDisk.file(api, if (series) "series" else "movies")
+        val disk = VodDisk.readItems(f) ?: return null
+        synchronized(allCache) { allCache[api to series] = disk }
+        if (VodDisk.stale(f)) VodDisk.refresh(f.path) { download(series) }
+        return disk
+    }
+
+    private fun download(series: Boolean): List<VodItem> {
+        val t0 = System.currentTimeMillis()
+        return streamItems(if (series) "get_series" else "get_vod_streams", "", series).also {
+            if (it.isNotEmpty()) {
+                synchronized(allCache) { allCache[api to series] = it }
+                VodDisk.writeItems(VodDisk.file(api, if (series) "series" else "movies"), it)
+            }
+            de.aze.iptv.ui.qaLog("VOD_ALL ${if (series) "Serien" else "Filme"} ${it.size} in ${System.currentTimeMillis() - t0} ms")
+        }
+    }
 
     override suspend fun all(series: Boolean): List<VodItem> = withContext(Dispatchers.IO) {
         cached(series) ?: synchronized(loadLock(series)) {
-            cached(series) ?: run {
-                val t0 = System.currentTimeMillis()
-                streamItems(if (series) "get_series" else "get_vod_streams", "", series).also {
-                    synchronized(allCache) { allCache[api to series] = it }
-                    de.aze.iptv.ui.qaLog("VOD_ALL ${if (series) "Serien" else "Filme"} ${it.size} in ${System.currentTimeMillis() - t0} ms")
-                }
-            }
+            cached(series) ?: download(series)
         }
     }
 
@@ -448,4 +469,62 @@ class HybridVod(private val file: java.io.File, private val name: String) : VodP
             }.getOrNull()
         }
     }
+}
+
+
+/** Kopie der Film-/Serienlisten auf dem Gerät: Kategorien und Raster gehen sofort auf, auch nach einem Neustart. */
+object VodDisk {
+    private var dir: java.io.File? = null
+    private val running = java.util.Collections.synchronizedSet(HashSet<String>())
+    private const val MAX_AGE = 6 * 60 * 60_000L
+
+    fun init(context: android.content.Context) {
+        dir = java.io.File(context.filesDir, "vod").apply { mkdirs() }
+    }
+
+    fun file(api: String, kind: String): java.io.File {
+        val h = java.security.MessageDigest.getInstance("SHA-1").digest(api.toByteArray()).joinToString("") { "%02x".format(it) }.take(16)
+        return java.io.File(dir ?: java.io.File(System.getProperty("java.io.tmpdir") ?: "/tmp"), "$h-$kind.tsv")
+    }
+
+    fun stale(f: java.io.File) = System.currentTimeMillis() - f.lastModified() > MAX_AGE
+
+    /** im Hintergrund neu laden (je Datei nur einmal gleichzeitig) */
+    fun refresh(key: String, load: () -> Unit) {
+        if (!running.add(key)) return
+        Thread { try { runCatching { load() } } finally { running.remove(key) } }.apply { isDaemon = true; start() }
+    }
+
+    private fun clean(s: String?) = s.orEmpty().replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+
+    private fun write(f: java.io.File, lines: Sequence<String>) = runCatching {
+        val tmp = java.io.File(f.path + ".tmp")
+        tmp.bufferedWriter().use { w -> lines.forEach { w.write(it); w.write("\n") } }
+        tmp.renameTo(f)
+    }
+
+    fun writeItems(f: java.io.File, items: List<VodItem>) = write(f, items.asSequence().map {
+        listOf(it.id, it.name, it.poster, it.rating, it.year, it.ext, it.cat).joinToString("\t") { v -> clean(v) }
+    })
+
+    fun readItems(f: java.io.File): List<VodItem>? = runCatching {
+        if (!f.exists()) return null
+        val out = ArrayList<VodItem>()
+        f.bufferedReader().useLines { seq ->
+            seq.forEach { l ->
+                val p = l.split('\t')
+                if (p.size < 7) return@forEach
+                fun n(i: Int) = p[i].ifEmpty { null }
+                out.add(VodItem(id = p[0], name = p[1], poster = n(2), rating = n(3), year = n(4), ext = p[5], cat = n(6)))
+            }
+        }
+        out.takeIf { it.isNotEmpty() }
+    }.getOrNull()
+
+    fun writeCats(f: java.io.File, cats: List<VodCategory>) = write(f, cats.asSequence().map { clean(it.id) + "\t" + clean(it.name) })
+
+    fun readCats(f: java.io.File): List<VodCategory>? = runCatching {
+        if (!f.exists()) return null
+        f.readLines().mapNotNull { l -> l.split('\t').takeIf { it.size >= 2 }?.let { VodCategory(it[0], it[1]) } }.takeIf { it.isNotEmpty() }
+    }.getOrNull()
 }

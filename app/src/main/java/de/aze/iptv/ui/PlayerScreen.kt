@@ -1206,7 +1206,8 @@ internal fun ZapBar(app: AppController, cur: de.aze.iptv.data.NumberedChannel, q
     Row(
         modifier
             .fillMaxWidth()
-            .padding(horizontal = 32.dp, vertical = 26.dp)
+            // näher an den unteren Bildrand
+            .padding(start = 32.dp, end = 32.dp, bottom = 10.dp)
             .background(Palette.PanelDark.copy(alpha = 0.92f), RoundedCornerShape(22.dp))
             .border(1.dp, Palette.Line.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
             .padding(horizontal = 22.dp, vertical = 16.dp),

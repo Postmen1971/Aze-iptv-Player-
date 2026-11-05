@@ -39,6 +39,7 @@ class MainActivity : ComponentActivity() {
         de.aze.iptv.data.HangLog.init(applicationContext)
         de.aze.iptv.data.Tmdb.init(applicationContext)
         de.aze.iptv.data.CoverStore.init(applicationContext)
+        de.aze.iptv.data.VodDisk.init(applicationContext)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
