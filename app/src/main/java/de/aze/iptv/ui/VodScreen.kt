@@ -392,6 +392,14 @@ private fun Browse(
                           // Poster der nächsten Reihen schon vorladen, damit beim schnellen Blättern Bilder da sind
                           val ctx = LocalContext.current
                           val vodFast = app.vodFast
+                          // Vorrat holt die Cover dieser Kategorie jetzt zuerst (ab der sichtbaren Stelle)
+                          androidx.compose.runtime.DisposableEffect(list) {
+                              CoverUrls.focusList = list; CoverUrls.focusSeries = series; CoverUrls.focusFrom = 0
+                              onDispose { if (CoverUrls.focusList === list) CoverUrls.focusList = null }
+                          }
+                          LaunchedEffect(gridState) {
+                              androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }.collect { CoverUrls.focusFrom = it }
+                          }
                           LaunchedEffect(list, gridState) {
                               val requested = HashSet<String>()
                               val loader = coil.Coil.imageLoader(ctx)
@@ -450,6 +458,10 @@ object CoverUrls {
     @Volatile var tmdbFirst = false
     /** Filme & Serien gerade offen → Vorrat-Auffüllen pausiert */
     @Volatile var vodOpen = false
+    /** gerade offene Kategorie (Filme & Serien offen): deren Cover holt der Vorrat zuerst, ab der sichtbaren Stelle */
+    @Volatile var focusList: List<VodItem>? = null
+    @Volatile var focusSeries = false
+    @Volatile var focusFrom = 0
     /** eigener Bildlader nur fürs Vorladen (schmale Leitung, siehe MainActivity) */
     @Volatile var bg: coil.ImageLoader? = null
 
@@ -1182,19 +1194,48 @@ internal fun vodLanguage(name: String): String? = when {
 }
 
 
+
+private fun stockKey(it: VodItem) = it.poster ?: ("tmdb:" + it.name)
+/** schon versucht (auch erfolglos) – nicht endlos wiederholen; wird je Runde geleert */
+private val stockTried = java.util.Collections.synchronizedSet(HashSet<String>())
+private fun stockWanted(it: VodItem) =
+    (it.poster != null || de.aze.iptv.data.Tmdb.enabled) && stockKey(it) !in stockTried && !de.aze.iptv.data.CoverStore.has(stockKey(it))
+
+/** 4 Cover gleichzeitig holen – schon beim Bilderdienst verkleinert (~10 KB), sonst Original direkt */
+private suspend fun stockFetch(loader: coil.ImageLoader, ctx: android.content.Context, items: List<VodItem>, series: Boolean) {
+    items.forEach { stockTried.add(stockKey(it)) }
+    kotlinx.coroutines.coroutineScope {
+        items.map { item -> async { runCatching { loader.execute(posterRequest(ctx, item.poster, item.name, series, shrinkOnServer = true)) } } }
+            .forEach { it.await() }
+    }
+}
+
+/** Filme & Serien offen: Cover der offenen Kategorie ab der sichtbaren Stelle holen; true = es gab etwas zu tun */
+private suspend fun stockFocus(loader: coil.ImageLoader, ctx: android.content.Context): Boolean {
+    val list = CoverUrls.focusList ?: return false
+    // die sichtbaren (~12) lädt das Raster selbst – der Vorrat macht direkt dahinter weiter
+    val from = (CoverUrls.focusFrom + 12).coerceIn(0, list.size)
+    val next = (list.subList(from, list.size).asSequence() + list.subList(0, from).asSequence())
+        .filter { stockWanted(it) }.take(4).toList()
+    if (next.isEmpty()) return false
+    stockFetch(loader, ctx, next, CoverUrls.focusSeries)
+    return true
+}
+
 /**
- * Cover-Vorrat im Hintergrund auffüllen, solange Filme & Serien NICHT offen sind:
- * alle Cover (bevorzugte Sprache zuerst, ohne ausgeblendete Kategorien) einmal holen und klein speichern.
- * Danach gehen die Raster sofort auf – wie bei einem fertigen Cover-Paket.
+ * Cover-Vorrat im Hintergrund auffüllen: alle Cover (bevorzugte Sprache zuerst, ohne ausgeblendete Kategorien)
+ * einmal holen und klein speichern. Sind Filme & Serien offen, kommt zuerst die gerade offene Kategorie dran –
+ * so hilft der Vorrat auch direkt nach der Installation.
  */
 internal suspend fun runCoverStock(app: AppController, ctx: android.content.Context) {
     val loader = CoverUrls.bg ?: return
-    delay(20_000) // erst nach dem Start (Sender soll in Ruhe anlaufen)
+    // erst nach dem Start (Sender soll in Ruhe anlaufen) – außer Filme werden gleich geöffnet
+    for (i in 0 until 20) { if (CoverUrls.vodOpen) break; delay(1_000) }
     while (true) {
         var fetched = 0
+        stockTried.clear()
         for (src in app.vodSources) for (series in listOf(false, true)) {
             val api = runCatching { app.vodProvider(src) }.getOrNull() ?: continue
-            while (CoverUrls.vodOpen) delay(5_000)
             val cats = runCatching { if (series) api.seriesCategories() else api.movieCategories() }.getOrNull() ?: continue
             val all = runCatching { api.all(series) }.getOrNull() ?: continue
             val skip = cats.filter {
@@ -1204,20 +1245,27 @@ internal suspend fun runCoverStock(app: AppController, ctx: android.content.Cont
             val order = if (app.vodLang == 1) listOf("tr", "de") else listOf("de", "tr")
             val visible = all.filter { it.cat !in skip }
             val queue = (order.flatMap { l -> visible.filter { langOf[it.cat] == l } } + visible.filter { langOf[it.cat] !in order })
-                .filter { (it.poster != null || de.aze.iptv.data.Tmdb.enabled) && !de.aze.iptv.data.CoverStore.has(it.poster ?: ("tmdb:" + it.name)) }
-            // 4 gleichzeitig; verkleinert schon beim Bilderdienst (lädt ~10 KB statt des großen Originals),
-            // klappt das nicht, holt die App das Original direkt vom Anbieter
-            for (chunk in queue.chunked(4)) {
+                .filter { stockWanted(it) }
+            var i = 0
+            while (i < queue.size) {
                 if (de.aze.iptv.data.CoverStore.full) return
-                while (CoverUrls.vodOpen) delay(5_000)
-                kotlinx.coroutines.coroutineScope {
-                    chunk.map { item -> async { runCatching { loader.execute(posterRequest(ctx, item.poster, item.name, series, shrinkOnServer = true)) } } }
-                        .forEach { it.await() }
+                // Filme & Serien offen: erst die offene Kategorie; ist die fertig, kurz warten (nichts anderes bremst dann)
+                if (CoverUrls.vodOpen) {
+                    if (stockFocus(loader, ctx)) { fetched += 4; continue }
+                    delay(2_000); continue
                 }
+                val chunk = queue.subList(i, minOf(i + 4, queue.size)).filter { stockWanted(it) }
+                i += 4
+                if (chunk.isEmpty()) continue
+                stockFetch(loader, ctx, chunk, series)
                 fetched += chunk.size
             }
         }
         qaLog("COVER_STOCK Runde fertig: $fetched neu, ${de.aze.iptv.data.CoverStore.count} im Vorrat")
-        delay(6 * 60 * 60_000L) // alle 6 Stunden nach neuen Filmen schauen
+        // fertig: alle 6 Stunden nach neuen Filmen schauen – offene Kategorien aber weiter sofort bedienen
+        val until = System.currentTimeMillis() + 6 * 60 * 60_000L
+        while (System.currentTimeMillis() < until) {
+            if (!(CoverUrls.vodOpen && stockFocus(loader, ctx))) delay(2_000)
+        }
     }
 }
