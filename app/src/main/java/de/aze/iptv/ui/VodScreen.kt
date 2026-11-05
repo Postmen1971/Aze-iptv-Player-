@@ -94,6 +94,7 @@ import de.aze.iptv.player.rememberDisplayWatch
 import de.aze.iptv.player.awaitChange
 import de.aze.iptv.player.TrackHelper
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -218,12 +219,8 @@ private fun Browse(
         val order = if (pref == 0) listOf("de", "tr") else listOf("tr", "de")
         val queue = (order.flatMap { l -> visible.filter { langOf[it.cat] == l } } + visible.filter { langOf[it.cat] == null })
             .mapNotNull { it.poster }.distinct().take(if (app.vodFast) 3_000 else 600)
-        val loader = coil.Coil.imageLoader(ctx)
         qaLog("VOD_PREFETCH ${queue.size} Cover (${order.joinToString(" → ")} zuerst)")
-        queue.chunked(30).forEach { batch ->
-            batch.forEach { loader.enqueue(posterRequest(ctx, it)) }
-            delay(1_500)
-        }
+        CoverUrls.prefetch(ctx, queue) { posterRequest(ctx, it) }
     }
     // Erwachsenen-Filter: solche Kategorien gar nicht erst zeigen
     val adultOff = app.adultFilter
@@ -392,17 +389,15 @@ private fun Browse(
                               val loader = coil.Coil.imageLoader(ctx)
                               // „Filme & Serien bevorzugt“: gleich die ganze Kategorie (bis 400 Cover) im Hintergrund holen
                               // Standard: die ersten 150 Cover der Kategorie (bleibt im 250-MB-Rahmen); bevorzugt: bis 400
-                              run {
+                              // ganze Kategorie über die schmale Hintergrund-Leitung (stört die sichtbaren Cover nicht)
+                              launch {
                                   kotlinx.coroutines.delay(if (vodFast) 800 else 1_200) // erst die sichtbaren Cover
-                                  list.asSequence().take(if (vodFast) 400 else 150).forEach { item ->
-                                      val url = item.poster ?: return@forEach
-                                      if (requested.add(url)) loader.enqueue(posterRequest(ctx, url))
-                                  }
+                                  CoverUrls.prefetch(ctx, list.asSequence().take(if (vodFast) 400 else 150).mapNotNull { it.poster }.distinct().toList()) { posterRequest(ctx, it) }
                               }
                               androidx.compose.runtime.snapshotFlow { gridState.firstVisibleItemIndex }.collect { first ->
                                   // kurz warten, bis das Blättern ruht – sonst drängeln sich vorgeladene Cover vor die sichtbaren
                                   kotlinx.coroutines.delay(250)
-                                  list.subList(first.coerceAtMost(list.size), list.size).take(if (vodFast) 80 else 60).forEach { item ->
+                                  list.subList(first.coerceAtMost(list.size), list.size).take(if (vodFast) 30 else 18).forEach { item ->
                                       val url = item.poster ?: return@forEach
                                       if (requested.add(url)) loader.enqueue(posterRequest(ctx, url))
                                   }
@@ -448,7 +443,19 @@ internal fun smallPoster(url: String): String = CoverUrls.small(url, 200, 300)
  */
 object CoverUrls {
     const val PROXY = "https://images.weserv.nl/"
-    @Volatile var proxy = true
+    @Volatile var proxy = false
+    /** eigener Bildlader nur fürs Vorladen (schmale Leitung, siehe MainActivity) */
+    @Volatile var bg: coil.ImageLoader? = null
+
+    /** Cover nacheinander im Hintergrund holen (2 gleichzeitig) – blockiert nie die sichtbaren Cover */
+    suspend fun prefetch(ctx: android.content.Context, urls: List<String>, request: (String) -> coil.request.ImageRequest) {
+        val loader = bg ?: return
+        kotlinx.coroutines.coroutineScope {
+            urls.chunked(2).forEach { pair ->
+                pair.map { u -> async { runCatching { loader.execute(request(u)) } } }.forEach { it.await() }
+            }
+        }
+    }
 
     fun small(url: String, w: Int, h: Int): String {
         if (url.contains("image.tmdb.org/t/p/")) return url.replace(tmdbSize, when { w <= 200 -> "$1w185/"; w <= 400 -> "$1w342/"; else -> "$1w780/" })

@@ -84,19 +84,34 @@ class MainActivity : ComponentActivity() {
         // „Filme & Serien bevorzugt“: größerer Zwischenspeicher (1 GB statt 250 MB), mehr Bilder im Arbeitsspeicher
         val vodFast = app.vodFast
         de.aze.iptv.ui.CoverUrls.proxy = app.coverProxy
+        // ein gemeinsamer Zwischenspeicher auf dem Gerät für sichtbare und vorgeladene Cover
+        val coverDisk = coil.disk.DiskCache.Builder()
+            .directory(cacheDir.resolve("bilder"))
+            .maxSizeBytes(if (vodFast) 1024L * 1024 * 1024 else 250L * 1024 * 1024)
+            .build()
+        // Vorladen im Hintergrund über eine eigene, schmale Leitung (2 gleichzeitig):
+        // so stehen die sichtbaren Cover nie hinter hunderten vorgeladenen Schlange.
+        de.aze.iptv.ui.CoverUrls.bg = coil.ImageLoader.Builder(this)
+            .memoryCache(null as coil.memory.MemoryCache?)
+            .diskCache(coverDisk)
+            .okHttpClient {
+                okhttp3.OkHttpClient.Builder()
+                    .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 2; maxRequestsPerHost = 2 })
+                    .connectTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+            }
+            .components { add(CoverFallback()) }
+            .respectCacheHeaders(false)
+            .build()
         coil.Coil.setImageLoader(
             coil.ImageLoader.Builder(this)
                 .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (vodFast) 0.25 else 0.15).build() }
-                .diskCache {
-                    coil.disk.DiskCache.Builder()
-                        .directory(cacheDir.resolve("bilder"))
-                        .maxSizeBytes(if (vodFast) 1024L * 1024 * 1024 else 250L * 1024 * 1024)
-                        .build()
-                }
+                .diskCache(coverDisk)
                 // Standard lädt nur 5 Bilder gleichzeitig vom selben Server – Cover standen Schlange
                 .okHttpClient {
                     okhttp3.OkHttpClient.Builder()
-                        .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 48; maxRequestsPerHost = 8 })
+                        .dispatcher(okhttp3.Dispatcher().apply { maxRequests = 48; maxRequestsPerHost = 12 })
                         // hängt ein Bild, nicht ewig warten (dann Rückfall bzw. nächstes Bild)
                         .connectTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
                         .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)

@@ -1361,7 +1361,7 @@ private fun VodCoverSection(app: AppController) {
                 "Servern geladen (der Dienst sieht nur die Bild-Adresse, nie Zugangsdaten). Klappt es dort nicht, kommt das Bild direkt vom Anbieter.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
-        TvSwitch("Schneller Bilderdienst", "Cover verkleinert über schnelle Server", app.coverProxy) { app.updateCoverProxy(!app.coverProxy) }
+        TvSwitch("Schneller Bilderdienst", "Cover verkleinert über images.weserv.nl – nur einschalten, wenn es damit schneller ist", app.coverProxy) { app.updateCoverProxy(!app.coverProxy) }
         Text("Bevorzugte Sprache – deren Cover werden zuerst geladen, dann der Rest nach und nach", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Deutsch, dann Türkisch", selected = app.vodLang == 0, onClick = { app.updateVodLang(0) })

@@ -186,8 +186,8 @@ class Store(context: Context) {
     /** Kleine Anzeige zur Fehlersuche im Bild (Frequenz, Bilder, Position). */
     /** Cover über den schnellen Bilderdienst images.weserv.nl (verkleinert, schnelle Server); sonst direkt vom Anbieter */
     var coverProxy: Boolean
-        get() = prefs.getBoolean("coverProxy", true)
-        set(v) = prefs.edit().putBoolean("coverProxy", v).apply()
+        get() = prefs.getBoolean("coverProxy2", false)
+        set(v) = prefs.edit().putBoolean("coverProxy2", v).apply()
 
     /** Bevorzugte Sprache bei Filmen & Serien: 0 = Deutsch, dann Türkisch · 1 = Türkisch, dann Deutsch · 2 = keine */
     var vodLang: Int
