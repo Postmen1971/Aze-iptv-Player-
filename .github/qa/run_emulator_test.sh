@@ -86,8 +86,20 @@ shot "test1b-liste-nach-hoch"
 note "Senderliste ▲" "$(qa | grep -E "LIST_|ROOT_KEY" | head -40)"
 [ "$(count "LIST_HEAD_FOCUS")" -eq 0 ] || fail "Senderliste: ▲ ist in der Gruppen-Kopfzeile gelandet"
 [ "$(count "LIST_WRAP")" -ge 1 ] || fail "Senderliste: ▲ oben ist nicht ans Ende gesprungen"
+o=$(count "LIST_OPEN")
 adb shell input keyevent KEYCODE_DPAD_RIGHT   # Rechts schließt die Liste
-sleep 2
+sleep 3
+[ "$(count "LIST_CLOSED")" -ge 1 ] || fail "Senderliste: ▶ hat die Liste nicht geschlossen"
+[ "$(count "LIST_OPEN")" -eq "$o" ] || fail "Senderliste: ▶ hat die Liste geschlossen und gleich wieder geöffnet"
+# ▶ öffnet die Liste (kurz), ▶ nochmal schließt sie wieder
+c=$(count "LIST_CLOSED")
+adb shell input keyevent KEYCODE_DPAD_RIGHT
+sleep 3
+adb shell input keyevent KEYCODE_DPAD_RIGHT
+sleep 3
+[ "$(count "LIST_CLOSED")" -gt "$c" ] || fail "Senderliste: ▶ ▶ geht nicht zurück zum laufenden Sender"
+o=$(count "LIST_OPEN"); sleep 2
+[ "$(count "LIST_OPEN")" -eq "$o" ] || fail "Senderliste: nach ▶ ▶ ging die Liste wieder auf"
 
 log "== Test 2: Server schickt keine Daten mehr (tote Verbindung)"
 channel 2

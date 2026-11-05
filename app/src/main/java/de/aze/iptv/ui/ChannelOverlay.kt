@@ -77,6 +77,7 @@ fun ChannelOverlay(
     // Zurück: Senderliste → Gruppen → App beenden.
     var showGroups by remember { mutableStateOf(startInGroups) }
     var showMenu by remember { mutableStateOf(false) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { qaLog("LIST_CLOSED") } }
     BackHandler {
         when {
             showMenu -> showMenu = false
