@@ -729,7 +729,9 @@ fun PlayerScreen(
             .onPreviewKeyEvent { e ->
                 // Senderliste offen, aber ohne Fokus (z. B. nach Touch-Bedienung): ▲/▼ holt den Fokus in die Liste
                 if (overlay && !overlayFocused && e.type == KeyEventType.KeyDown &&
-                    (e.key == androidx.compose.ui.input.key.Key.DirectionUp || e.key == androidx.compose.ui.input.key.Key.DirectionDown)
+                    (e.key == androidx.compose.ui.input.key.Key.DirectionUp || e.key == androidx.compose.ui.input.key.Key.DirectionDown ||
+                        e.key == androidx.compose.ui.input.key.Key.DirectionLeft || e.key == androidx.compose.ui.input.key.Key.DirectionRight ||
+                        e.key == androidx.compose.ui.input.key.Key.DirectionCenter || e.key == androidx.compose.ui.input.key.Key.Enter)
                 ) { overlayKick++; qaLog("ROOT_KEY kick=$overlayKick"); return@onPreviewKeyEvent true }
                 false
             }
