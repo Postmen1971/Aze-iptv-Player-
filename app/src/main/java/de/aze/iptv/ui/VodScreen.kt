@@ -124,6 +124,10 @@ fun VodScreen(app: AppController, startWithSeries: Boolean, onExit: () -> Unit, 
         }
         return
     }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        CoverUrls.vodOpen = true
+        onDispose { CoverUrls.vodOpen = false }
+    }
     val src = vodSources[sourceIdx.coerceIn(0, vodSources.lastIndex)]
     val api = remember(src.id, src.url, src.user) { app.vodProvider(src) }
 
@@ -444,6 +448,8 @@ object CoverUrls {
     const val PROXY = "https://images.weserv.nl/"
     @Volatile var proxy = false
     @Volatile var tmdbFirst = false
+    /** Filme & Serien gerade offen → Vorrat-Auffüllen pausiert */
+    @Volatile var vodOpen = false
     /** eigener Bildlader nur fürs Vorladen (schmale Leitung, siehe MainActivity) */
     @Volatile var bg: coil.ImageLoader? = null
 
@@ -1173,4 +1179,42 @@ internal fun vodLanguage(name: String): String? = when {
     deCat.containsMatchIn(name) -> "de"
     trCat.containsMatchIn(name) || trChars.containsMatchIn(name) -> "tr"
     else -> null
+}
+
+
+/**
+ * Cover-Vorrat im Hintergrund auffüllen, solange Filme & Serien NICHT offen sind:
+ * alle Cover (bevorzugte Sprache zuerst, ohne ausgeblendete Kategorien) einmal holen und klein speichern.
+ * Danach gehen die Raster sofort auf – wie bei einem fertigen Cover-Paket.
+ */
+internal suspend fun runCoverStock(app: AppController, ctx: android.content.Context) {
+    val loader = CoverUrls.bg ?: return
+    delay(60_000) // erst nach dem Start (Sender soll in Ruhe anlaufen)
+    while (true) {
+        var fetched = 0
+        for (src in app.vodSources) for (series in listOf(false, true)) {
+            val api = runCatching { app.vodProvider(src) }.getOrNull() ?: continue
+            while (CoverUrls.vodOpen) delay(5_000)
+            val cats = runCatching { if (series) api.seriesCategories() else api.movieCategories() }.getOrNull() ?: continue
+            val all = runCatching { api.all(series) }.getOrNull() ?: continue
+            val skip = cats.filter {
+                app.isVodHidden(src.id, series, it.id) || (app.adultFilter && de.aze.iptv.data.AdultFilter.isAdult(it.name))
+            }.map { it.id }.toSet()
+            val langOf = cats.associate { it.id to vodLanguage(it.name) }
+            val order = if (app.vodLang == 1) listOf("tr", "de") else listOf("de", "tr")
+            val visible = all.filter { it.cat !in skip }
+            val queue = order.flatMap { l -> visible.filter { langOf[it.cat] == l } } + visible.filter { langOf[it.cat] !in order }
+            for (item in queue) {
+                if (de.aze.iptv.data.CoverStore.full) return
+                val key = item.poster ?: ("tmdb:" + item.name)
+                if (item.poster == null && !de.aze.iptv.data.Tmdb.enabled) continue
+                if (de.aze.iptv.data.CoverStore.has(key)) continue
+                while (CoverUrls.vodOpen) delay(5_000)
+                runCatching { loader.execute(posterRequest(ctx, item.poster, item.name, series)) }
+                fetched++
+            }
+        }
+        qaLog("COVER_STOCK Runde fertig: $fetched neu, ${de.aze.iptv.data.CoverStore.count} im Vorrat")
+        delay(6 * 60 * 60_000L) // alle 6 Stunden nach neuen Filmen schauen
+    }
 }

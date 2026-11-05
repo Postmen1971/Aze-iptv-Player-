@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         de.aze.iptv.data.HangLog.init(applicationContext)
         de.aze.iptv.data.Tmdb.init(applicationContext)
+        de.aze.iptv.data.CoverStore.init(applicationContext)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
@@ -106,6 +107,7 @@ class MainActivity : ComponentActivity() {
             .components { add(CoverFallback()) }
             .respectCacheHeaders(false)
             .build()
+        lifecycleScope.launch { de.aze.iptv.ui.runCoverStock(app, applicationContext) }
         coil.Coil.setImageLoader(
             coil.ImageLoader.Builder(this)
                 .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (vodFast) 0.25 else 0.15).build() }
@@ -284,12 +286,14 @@ object CoverStats {
     val over3s = java.util.concurrent.atomic.AtomicInteger(0)
     val failed = java.util.concurrent.atomic.AtomicInteger(0)
     val tmdb = java.util.concurrent.atomic.AtomicInteger(0)
+    val store = java.util.concurrent.atomic.AtomicInteger(0)
     @Volatile var host: String = "–"
     fun text(): String {
         val n = loaded.get()
-        if (n == 0 && failed.get() == 0) return "Noch keine Cover geladen – einmal Filme oder Serien öffnen."
+        if (n == 0 && failed.get() == 0 && store.get() == 0) return "Noch keine Cover geladen – einmal Filme oder Serien öffnen."
         return "Cover aus dem Netz: $n · Ø ${if (n > 0) totalMs.get() / n else 0} ms · langsamstes ${slowest.get()} ms · " +
-            "über 3 s: ${over3s.get()} · nicht gekommen: ${failed.get()} · von TMDB: ${tmdb.get()} · Server: $host"
+            "über 3 s: ${over3s.get()} · nicht gekommen: ${failed.get()} · von TMDB: ${tmdb.get()} · aus dem Vorrat: ${store.get()} · " +
+            "im Vorrat: ${de.aze.iptv.data.CoverStore.count} · Server: $host"
     }
 }
 
@@ -302,13 +306,28 @@ private class CoverFallback : coil.intercept.Interceptor {
             runCatching { android.net.Uri.parse(data).getQueryParameter("url") }.getOrNull() ?: data
         else data
 
+    /** geladenes Cover (liegt jetzt im Bild-Zwischenspeicher) klein in den eigenen Vorrat übernehmen */
+    private fun keep(ctx: android.content.Context, used: String, key: String) {
+        if (de.aze.iptv.data.CoverStore.full) return
+        coverKeepScope.launch {
+            runCatching {
+                val dc = coil.Coil.imageLoader(ctx).diskCache ?: return@runCatching
+                val saved = dc.openSnapshot(used)?.use { de.aze.iptv.data.CoverStore.saveFrom(it.data.toFile(), key) } == true
+                // großes Original wird nicht mehr gebraucht → Platz im Zwischenspeicher frei
+                if (saved) dc.remove(used)
+            }
+        }
+    }
+
+    private fun ok(r: coil.request.ImageResult?) = r != null && r !is coil.request.ErrorResult
+
     /** Ersatz von TMDB holen und laden; null = keiner gefunden */
-    private suspend fun fromTmdb(chain: coil.intercept.Interceptor.Chain, title: String, series: Boolean, provider: String?): coil.request.ImageResult? {
+    private suspend fun fromTmdb(chain: coil.intercept.Interceptor.Chain, title: String, series: Boolean, provider: String?, key: String): coil.request.ImageResult? {
         val url = de.aze.iptv.data.Tmdb.poster(title, series) ?: return null
         if (provider != null) de.aze.iptv.data.Tmdb.rememberReplacement(provider, url)
         val r = chain.proceed(chain.request.newBuilder().data(url).build())
-        if (r !is coil.request.ErrorResult) CoverStats.tmdb.incrementAndGet()
-        if (logged.getAndIncrement() < 12) de.aze.iptv.ui.qaLog("COVER TMDB-Ersatz ${if (r is coil.request.ErrorResult) "FEHLER" else "ok"}")
+        if (ok(r)) { CoverStats.tmdb.incrementAndGet(); keep(chain.request.context, url, key) }
+        if (logged.getAndIncrement() < 12) de.aze.iptv.ui.qaLog("COVER TMDB-Ersatz ${if (ok(r)) "ok" else "FEHLER"}")
         return r
     }
 
@@ -318,26 +337,34 @@ private class CoverFallback : coil.intercept.Interceptor {
         val title = req.parameters.value<String>("title")
         val series = req.parameters.value<Boolean>("series") ?: false
         val tmdb = title != null && de.aze.iptv.data.Tmdb.enabled
+        val provider = if (data == "tmdb:") null else originalOf(data)
+        val key = provider ?: ("tmdb:" + (title ?: ""))
+        // 1. eigener Vorrat auf dem Gerät: sofort da
+        de.aze.iptv.data.CoverStore.file(key)?.takeIf { it.exists() }?.let {
+            CoverStats.store.incrementAndGet()
+            return chain.proceed(req.newBuilder().data(it).build())
+        }
         // Anbieter hat gar kein Cover → gleich TMDB
-        if (data == "tmdb:") {
-            return (if (tmdb) fromTmdb(chain, title!!, series, null) else null)
+        if (provider == null) {
+            return (if (tmdb) fromTmdb(chain, title!!, series, null, key) else null)
                 ?: coil.request.ErrorResult(null, req, IllegalStateException("kein Cover"))
         }
-        val provider = originalOf(data)
         // Schalter „TMDB zuerst“: erst TMDB, Anbieter nur, wenn TMDB nichts hat
         if (tmdb && de.aze.iptv.ui.CoverUrls.tmdbFirst) {
-            fromTmdb(chain, title!!, series, null)?.let { if (it !is coil.request.ErrorResult) return it }
-            return chain.proceed(req.newBuilder().data(provider).build())
+            fromTmdb(chain, title!!, series, null, key)?.let { if (ok(it)) return it }
+            return chain.proceed(req.newBuilder().data(provider).build()).also { if (ok(it)) keep(req.context, provider, key) }
         }
         // dieses Anbieter-Cover kam schon einmal nicht → gleich den gemerkten Ersatz
-        if (tmdb) de.aze.iptv.data.Tmdb.replacementFor(provider)?.let { return chain.proceed(req.newBuilder().data(it).build()) }
+        if (tmdb) de.aze.iptv.data.Tmdb.replacementFor(provider)?.let { u ->
+            return chain.proceed(req.newBuilder().data(u).build()).also { if (ok(it)) keep(req.context, u, key) }
+        }
 
         val t0 = android.os.SystemClock.elapsedRealtime()
         // mit TMDB als Ersatz: höchstens 5 s auf den Anbieter warten
         val first = if (tmdb) kotlinx.coroutines.withTimeoutOrNull(5_000) { chain.proceed(req) } else chain.proceed(req)
         val ms = android.os.SystemClock.elapsedRealtime() - t0
         if (ms > 80) { // echter Download (nicht aus dem Zwischenspeicher)
-            if (first == null || first is coil.request.ErrorResult) CoverStats.failed.incrementAndGet()
+            if (!ok(first)) CoverStats.failed.incrementAndGet()
             else { CoverStats.loaded.incrementAndGet(); CoverStats.totalMs.addAndGet(ms) }
             if (ms > CoverStats.slowest.get()) CoverStats.slowest.set(ms)
             if (ms > 3_000) CoverStats.over3s.incrementAndGet()
@@ -346,26 +373,32 @@ private class CoverFallback : coil.intercept.Interceptor {
         val viaProxy = data.startsWith(de.aze.iptv.ui.CoverUrls.PROXY)
         // die ersten Cover je Start mit Ladezeit ins Hänger-Protokoll (nur echte Downloads, nicht aus dem Zwischenspeicher)
         if (ms > 150 && logged.getAndIncrement() < 6) {
-            de.aze.iptv.ui.qaLog("COVER ${if (viaProxy) "Bilderdienst" else "direkt"} $ms ms ${if (first == null) "ZU LANGSAM" else if (first is coil.request.ErrorResult) "FEHLER" else "ok"} " +
+            de.aze.iptv.ui.qaLog("COVER ${if (viaProxy) "Bilderdienst" else "direkt"} $ms ms ${if (first == null) "ZU LANGSAM" else if (!ok(first)) "FEHLER" else "ok"} " +
                 runCatching { android.net.Uri.parse(data).host }.getOrNull())
         }
-        if (viaProxy && (first == null || first is coil.request.ErrorResult || ms > 3_000)) {
+        if (viaProxy && (!ok(first) || ms > 3_000)) {
             // Bilderdienst bei diesem Anbieter langsam oder erfolglos → für diesen Programmstart direkt laden
             if (slow.incrementAndGet() >= 3 && de.aze.iptv.ui.CoverUrls.proxy) {
                 de.aze.iptv.ui.CoverUrls.proxy = false
                 de.aze.iptv.ui.qaLog("COVER Bilderdienst zu langsam – lade direkt")
             }
         }
-        if (first != null && first !is coil.request.ErrorResult) return first
+        if (ok(first)) { keep(req.context, data, key); return first!! }
         // Bilderdienst erfolglos → Original direkt vom Anbieter
         var result = first
         if (viaProxy && provider != data) {
             result = if (tmdb) kotlinx.coroutines.withTimeoutOrNull(5_000) { chain.proceed(req.newBuilder().data(provider).build()) }
                      else chain.proceed(req.newBuilder().data(provider).build())
-            if (result != null && result !is coil.request.ErrorResult) return result
+            if (ok(result)) { keep(req.context, provider, key); return result!! }
         }
         // Anbieter kaputt oder zu langsam → TMDB
-        if (tmdb) fromTmdb(chain, title!!, series, provider)?.let { if (it !is coil.request.ErrorResult) return it }
+        if (tmdb) fromTmdb(chain, title!!, series, provider, key)?.let { if (ok(it)) return it }
         return result ?: coil.request.ErrorResult(null, req, java.io.IOException("Cover zu langsam"))
     }
 }
+
+/** verkleinert geladene Cover nacheinander in den Vorrat (eine Aufgabe zur Zeit, blockiert nichts) */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+private val coverKeepScope = kotlinx.coroutines.CoroutineScope(
+    kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO.limitedParallelism(1),
+)
