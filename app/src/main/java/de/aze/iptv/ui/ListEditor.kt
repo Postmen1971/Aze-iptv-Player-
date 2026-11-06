@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -131,23 +132,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             // ---- Kategorien ----
             Column(Modifier.width(380.dp).fillMaxHeight().background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp)) {
                 Text("Kategorien (${groups.count { !it.hidden }}/${groups.size} sichtbar)", color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp))
-                LazyColumn(
-                    state = groupState, verticalArrangement = Arrangement.spacedBy(3.dp),
-                    modifier = Modifier.onPreviewKeyEvent { e ->
-                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight && movingGroup == null) {
-                            moveScope.launch {
-                                // nur scrollen, wenn nötig – und erst fokussieren, wenn alles platziert ist
-                                // (sonst Absturz „BringIntoViewRequester … before parents are placed“)
-                                if (channelState.firstVisibleItemIndex > 0) channelState.scrollToItem(0)
-                                androidx.compose.runtime.withFrameNanos { }
-                                androidx.compose.runtime.withFrameNanos { }
-                                kotlinx.coroutines.delay(30)
-                                runCatching { firstChannelReq.requestFocus() }
-                            }
-                            true
-                        } else false
-                    },
-                ) {
+                LazyColumn(state = groupState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     itemsIndexed(groups, key = { _, g -> g.key }) { i, g ->
                         ManageRow(
                             title = g.name,
@@ -157,7 +142,11 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                             active = selected?.key == g.key,
                             modifier = (if (i == 0) Modifier.focusRequester(firstGroup) else Modifier)
                                 .then(if (movingGroup == g.key) Modifier.focusRequester(movingReq) else Modifier)
-                                .then(if (selected?.key == g.key && movingGroup == null) Modifier.focusRequester(selectedGroupReq) else Modifier),
+                                .then(if (selected?.key == g.key && movingGroup == null) Modifier.focusRequester(selectedGroupReq) else Modifier)
+                                // ▶ springt über die normale Fokus-Steuerung zum ersten Sender (kein eigenes requestFocus → kein Absturz)
+                                .focusProperties {
+                                    right = if (channelState.layoutInfo.visibleItemsInfo.any { it.index == 0 }) firstChannelReq else FocusRequester.Default
+                                },
                             onFocus = { if (movingGroup == null) selectedKey = g.key; qaLog("SORT_G_FOCUS $i") },
                             onToggle = { if (sorting) movingGroup = g.key else app.toggleGroupHidden(g.key) },
                             onMoveStart = { movingGroup = g.key; qaLog("SORT_START ${g.name} $i") },
@@ -182,15 +171,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                         "${g.name} – ${g.channels.count { it.key !in hidden }}/${g.channels.size} Sender sichtbar" + if (g.hidden) " (Kategorie ausgeblendet)" else "",
                         color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp),
                     )
-                    LazyColumn(
-                        state = channelState, verticalArrangement = Arrangement.spacedBy(3.dp),
-                        modifier = Modifier.onPreviewKeyEvent { e ->
-                            if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && movingChannel == null) {
-                                runCatching { selectedGroupReq.requestFocus() }
-                                true
-                            } else false
-                        },
-                    ) {
+                    LazyColumn(state = channelState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         itemsIndexed(g.channels, key = { _, c -> c.key }) { ci, ch ->
                             val nr = app.lineup.byKey[ch.key]?.number
                             ManageRow(
@@ -205,7 +186,11 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 moving = movingChannel == ch.key,
                                 active = false,
                                 modifier = (if (movingChannel == ch.key) Modifier.focusRequester(movingReq) else Modifier)
-                                    .then(if (ci == 0) Modifier.focusRequester(firstChannelReq) else Modifier),
+                                    .then(if (ci == 0) Modifier.focusRequester(firstChannelReq) else Modifier)
+                                    .focusProperties {
+                                        val si = app.editGroups.indexOfFirst { it.key == selectedKey }
+                                        left = if (groupState.layoutInfo.visibleItemsInfo.any { it.index == si }) selectedGroupReq else FocusRequester.Default
+                                    },
                                 onFocus = { qaLog("SORT_CH_FOCUS $ci") },
                                 onToggle = { if (sorting) movingChannel = ch.key else app.toggleChannelHidden(ch.key) },
                                 onMoveStart = { movingChannel = ch.key; qaLog("SORT_CH_START ${ch.name} $ci") },
