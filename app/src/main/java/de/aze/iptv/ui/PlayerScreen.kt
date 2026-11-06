@@ -394,6 +394,7 @@ fun PlayerScreen(
     var skorLoading by remember { mutableStateOf(false) }
     // aus „Fußball heute“ im Menü der Filme: hier öffnen
     LaunchedEffect(app.pendingFootball) { if (app.pendingFootball) { app.pendingFootball = false; football = true } }
+    LaunchedEffect(Unit) { if (app.testSkorText) { app.testSkorText = false; delay(3_000); teletext = true; skorLoading = true } }
     // Versteckter Videotext rechnet nicht weiter im Hintergrund – bleibt aber 10 Minuten bereit (zweites Öffnen sofort)
     LaunchedEffect(teletext) {
         teletextWeb?.let { if (teletext) it.onResume() else it.onPause() }
@@ -1109,6 +1110,11 @@ fun PlayerScreen(
                 teletextWeb = null
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ runCatching { dead?.destroy() } }, 500)
             })?.also { teletextWeb = it }
+            if (w == null) LaunchedEffect(Unit) {
+                qaLog("SKOR_FAIL Anzeige ließ sich nicht anlegen")
+                app.message = "SkorText konnte nicht starten – bitte nochmal versuchen"
+                teletext = false
+            }
             if (w != null) TeletextView(web = w, modifier = Modifier.fillMaxSize())
             if (skorLoading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1140,6 +1146,7 @@ fun PlayerScreen(
                 QuickItem("Fußball", "SkorText") {
                     quickMenu = false
                     teletext = true
+                    skorLoading = teletextWeb == null
                 },
                 QuickItem("Spiele", "heute") {
                     quickMenu = false

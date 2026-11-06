@@ -41,11 +41,8 @@ class MainActivity : ComponentActivity() {
         de.aze.iptv.data.Tmdb.init(applicationContext)
         de.aze.iptv.data.CoverStore.init(applicationContext)
         de.aze.iptv.data.VodDisk.init(applicationContext)
-        // Web-Anzeige (für SkorText) im Hintergrund vorwärmen: das erste Öffnen lädt sonst erst die ganze Chromium-Bibliothek
-        Thread {
-            Thread.sleep(4_000)
-            runCatching { android.webkit.WebSettings.getDefaultUserAgent(applicationContext) }
-        }.apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
+        // KEIN Vorwärmen der Web-Anzeige im Hintergrund-Thread: Chromium bindet sich dann an diesen Thread,
+        // und SkorText ließ sich danach gar nicht mehr öffnen.
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
@@ -78,6 +75,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             app.testOpenVod = intent?.getBooleanExtra("aze_test_vod", false) == true
+            app.testSkorText = intent?.getBooleanExtra("aze_test_skortext", false) == true
             // Herzschlag aus dem Haupt-Thread alle 0,25 s: Lücken > 1,5 s = App hing (prüft der Emulator-Test)
             lifecycleScope.launch { while (true) { kotlinx.coroutines.delay(250); lastBeat = android.os.SystemClock.uptimeMillis(); de.aze.iptv.ui.qaLog("BEAT ${beatNo++}") } }
             // Stockt der Haupt-Thread > 1 s: festhalten, WO er gerade hängt (zeigt der Emulator-Test als STALL)

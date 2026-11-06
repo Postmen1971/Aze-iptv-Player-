@@ -927,6 +927,8 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     var testOpenVod = false
     /** „Fußball heute“ aus dem Menü der Filme gewählt → im Fernsehen öffnen */
     var pendingFootball by mutableStateOf(false)
+    /** Test-Zugang: SkorText gleich öffnen (nur im QA-Build) */
+    var testSkorText = false
 
     /** Der zuletzt geschaute Sender (für OK = zurückspringen). */
     private var previousKey: String? = null
