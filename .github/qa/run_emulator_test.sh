@@ -71,13 +71,16 @@ max_gap() {
 }
 
 # ── Touch (Tablet): die App (Test-Build) schreibt die Position jedes Knopfs ins Protokoll (POS Name|x|y|sichtbare Höhe)
+# echte Bildschirmgröße wie gerade gedreht (wm size zeigt im Querformat die Hochformat-Werte!)
+scr() { adb shell dumpsys window displays 2>/dev/null | grep -o 'cur=[0-9]*x[0-9]*' | head -1 | cut -d= -f2; }
 tap() {  # tap "Name": Knopf antippen (scrollt bei Bedarf); 1 = nicht da
-  local H; H=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1 | cut -dx -f2)
+  local H; H=$(scr | cut -dx -f2); H=${H:-1000}
   for try in 1 2 3 4 5; do
     local l; l=$(qa | grep -F -e "POS $1|" -e "GONE $1" | sed 's/.*AzeQA[^:]*: //' | tail -1)
     case "$l" in
       "POS $1|"*) local x y v; IFS='|' read -r _ x y v <<<"$l"
         if [ "$v" -ge 10 ]; then adb shell input tap "$x" "$y"; sleep 1.5; return 0; fi
+        echo "  (tap $1: verdeckt bei y=$y, Bildschirm-Höhe $H → wischen)"
         if [ "$y" -gt $((H/2)) ]; then adb shell input swipe "$x" $((H*3/4)) "$x" $((H/4)) 400; else adb shell input swipe "$x" $((H/4)) "$x" $((H*3/4)) 400; fi
         sleep 1 ;;
       *) sleep 1 ;;
@@ -424,7 +427,7 @@ for b in "☰ Sender" "⋯ Menü" "⚽ Heute"; do
   adb shell input tap 300 300; sleep 2
   if tap "$b"; then sleep 3; shot "test13-knopf"
     if [ "$b" = "☰ Sender" ]; then   # Senderliste: Tippen aufs Bild daneben schließt sie (Zurück führt zu den Gruppen)
-      N=$(count "LIST_CLOSED"); W=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); adb shell input tap $(( ${W%x*} - 15 )) $(( ${W#*x} / 2 )); sleep 2
+      N=$(count "LIST_CLOSED"); W=$(scr); adb shell input tap $(( ${W%x*} - 15 )) $(( ${W#*x} / 2 )); sleep 2
       [ "$(count "LIST_CLOSED")" -gt "$N" ] || { fail "Touch: Senderliste schließt nicht beim Tippen daneben"; adb shell input keyevent KEYCODE_BACK; }
     else
       adb shell input keyevent KEYCODE_BACK; sleep 2
@@ -434,7 +437,7 @@ for b in "☰ Sender" "⋯ Menü" "⚽ Heute"; do
 done
 
 # ---- weitere Touch-Wege: Multi-View, Senderliste → Menü → Filme/Suchen, Sender antippen, Fußball, Schnellmenü
-WH=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); SW=${WH%x*}; SH=${WH#*x}
+WH=$(scr); SW=${WH%x*}; SH=${WH#*x}; log "Bildschirm: $WH"
 bar() { adb shell input tap $((SW/3)) $((SH/3)); sleep 2; }
 swipe_r() { adb shell input swipe 60 $((SH/2)) $((SW/2)) $((SH/2)) 300; sleep 1.5; }
 seen_log() { [ "$(count "$1")" -gt "$2" ]; }
