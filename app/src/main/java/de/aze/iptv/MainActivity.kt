@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        guardMainLoop()
         de.aze.iptv.data.HangLog.init(applicationContext)
         de.aze.iptv.data.Tmdb.init(applicationContext)
         de.aze.iptv.data.CoverStore.init(applicationContext)
@@ -73,7 +74,25 @@ class MainActivity : ComponentActivity() {
             }
             app.testOpenVod = intent?.getBooleanExtra("aze_test_vod", false) == true
             // Herzschlag aus dem Haupt-Thread alle 0,25 s: Lücken > 1,5 s = App hing (prüft der Emulator-Test)
-            lifecycleScope.launch { while (true) { kotlinx.coroutines.delay(250); de.aze.iptv.ui.qaLog("BEAT") } }
+            lifecycleScope.launch { while (true) { kotlinx.coroutines.delay(250); lastBeat = android.os.SystemClock.uptimeMillis(); de.aze.iptv.ui.qaLog("BEAT") } }
+            // Stockt der Haupt-Thread > 1 s: festhalten, WO er gerade hängt (zeigt der Emulator-Test als STALL)
+            if (!stallWatch) {
+                stallWatch = true
+                val main = android.os.Looper.getMainLooper().thread
+                Thread {
+                    var reported = 0L
+                    while (true) {
+                        Thread.sleep(200)
+                        val gap = android.os.SystemClock.uptimeMillis() - lastBeat
+                        if (lastBeat > 0 && gap > 1_000 && reported != lastBeat) {
+                            reported = lastBeat
+                            val st = main.stackTrace.filter { !it.className.startsWith("java.") && !it.className.startsWith("android.os.MessageQueue") }
+                                .take(14).joinToString(" < ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" }
+                            de.aze.iptv.ui.qaLog("STALL ${gap} ms: $st")
+                        }
+                    }
+                }.apply { isDaemon = true; name = "qa-stall" }.start()
+            }
             // Lippensynchron-Wert für den Test setzen
             intent?.getIntExtra("aze_test_audio_delay", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE }?.let { app.updateAudioDelay(it) }
             // zusätzlicher Versatz für einen Sender (Schlüssel = Adresse)
@@ -425,3 +444,29 @@ private class CoverFallback : coil.intercept.Interceptor {
 private val coverKeepScope = kotlinx.coroutines.CoroutineScope(
     kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO.limitedParallelism(1),
 )
+
+
+@Volatile private var lastBeat = 0L
+@Volatile private var stallWatch = false
+@Volatile private var loopGuarded = false
+
+/**
+ * Schutz vor einem bekannten Fehler in Jetpack Compose: „Expected BringIntoViewRequester to not be used before
+ * parents are placed“ – tritt auf, wenn ein Eintrag den Fokus bekommt, während seine Liste gerade neu aufgebaut wird.
+ * Er ist harmlos (es wird nur nicht zum Eintrag gescrollt), beendete aber die ganze App. Nur DIESER Fehler wird
+ * abgefangen und protokolliert; alle anderen Fehler laufen wie gewohnt weiter.
+ */
+private fun guardMainLoop() {
+    if (loopGuarded) return
+    loopGuarded = true
+    android.os.Handler(android.os.Looper.getMainLooper()).post {
+        while (true) {
+            try {
+                android.os.Looper.loop()
+            } catch (e: IllegalStateException) {
+                if (e.message?.contains("BringIntoViewRequester") != true) throw e
+                de.aze.iptv.ui.qaLog("COMPOSE_BRING_INTO_VIEW abgefangen")
+            }
+        }
+    }
+}

@@ -808,7 +808,7 @@ fun PlayerScreen(
                 }
                 if (arrow != null && app.keyAction(arrow.second) != KeyAction.NONE) {
                     when (e.type) {
-                        KeyEventType.KeyDown -> if (e.nativeKeyEvent.repeatCount == 0) { arrowLong = false; arrowDown = code }
+                        KeyEventType.KeyDown -> if (e.nativeKeyEvent.repeatCount == 0) { arrowLong = false; arrowDown = code; qaLog("ARROW down $code") }
                             else if (!arrowLong && arrowDown == code) { arrowLong = true; perform(app.keyAction(arrow.second)) }
                         KeyEventType.KeyUp -> { if (!arrowLong && arrowDown == code) perform(app.keyAction(arrow.first)); arrowLong = false; arrowDown = 0 }
                     }

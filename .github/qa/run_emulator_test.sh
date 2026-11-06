@@ -19,6 +19,7 @@ beat_gap() { adb logcat -d -s AzeQA:I 2>/dev/null | grep ": BEAT$" | awk -v sinc
   END { printf "%.1f", max+0 }'; }
 # Alarm: Lücke über 1,5 s UND deutlich länger (+0,7 s) als beim normalen Zappen im selben Emulator
 hang_check() { local g; g=$(beat_gap "$2"); log "Herzschlag $1: längste Lücke ${g} s (Vergleich Zappen: ${BASE_GAP:-0} s)"
+  qa | grep "STALL" | tail -4 | while IFS= read -r l; do log "  $l"; done
   awk -v g="$g" -v b="${BASE_GAP:-0}" 'BEGIN{exit !(g>1.5 && g>b+0.7)}' && fail "$1: App hing ${g} s (Haupt-Thread blockiert)"; true; }
 ticks() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F " TICK " ; }
 count() { qa | grep -cF -- "$1" || true; }
@@ -347,10 +348,11 @@ log "== Test 11: Rundgang – Schnellmenü, Suche, Infoleiste (▶ lang), Sender
 adb shell am start -S -n $PKG/.MainActivity >/dev/null
 sleep 3; wait_for "FIRST_FRAME" 1 30; sleep 3
 T11=$(adb shell date +%H:%M:%S | tr -d '\r')
-adb shell input keyevent KEYCODE_PROG_GREEN; sleep 2; shot "test11-schnellmenue"; adb shell input keyevent KEYCODE_BACK; sleep 2
-adb shell input keyevent KEYCODE_PROG_YELLOW; sleep 2; shot "test11-suche"; adb shell input keyevent KEYCODE_BACK; sleep 2
 adb shell input keyevent --longpress KEYCODE_DPAD_RIGHT; sleep 2; shot "test11-infoleiste"
-[ "$(count "INFO_BAR an")" -ge 1 ] || fail "Infoleiste: ▶ lang hat sie nicht geöffnet"
+[ "$(count "INFO_BAR an")" -ge 1 ] || fail "Infoleiste: ▶ lang hat sie nicht geöffnet ($(qa | grep -E "ARROW|INFO_BAR" | tail -3 | tr '\n' ' '))"
+sleep 6
+adb shell input keyevent KEYCODE_PROG_GREEN; sleep 2; shot "test11-schnellmenue"; adb shell input keyevent KEYCODE_BACK; sleep 2
+adb shell input keyevent KEYCODE_PROG_YELLOW; sleep 2; shot "test11-suche"; adb shell input keyevent KEYCODE_BACK; sleep 2; adb shell input keyevent KEYCODE_BACK; sleep 2
 adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 2; shot "test11-senderliste"
 [ "$(count "LIST_OPEN")" -ge 1 ] || fail "Senderliste: ◀ hat sie nicht geöffnet"
 adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 2
