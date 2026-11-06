@@ -116,15 +116,29 @@ jobs:
           name: qa-apk
           path: qa
 
+      # Test-Videos nur einmal erzeugen und dann aus dem Zwischenspeicher nehmen (ffmpeg-Installation hing öfter)
+      - name: Test-Videos aus dem Zwischenspeicher
+        id: media
+        uses: actions/cache@v4
+        with:
+          path: .github/qa/media
+          key: qa-media-${{ hashFiles('.github/qa/make_media.sh') }}
+
       - name: Test-Sender erzeugen und Test-Server starten
         timeout-minutes: 12
         run: |
-          # ffmpeg: höchstens 2 Versuche à 4 min (Paketserver hängen manchmal)
-          for i in 1 2; do
-            command -v ffmpeg >/dev/null && break
-            timeout 240 bash -c 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg' || echo "ffmpeg-Installation Versuch $i fehlgeschlagen"
-          done
-          bash .github/qa/make_media.sh
+          if [ "${{ steps.media.outputs.cache-hit }}" != "true" ]; then
+            # ffmpeg: erst Paketquelle (max. 4 min), sonst fertiges Programm herunterladen
+            command -v ffmpeg >/dev/null || timeout 240 bash -c 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg' || echo "apt fehlgeschlagen"
+            if ! command -v ffmpeg >/dev/null; then
+              curl -sSfL --retry 3 -o /tmp/ff.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+              mkdir -p /tmp/ff && tar -xJf /tmp/ff.tar.xz -C /tmp/ff --strip-components=1
+              sudo cp /tmp/ff/ffmpeg /usr/local/bin/ffmpeg
+            fi
+            bash .github/qa/make_media.sh
+          else
+            echo "Test-Videos aus dem Zwischenspeicher"; ls -la .github/qa/media
+          fi
           nohup python3 .github/qa/test_server.py 8090 > qa-server.log 2>&1 &
           sleep 2
           curl -sf http://127.0.0.1:8090/list.m3u | head -3
