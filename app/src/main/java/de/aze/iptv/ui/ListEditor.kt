@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -62,6 +63,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     // Je Eintrag ein fester FocusRequester (die Modifier-Kette eines Eintrags ändert sich nie –
     // wechselnde Kette am fokussierten Eintrag führte zum Absturz „BringIntoViewRequester … before parents are placed“)
     val reqs = remember { HashMap<String, FocusRequester>() }
+    var panelInfo by remember { mutableStateOf("") }
     fun req(key: String) = reqs.getOrPut(key) { FocusRequester() }
     fun follow(state: androidx.compose.foundation.lazy.LazyListState, idx: Int, key: String) {
         if (idx < 0) return
@@ -95,6 +97,8 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
         withFrameNanos { }
         app.editGroups.firstOrNull()?.let { runCatching { req("g:" + it.key).requestFocus() } }
         qaLog("SORT_OPEN ${app.editGroups.size} Gruppen")
+        withFrameNanos { }
+        qaLog("SORT_LAYOUT $panelInfo")
     }
 
     val groups = app.editGroups
@@ -134,7 +138,13 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             // ---- Kategorien ----
             Column(Modifier.width(groupW).fillMaxHeight().background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp)) {
                 Text("Kategorien (${groups.count { !it.hidden }}/${groups.size} sichtbar)", color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp))
-                LazyColumn(state = groupState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                LazyColumn(
+                    state = groupState, verticalArrangement = Arrangement.spacedBy(3.dp),
+                    modifier = Modifier.onPreviewKeyEvent { e ->
+                        if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) qaLog("SORT_RIGHT $panelInfo")
+                        false
+                    },
+                ) {
                     itemsIndexed(groups, key = { _, g -> g.key }) { i, g ->
                         ManageRow(
                             title = g.name,
@@ -160,7 +170,11 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                 }
             }
             // ---- Sender der gewählten Kategorie ----
-            Column(Modifier.weight(1f).fillMaxHeight().background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp)) {
+            Column(
+                Modifier.weight(1f).fillMaxHeight()
+                    .onGloballyPositioned { c -> panelInfo = "Bildschirm ${screenW.value.toInt()} dp · Kategorien ${groupW.value.toInt()} dp · Sender-Spalte ${c.size.width} px × ${c.size.height} px" }
+                    .background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp),
+            ) {
                 val g = selected
                 if (g != null) {
                     Text(

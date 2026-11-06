@@ -311,7 +311,7 @@ sleep 1
 adb shell input keyevent KEYCODE_DPAD_CENTER
 sleep 2
 shot "test9b-sender-sortiert"
-note "Sender sortieren" "$(qa | grep -E "SORT_CH_(START|END)")"
+note "Sender sortieren" "$(qa | grep -E "SORT_(LAYOUT|RIGHT|CH_START|CH_END|CH_FOCUS 0)|BRING" | tail -12)"
 qa | grep -q "SORT_CH_END .* 0$" || fail "Sortieren: Sender kam nicht ganz nach oben (Fokus verloren / Liste scrollt nicht mit)"
 alive || fail "App nach dem Sortieren nicht mehr da"
 
