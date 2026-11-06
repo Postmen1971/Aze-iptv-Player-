@@ -152,13 +152,13 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             CategoryItem("Fernsehen", selected = false, icon = LineIcon.TV, modifier = Modifier.focusRequester(firstFocus), onFocus = { if (app.hasAnySource) onTv = true }, onClick = onClose)
             cats.forEachIndexed { i, name ->
                 // gewählter Bereich nur markiert, solange nicht „Fernsehen“ den Fokus hat (sonst zwei Markierungen gleichzeitig)
-                CategoryItem(name, selected = i == cat && !onTv, icon = CATEGORY_ICON[name], onFocus = { onTv = false; cat = i }, onClick = { cat = i })
+                CategoryItem(name, selected = i == cat && !onTv, icon = CATEGORY_ICON[name], onFocus = { onTv = false; cat = i }, onClick = { onTv = false; cat = i; qaLog("SET_CAT $name") })
             }
             Spacer(Modifier.height(14.dp))
             CategoryItem(
                 if (app.expertMode) "Erweitert: an" else "Erweitert: aus",
                 selected = app.expertMode, onFocus = {},
-                onClick = { app.updateExpertMode(!app.expertMode); cat = cats.indexOf("System") },
+                onClick = { app.updateExpertMode(!app.expertMode); onTv = false; cat = cats.indexOf("System") },
             )
         }
         Column(
@@ -189,7 +189,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             }
             CATEGORY_HINT[cats.getOrNull(cat)]?.let { Text(it, color = Palette.TextMuted, fontSize = 14.sp) }
             when (cats.getOrNull(cat)) {
-                "Suchen" -> SettingsSearch(onGo = { name -> cat = cats.indexOf(name).coerceAtLeast(0) })
+                "Suchen" -> SettingsSearch(onGo = { name -> onTv = false; cat = cats.indexOf(name).coerceAtLeast(0) })
                 "Sender & Playlists" -> {
                     PhoneInputSection(app)
                     PlaylistSection(app)

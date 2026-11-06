@@ -70,6 +70,35 @@ max_gap() {
   ticks | tail -n +$(($1+1)) | awk '{ if ($0 ~ / img=0 /) { if (seen) { run++; if (run>max) max=run } } else { seen=1; run=0 } } END { print max+0 }'
 }
 
+# ── Touch (Tablet): Bildschirm per uiautomator lesen, Text antippen ──
+ui_dump() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml 2>/dev/null; }
+seen() { ui_dump | python3 -c '
+import sys,re,html
+t=sys.argv[1]; x=sys.stdin.read()
+print(sum(1 for m in re.finditer(r"(?:text|content-desc)=\"([^\"]*)\"",x) if t in html.unescape(m.group(1))))' "$1"; }
+tap() {  # tap "Text": Element mit genau diesem Text antippen (scrollt bei Bedarf); 1 = nicht gefunden
+  local H; H=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1 | cut -dx -f2)
+  for try in 1 2 3 4; do
+    local pos; pos=$(ui_dump | python3 -c '
+import sys,re,html
+t=sys.argv[1]; H=int(sys.argv[2]); x=sys.stdin.read()
+nodes=[dict(re.findall(r"([\w-]+)=\"([^\"]*)\"",m.group(0))) for m in re.finditer(r"<node [^>]*>",x)]
+txt=lambda a: [html.unescape(a.get("text","")).strip(), html.unescape(a.get("content-desc","")).strip()]
+hit=[a for a in nodes if t in txt(a)] or ([a for a in nodes if any(v.startswith(t) for v in txt(a))] if len(t)>2 else [])
+for a in hit[:1]:
+    b=list(map(int,re.findall(r"\d+",a["bounds"]))); cx=(b[0]+b[2])//2; cy=(b[1]+b[3])//2
+    print(cx,cy, "unten" if cy>H-40 else ("oben" if cy<20 else "ok")); break' "$1" "${H:-1080}")
+    [ -z "$pos" ] && { sleep 1; continue; }
+    set -- "$1" $pos
+    case "$4" in
+      ok) adb shell input tap "$2" "$3"; sleep 1.5; return 0 ;;
+      unten) adb shell input swipe "$2" $((H*3/4)) "$2" $((H/4)) 400; sleep 1 ;;
+      oben) adb shell input swipe "$2" $((H/4)) "$2" $((H*3/4)) 400; sleep 1 ;;
+    esac
+  done
+  return 1
+}
+
 channel() {  # Sender per Zifferntaste wählen
   adb shell input keyevent "KEYCODE_$1"; sleep 0.3; adb shell input keyevent KEYCODE_DPAD_CENTER
 }
@@ -380,6 +409,38 @@ sleep 5; shot "test12-skortext"
 note "SkorText" "$(qa | grep -E "SKOR_" | head -12)"
 adb shell input keyevent KEYCODE_BACK; sleep 2
 alive || fail "SkorText: App nach dem Schließen nicht mehr da"
+
+log "== Test 13: Tablet (Touch) – alles antippbar, überall zurück"
+T13=$(date +%H:%M:%S)
+adb shell am start -S -n $PKG/.MainActivity >/dev/null; sleep 8
+adb shell input tap 300 300; sleep 2; shot "test13-knopfleiste"
+tap "⚙ Einstellungen" || fail "Touch: Knopf „⚙ Einstellungen“ nicht da (Knopfleiste nach Tippen aufs Bild)"
+sleep 2
+for d in 0 0 0 0; do tap "$d" || { fail "Touch: PIN-Taste $d nicht antippbar"; break; }; done
+sleep 2; shot "test13-einstellungen"
+for c in "Sender & Playlists" "Senderliste & Favoriten" "Filme & Serien" "Fußball" "Bild & Ton" "Programmzeitschrift" "Fernbedienung" "Aussehen" "PIN & Kinderschutz" "Sichern" "System" "Hilfe" "Über" "Suchen"; do
+  if ! tap "$c"; then fail "Touch: Bereich „$c“ nicht antippbar"; continue; fi
+  [ "$(seen "OK = zurück zum Fernsehen")" -eq 0 ] && [ "$(seen "$c")" -ge 2 ] || { fail "Touch: Bereich „$c“ öffnet sich nicht"; shot "test13-$c"; }
+done
+tap "Senderliste & Favoriten"; tap "Senderliste bearbeiten öffnen" || fail "Touch: „Senderliste bearbeiten öffnen“ nicht antippbar"
+sleep 3; shot "test13-senderliste"
+[ "$(seen "Senderliste verwalten")" -ge 1 ] || fail "Touch: Senderliste verwalten öffnet sich nicht"
+tap "›" || fail "Touch: „›“ (Sender der Kategorie) nicht antippbar"
+tap "Sortieren" || fail "Touch: „Sortieren“ nicht antippbar"
+tap "Sortieren beenden" || fail "Touch: „Sortieren beenden“ nicht antippbar"
+adb shell input keyevent KEYCODE_BACK; sleep 2
+[ "$(seen "Senderliste verwalten")" -eq 0 ] || fail "Touch: Zurück schließt „Senderliste verwalten“ nicht"
+adb shell input keyevent KEYCODE_BACK; sleep 2
+[ "$(seen "Sichern")" -eq 0 ] || fail "Touch: Zurück schließt die Einstellungen nicht"
+for b in "☰ Sender" "⋯ Menü" "⚽ Heute"; do
+  adb shell input tap 300 300; sleep 2
+  if tap "$b"; then sleep 3; shot "test13-$b"; adb shell input keyevent KEYCODE_BACK; sleep 2
+  else fail "Touch: Knopf „$b“ nicht da"; fi
+  alive || { fail "Touch: App nach „$b“ weg"; break; }
+done
+note "Touch-Test" "$(qa | grep -E "SET_CAT|LIST_|SORT_" | tail -30)"
+alive || fail "Touch: App nicht mehr da"
+hang_check "Touch" "$T13"
 
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
