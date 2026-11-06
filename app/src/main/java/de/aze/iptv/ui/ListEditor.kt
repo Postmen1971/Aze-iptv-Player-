@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -108,15 +110,10 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     val hidden = app.hiddenChannels
 
     Column(Modifier.fillMaxSize().background(Palette.ScreenBrush).padding(horizontal = 20.dp, vertical = 16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(Modifier.weight(1f)) {
-                Text("Senderliste verwalten", color = Palette.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text(
-                    if (sorting) "SORTIEREN: OK = Kategorie bzw. Sender aufnehmen · ▲▼ verschieben · OK = ablegen · ▶ zu den Sendern · fertig: „Sortieren beenden“"
-                    else "OK = ein-/ausblenden · OK lang = verschieben (▲▼, OK legt ab) · Menü = umbenennen · ◀ ▶ wechselt zwischen Kategorien und Sendern",
-                    color = if (sorting) Palette.Highlight else Palette.TextMuted, fontSize = 12.sp,
-                )
-            }
+        // Kopfzeile: auf schmalen Bildschirmen (Handy, Hochformat) Knöpfe unter den Titel, sonst daneben –
+        // vorher wurde der Hinweistext so schmal, dass die Kopfzeile den ganzen Bildschirm füllte (Sender-Spalte 0 px hoch)
+        val narrow = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp < 800
+        val buttons: @Composable () -> Unit = {
             TvButton(if (sorting) "Sortieren beenden" else "Sortieren", selected = sorting, onClick = {
                 sorting = !sorting
                 movingGroup = null; movingChannel = null
@@ -126,6 +123,27 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                 TvButton("Zurücksetzen", onClick = { app.resetGroup(g.key) })
             }
             TvButton("Fertig", onClick = onClose)
+        }
+        val title: @Composable () -> Unit = {
+            Text("Senderliste verwalten", color = Palette.Text, fontSize = if (narrow) 20.sp else 24.sp, fontWeight = FontWeight.Bold)
+            Text(
+                if (sorting) "SORTIEREN: OK = Kategorie bzw. Sender aufnehmen · ▲▼ verschieben · OK = ablegen · ▶ zu den Sendern · fertig: „Sortieren beenden“"
+                else "OK = ein-/ausblenden · OK lang = verschieben (▲▼, OK legt ab) · Menü = umbenennen · ◀ ▶ wechselt zwischen Kategorien und Sendern",
+                color = if (sorting) Palette.Highlight else Palette.TextMuted, fontSize = 12.sp,
+                maxLines = if (narrow) 2 else 3, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (narrow) {
+            title()
+            Row(
+                Modifier.padding(top = 6.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) { buttons() }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f)) { title() }
+                buttons()
+            }
         }
         if (groups.isEmpty()) {
             Text("Noch keine Sender geladen.", color = Palette.TextMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 20.dp))

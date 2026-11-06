@@ -78,8 +78,8 @@ channel() {  # Sender per Zifferntaste wählen
 # „Senderliste verwalten“ hatte dort für die Sender-Spalte 0 px Höhe)
 adb shell wm size 1920x1080 || true
 adb shell wm density 320 || true
-adb shell settings put system user_rotation 1 || true
 adb shell settings put system accelerometer_rotation 0 || true
+adb shell settings put system user_rotation 1 || true
 log "Installiere $APK"
 adb install -r "$APK" || { echo "::error::Installation fehlgeschlagen"; exit 1; }
 adb logcat -G 16M 2>/dev/null || true
