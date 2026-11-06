@@ -41,8 +41,8 @@ burn() {
   local f="caps/$name.txt" filters="" i=0 prev_t="" prev_txt=""
   while IFS='|' read -r t txt; do
     if [ -n "$prev_t" ] && [ -n "$prev_txt" ]; then
-      i=$((i+1)); printf '%s' "$prev_txt" > "caps/$name-$i.txt"
-      filters="$filters,drawtext=fontfile=$FONT:textfile=caps/$name-$i.txt:fontsize=34:fontcolor=white:box=1:boxcolor=0x0b1530@0.88:boxborderw=22:x=(w-text_w)/2:y=h-text_h-48:enable='between(t,$prev_t,$t)'"
+      i=$((i+1)); printf '%s' "$prev_txt" | fold -s -w 58 > "caps/$name-$i.txt"
+      filters="$filters,drawtext=fontfile=$FONT:textfile=caps/$name-$i.txt:fontsize=28:line_spacing=8:fontcolor=white:box=1:boxcolor=0x0b1530@0.88:boxborderw=22:x=(w-text_w)/2:y=h-text_h-48:enable='between(t,$prev_t,$t)'"
     fi
     prev_t=$t; prev_txt=$txt
   done < "$f"
@@ -63,7 +63,8 @@ sleep 6
 rec hilfe-playlist
 cap "Beim ersten Start öffnen sich die Einstellungen: „Sender & Playlists“"
 sleep 4
-k KEYCODE_DPAD_RIGHT 2
+k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN 1.5     # links auf „Sender & Playlists“
+k KEYCODE_DPAD_RIGHT 1.5; k KEYCODE_DPAD_DOWN 2   # rechts auf „Handy-Eingabe starten“
 cap "„Handy-Eingabe starten“ mit OK drücken"
 k KEYCODE_DPAD_CENTER 3
 cap "QR-Code mit dem Handy scannen – oder die Adresse im Handy-Browser öffnen"
@@ -84,7 +85,8 @@ sleep 6
 stop
 
 # ───────────── Video 2: Senderliste bearbeiten und sortieren ─────────────
-adb shell am start -S -n $PKG/.MainActivity >/dev/null
+# falls die Handy-Eingabe im ersten Video nicht geklappt hat: Beispiel-Playlist direkt laden
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/demo.m3u" >/dev/null
 sleep 10
 rec hilfe-senderliste
 cap "Einstellungen öffnen (blaue Taste oder Menü) – Standard-PIN 0000"
@@ -94,7 +96,7 @@ sleep 2
 cap "Links „Senderliste & Favoriten“ wählen"
 k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN 2
 cap "„Senderliste bearbeiten öffnen“ mit OK"
-k KEYCODE_DPAD_RIGHT 2; k KEYCODE_DPAD_CENTER 3
+k KEYCODE_DPAD_RIGHT 1.5; k KEYCODE_DPAD_DOWN 1.5; k KEYCODE_DPAD_CENTER 3
 cap "Links die Kategorien, rechts ihre Sender"
 k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN 2
 cap "Verschieben: OK lang drücken, mit ▲▼ an die neue Stelle, OK legt ab"
@@ -111,7 +113,7 @@ k KEYCODE_BACK 2
 stop
 
 # ───────────── Video 3: Fußball heute im TV ─────────────
-adb shell am start -S -n $PKG/.MainActivity --ez aze_test_football true >/dev/null
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/demo.m3u" --ez aze_test_football true >/dev/null
 sleep 12
 rec hilfe-fussball
 cap "Menü → „Fußball heute“: alle Spiele von heute mit den Sendern"

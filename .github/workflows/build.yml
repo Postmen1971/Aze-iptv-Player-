@@ -177,7 +177,8 @@ jobs:
 
   release:
     needs: [build, emulator-test]
-    if: ${{ always() && needs.build.result == 'success' && (needs.emulator-test.result == 'success' || (needs.emulator-test.result == 'skipped' && github.event_name == 'workflow_dispatch' && inputs.skip_test)) }}
+    # nur Videos neu (record_help + skip_test): keine neue App-Version veröffentlichen
+    if: ${{ always() && needs.build.result == 'success' && !(github.event_name == 'workflow_dispatch' && inputs.record_help && inputs.skip_test) && (needs.emulator-test.result == 'success' || (needs.emulator-test.result == 'skipped' && github.event_name == 'workflow_dispatch' && inputs.skip_test)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
