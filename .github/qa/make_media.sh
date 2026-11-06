@@ -18,4 +18,6 @@ ffmpeg -loglevel error -y -itsoffset 60 -f lavfi -i "testsrc2=size=640x360:rate=
   -t 120 -fps_mode passthrough $V $A -output_ts_offset 15 -f mpegts media/jB.ts
 cat media/jA.ts media/jB.ts > media/jump.ts
 rm -f media/jA.ts media/jB.ts
+# Film-Cover für den Test-Anbieter (ein Bild, 400×600 wie echte Poster)
+ffmpeg -loglevel error -y -f lavfi -i "color=c=0x2a6fdb:s=400x600" -frames:v 1 media/poster.jpg
 ls -la media

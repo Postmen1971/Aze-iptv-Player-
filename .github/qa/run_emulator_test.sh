@@ -11,7 +11,14 @@ FAILS=0
 STEP=0
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
-qa() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F "AzeQA" | grep -v " TICK " ; }
+qa() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F "AzeQA" | grep -v " TICK " | grep -v ": BEAT$" ; }
+# größte Lücke im Herzschlag (Haupt-Thread) in Sekunden – je Prozess, ab Zeile „seit“ (Uhrzeit HH:MM:SS)
+beat_gap() { adb logcat -d -s AzeQA:I 2>/dev/null | grep ": BEAT$" | awk -v since="${1:-00:00:00}" '
+  { split($2,t,":"); s=t[1]*3600+t[2]*60+t[3]; if ($2 < since) next;
+    if (($3 in last) && s-last[$3] > max) max=s-last[$3]; last[$3]=s }
+  END { printf "%.1f", max+0 }'; }
+hang_check() { local g; g=$(beat_gap "$2"); log "Herzschlag $1: längste Lücke ${g} s"
+  awk -v g="$g" 'BEGIN{exit !(g>4.0)}' && fail "$1: App hing ${g} s (Haupt-Thread blockiert)"; true; }
 ticks() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F " TICK " ; }
 count() { qa | grep -cF -- "$1" || true; }
 shot() { STEP=$((STEP+1)); adb exec-out screencap -p > "$OUT/$(printf %02d $STEP)-$1.png" 2>/dev/null || true; }
@@ -67,6 +74,7 @@ channel() {  # Sender per Zifferntaste wählen
 
 log "Installiere $APK"
 adb install -r "$APK" || { echo "::error::Installation fehlgeschlagen"; exit 1; }
+adb logcat -G 16M 2>/dev/null || true
 adb logcat -c
 adb shell am start -W -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/list.m3u"
 
@@ -300,6 +308,52 @@ shot "test9b-sender-sortiert"
 note "Sender sortieren" "$(qa | grep -E "SORT_CH_(START|END)")"
 qa | grep -q "SORT_CH_END .* 0$" || fail "Sortieren: Sender kam nicht ganz nach oben (Fokus verloren / Liste scrollt nicht mit)"
 alive || fail "App nach dem Sortieren nicht mehr da"
+
+hang_check "Sortieren"
+
+log "== Test 10: Filme & Serien mit Test-Anbieter (3000 Filme, 600 Serien) – Cover, Cover-Vorrat, keine Hänger"
+T10=$(adb shell date +%H:%M:%S | tr -d '\r')
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_xtream "http://10.0.2.2:8090" --ez aze_test_vod true >/dev/null
+wait_for "VOD_CAT" 1 60 || fail "Filme: erste Kategorie kam nicht"
+sleep 15
+shot "test10-filme"
+c=$(qa | grep -c "COVER " || true)
+note "Filme" "$(qa | grep -E "VOD_|COVER" | head -20)"
+[ "$(count "VOD_CAT_ERROR")" -eq 0 ] || fail "Filme: Kategorie konnte nicht geladen werden"
+# durch die Kategorien und das Raster blättern
+for i in 1 2 3 4 5; do adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1; done
+adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+for i in $(seq 1 15); do adb shell input keyevent KEYCODE_DPAD_DOWN; done
+sleep 3
+alive || fail "Filme: App nach dem Blättern nicht mehr da"
+hang_check "Filme blättern" "$T10"
+# zurück zum Fernsehen: der Cover-Vorrat füllt sich jetzt im Hintergrund – Umschalten muss trotzdem flüssig bleiben
+T10b=$(adb shell date +%H:%M:%S | tr -d '\r')
+for i in 1 2 3 4; do adb shell input keyevent KEYCODE_BACK; sleep 2; done
+adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 2
+for i in $(seq 1 8); do adb shell input keyevent KEYCODE_CHANNEL_UP; sleep 2; done
+sleep 30
+alive || fail "Cover-Vorrat: App nicht mehr da"
+hang_check "Fernsehen während Cover-Vorrat" "$T10b"
+note "Cover-Vorrat" "$(qa | grep -E "COVER_STOCK|VOD_ALL" | tail -5)"
+
+log "== Test 11: Rundgang – Schnellmenü, Suche, Infoleiste (▶ lang), Senderliste, Einstellungen"
+T11=$(adb shell date +%H:%M:%S | tr -d '\r')
+adb shell input keyevent KEYCODE_PROG_GREEN; sleep 2; shot "test11-schnellmenue"; adb shell input keyevent KEYCODE_BACK; sleep 2
+adb shell input keyevent KEYCODE_PROG_YELLOW; sleep 2; shot "test11-suche"; adb shell input keyevent KEYCODE_BACK; sleep 2
+adb shell input keyevent --longpress KEYCODE_DPAD_RIGHT; sleep 2; shot "test11-infoleiste"
+[ "$(count "INFO_BAR an")" -ge 1 ] || fail "Infoleiste: ▶ lang hat sie nicht geöffnet"
+adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 2; shot "test11-senderliste"
+[ "$(count "LIST_OPEN")" -ge 1 ] || fail "Senderliste: ◀ hat sie nicht geöffnet"
+adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 2
+adb shell input keyevent KEYCODE_PROG_BLUE; sleep 3
+for d in 0 0 0 0; do adb shell input keyevent KEYCODE_$d; done   # Standard-PIN 0000
+sleep 3; shot "test11-einstellungen"
+for i in $(seq 1 18); do adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1; done   # jeden Bereich einmal öffnen
+shot "test11-einstellungen-ende"
+for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 2; done
+alive || fail "Rundgang: App nicht mehr da"
+hang_check "Rundgang" "$T11"
 
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"

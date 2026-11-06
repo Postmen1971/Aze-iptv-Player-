@@ -110,7 +110,8 @@ private class Playing(val url: String, val title: String, val resumeKey: String,
 fun VodScreen(app: AppController, startWithSeries: Boolean, onExit: () -> Unit, onOpenSettings: () -> Unit = onExit) {
     val vodSources = app.vodSources
     var series by remember { mutableStateOf(startWithSeries) }
-    var sourceIdx by remember { mutableIntStateOf(0) }
+    // Emulator-Test: gleich den Test-Anbieter für Filme wählen
+    var sourceIdx by remember { mutableIntStateOf(if (app.testOpenVod) vodSources.indexOfFirst { it.name == "Test-VOD" }.coerceAtLeast(0) else 0) }
     var detail by remember { mutableStateOf<VodItem?>(null) }
     var playing by remember { mutableStateOf<Playing?>(null) }
 

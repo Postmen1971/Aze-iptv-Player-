@@ -56,6 +56,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0].lstrip("/")
         log(f"GET /{path}")
+        if path == "player_api.php":
+            return self.xtream()
+        if path == "get.php":  # Live-Liste des Test-Anbieters: leer (die Sender kommen aus list.m3u)
+            return self.send_body(b"#EXTM3U\n", "audio/x-mpegurl")
+        if path.startswith("poster/"):
+            time.sleep(0.05)
+            with open(os.path.join(MEDIA, "poster.jpg"), "rb") as fh:
+                return self.send_body(fh.read(), "image/jpeg")
         if path == "list.m3u":
             body = PLAYLIST.encode()
             self.send_response(200)
@@ -87,6 +95,38 @@ class Handler(BaseHTTPRequestHandler):
                     ONE_FREE_AT = time.time() + 2.0
             return
         self.stream(name, behaviour, speed=3.0 if behaviour == "drop" else 1.0, cut=15)
+
+    def send_body(self, body, ctype):
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def xtream(self):
+        """Test-Anbieter für Filme & Serien: 6 Kategorien, 3000 Filme, 600 Serien – mit Cover-Adressen."""
+        import json, urllib.parse
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        action = (q.get("action") or [""])[0]
+        cat = (q.get("category_id") or [""])[0]
+        base = "http://10.0.2.2:{p}".format(p=PORT)
+        cats = [("1", "DE | Filme Action"), ("2", "DE | Filme Komödie"), ("3", "TR | Yerli Filmler"),
+                ("4", "EN | Movies"), ("5", "DE | Kinder"), ("6", "TR | Aksiyon")]
+        if action in ("get_vod_categories", "get_series_categories"):
+            data = [{"category_id": c, "category_name": n} for c, n in cats]
+        elif action == "get_vod_streams":
+            data = [{"stream_id": i, "name": "Testfilm %d (2024)" % i, "stream_icon": base + "/poster/m%d.jpg" % i,
+                     "rating": "7.1", "container_extension": "mp4", "category_id": str(i % 6 + 1)} for i in range(1, 3001)]
+            if cat: data = [d for d in data if d["category_id"] == cat]
+        elif action == "get_series":
+            data = [{"series_id": i, "name": "Testserie %d" % i, "cover": base + "/poster/s%d.jpg" % i,
+                     "rating": "8.0", "category_id": str(i % 6 + 1)} for i in range(1, 601)]
+            if cat: data = [d for d in data if d["category_id"] == cat]
+        elif action == "":
+            data = {"user_info": {"auth": 1, "status": "Active"}, "server_info": {"url": "10.0.2.2"}}
+        else:
+            data = []
+        return self.send_body(json.dumps(data).encode(), "application/json")
 
     def stream(self, name, behaviour, speed, cut):
         path = name

@@ -720,7 +720,7 @@ fun PlayerScreen(
             KeyAction.MOVIES -> onOpenVod(false)
             KeyAction.SERIES -> onOpenVod(true)
             KeyAction.SETTINGS -> onOpenSettings()
-            KeyAction.INFO -> { infoForced = !infoForced; infoTick++ }
+            KeyAction.INFO -> { infoForced = !infoForced; infoTick++; qaLog("INFO_BAR ${if (infoForced) "an" else "aus"}") }
         }
     }
 
@@ -1212,7 +1212,7 @@ fun PlayerScreen(
 internal fun qaLog(msg: String) {
     android.util.Log.i("AzeQA", msg)
     // auch ins Hänger-Protokoll auf dem Gerät (ohne die sekündlichen Messzeilen)
-    if (!msg.startsWith("TICK") && !msg.startsWith("MV_TICK")) de.aze.iptv.data.HangLog.add(msg)
+    if (!msg.startsWith("TICK") && !msg.startsWith("MV_TICK") && msg != "BEAT") de.aze.iptv.data.HangLog.add(msg)
 }
 
 @Composable
