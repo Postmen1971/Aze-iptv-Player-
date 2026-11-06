@@ -1,4 +1,8 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package de.aze.iptv.ui
+
+import androidx.compose.foundation.layout.widthIn
 
 import android.view.KeyEvent as AndroidKeyEvent
 import androidx.annotation.OptIn
@@ -1072,7 +1076,12 @@ fun PlayerScreen(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // bricht auf schmalen Bildschirmen (Hochformat) um – vorher lagen „Einstellungen“ und „Beenden“ außerhalb
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.widthIn(max = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 40).coerceAtLeast(200).dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     TvButton("☰ Sender", onClick = { touchBar = false; overlay = true })
                     TvButton("⚽ Heute", onClick = { touchBar = false; football = true })
                     TvButton("⋯ Menü", onClick = { touchBar = false; quickMenu = true })

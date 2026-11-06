@@ -131,7 +131,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
         // Linke Leiste scrollt mit (auf manchen Fernsehern passten nicht alle Bereiche auf den Bildschirm)
         Column(
             modifier = Modifier
-                .width(250.dp)
+                .width(minOf(250, (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp * 0.38f).toInt()).dp)
                 .fillMaxHeight()
                 .background(Palette.PanelDark)
                 .verticalScroll(rememberScrollState())
