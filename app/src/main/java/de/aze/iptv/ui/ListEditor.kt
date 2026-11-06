@@ -127,9 +127,12 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             Text("Noch keine Sender geladen.", color = Palette.TextMuted, fontSize = 16.sp, modifier = Modifier.padding(top = 20.dp))
             return@Column
         }
+        // Kategorien-Spalte passt sich der Breite an (schmale Geräte/Hochformat: sonst blieb für die Sender kein Platz)
+        val screenW = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp.dp
+        val groupW = (screenW * 0.42f).coerceIn(160.dp, 380.dp)
         Row(Modifier.fillMaxSize().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             // ---- Kategorien ----
-            Column(Modifier.width(380.dp).fillMaxHeight().background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp)) {
+            Column(Modifier.width(groupW).fillMaxHeight().background(Palette.PanelBrush, RoundedCornerShape(14.dp)).padding(8.dp)) {
                 Text("Kategorien (${groups.count { !it.hidden }}/${groups.size} sichtbar)", color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(6.dp))
                 LazyColumn(state = groupState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     itemsIndexed(groups, key = { _, g -> g.key }) { i, g ->
