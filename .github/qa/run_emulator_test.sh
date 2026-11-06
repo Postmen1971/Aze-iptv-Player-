@@ -18,7 +18,7 @@ beat_gap() { adb logcat -d -s AzeQA:I 2>/dev/null | grep ": BEAT$" | awk -v sinc
     if (($3 in last) && s-last[$3] > max) max=s-last[$3]; last[$3]=s }
   END { printf "%.1f", max+0 }'; }
 hang_check() { local g; g=$(beat_gap "$2"); log "Herzschlag $1: längste Lücke ${g} s"
-  awk -v g="$g" 'BEGIN{exit !(g>4.0)}' && fail "$1: App hing ${g} s (Haupt-Thread blockiert)"; true; }
+  awk -v g="$g" 'BEGIN{exit !(g>1.5)}' && fail "$1: App hing ${g} s (Haupt-Thread blockiert)"; true; }
 ticks() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F " TICK " ; }
 count() { qa | grep -cF -- "$1" || true; }
 shot() { STEP=$((STEP+1)); adb exec-out screencap -p > "$OUT/$(printf %02d $STEP)-$1.png" 2>/dev/null || true; }
@@ -191,7 +191,8 @@ if [ "$n" -ge 6 ]; then
   med=$(echo "$vals" | awk '{a[NR]=$1} END{print a[int((NR+1)/2)]}')
   mx=$(echo "$vals" | tail -1)
   base=$(cat .github/qa/zap_baseline.txt 2>/dev/null | tr -dc 0-9)
-  limit=$(( ${base:-0} > 0 ? base * 13 / 10 + 300 : 4000 ))
+  # Grenze: höchstens 0,5 s im Median (Ziel ~0,3 s; der Emulator ist etwas langsamer als ein echtes Gerät)
+  limit=500
   note "Umschaltzeit" "Median ${med} ms · langsamster ${mx} ms · Messungen: $(echo $vals | tr '\n' ' ') · Grenze ${limit} ms (Basis ${base:-keine})"
   [ "$med" -le "$limit" ] || fail "Umschalten zu langsam: Median ${med} ms (Grenze ${limit} ms)"
 else

@@ -72,8 +72,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
             app.testOpenVod = intent?.getBooleanExtra("aze_test_vod", false) == true
-            // Herzschlag aus dem Haupt-Thread: Lücken > 3 s = App hing (prüft der Emulator-Test)
-            lifecycleScope.launch { while (true) { kotlinx.coroutines.delay(1_000); de.aze.iptv.ui.qaLog("BEAT") } }
+            // Herzschlag aus dem Haupt-Thread alle 0,25 s: Lücken > 1,5 s = App hing (prüft der Emulator-Test)
+            lifecycleScope.launch { while (true) { kotlinx.coroutines.delay(250); de.aze.iptv.ui.qaLog("BEAT") } }
             // Lippensynchron-Wert für den Test setzen
             intent?.getIntExtra("aze_test_audio_delay", Int.MIN_VALUE)?.takeIf { it != Int.MIN_VALUE }?.let { app.updateAudioDelay(it) }
             // zusätzlicher Versatz für einen Sender (Schlüssel = Adresse)
