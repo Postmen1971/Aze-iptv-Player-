@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      skip_test:
+        description: "Emulator-Test überspringen (nur auf ausdrücklichen Wunsch)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -99,6 +104,7 @@ jobs:
   # Nur wenn alles besteht, wird die neue Version veröffentlicht.
   emulator-test:
     needs: build
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_test) }}
     # feste Ubuntu-Version: auf dem neuen Abbild hing die ffmpeg-Installation (Lauf brach nach 40 min ab)
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -167,6 +173,7 @@ jobs:
 
   release:
     needs: [build, emulator-test]
+    if: ${{ always() && needs.build.result == 'success' && (needs.emulator-test.result == 'success' || (needs.emulator-test.result == 'skipped' && github.event_name == 'workflow_dispatch' && inputs.skip_test)) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
