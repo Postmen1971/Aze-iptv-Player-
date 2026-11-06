@@ -97,7 +97,7 @@ class LiveSource(context: Context, http: HttpDataSource.Factory) {
                 if (e is HttpDataSource.InvalidResponseCodeException && e.responseCode in intArrayOf(401, 404, 410)) return C.TIME_UNSET
                 if (super.getRetryDelayMsFor(info) == C.TIME_UNSET) return C.TIME_UNSET
                 return when {
-                    info.errorCount <= 10 -> 400L
+                    info.errorCount <= 10 -> 300L // neu verbinden nach 0,3 s
                     info.errorCount <= MAX_TRIES -> 1_500L
                     else -> C.TIME_UNSET
                 }

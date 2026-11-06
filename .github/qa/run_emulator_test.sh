@@ -141,7 +141,7 @@ sleep 5
 [ "$(count "WATCHDOG")" -eq "$w" ] || fail "Nach Stream-Ende musste der Wächter eingreifen"
 g=$(max_gap "$tb")
 note "Test 4 Übergang" "längste Lücke ohne Bild: ${g} s"
-[ "$g" -le 2 ] || fail "Übergang nach Stream-Ende nicht flüssig: ${g} s ohne Bild"
+[ "$g" -le 1 ] || fail "Übergang nach Stream-Ende nicht flüssig: ${g} s ohne Bild"
 
 log "== Test 4b: Zeitsprung im Stream (Bildzeit springt 60 s vor, Ton läuft weiter)"
 channel 5
@@ -165,7 +165,7 @@ t=$(count "TRANSITION Test 6")
 g=$(max_gap "$tb")
 note "Test 4c Dauerlauf" "nahtlose Übergänge: $t · längste Lücke ohne Bild: ${g} s · abgelehnte Verbindungen werden schnell neu versucht"
 [ "$t" -ge 4 ] || fail "Dauerlauf: zu wenige nahtlose Neuverbindungen ($t)"
-[ "$g" -le 2 ] || fail "Dauerlauf: ${g} s ohne Bild"
+[ "$g" -le 1 ] || fail "Dauerlauf: ${g} s ohne Bild"
 [ "$(count "WATCHDOG")" -eq "$w" ] || fail "Dauerlauf: Wächter musste eingreifen"
 [ "$(count "ENDED")" -eq "$e" ] || fail "Dauerlauf: Notlösung mit Neustart gebraucht"
 shot "test4c-dauerlauf"
