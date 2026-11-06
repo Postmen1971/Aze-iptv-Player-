@@ -131,6 +131,7 @@ fun SearchOverlay(app: AppController, onClose: () -> Unit) {
                     val playing = nc.channel.key == currentKey
                     Focusable(
                         modifier = Modifier.fillMaxWidth(),
+                        qaName = "S " + nc.channel.name,
                         onClick = {
                             app.play(nc)
                             onClose()

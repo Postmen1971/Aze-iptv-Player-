@@ -510,7 +510,7 @@ private fun posterRequest(context: android.content.Context, url: String?, title:
 
 @Composable
 private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boolean = false, onClick: () -> Unit) {
-    Focusable(onClick = onClick) { focused ->
+    Focusable(onClick = onClick, qaName = "V $number") { focused ->
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(
                 Modifier

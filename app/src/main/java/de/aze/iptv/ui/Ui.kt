@@ -217,16 +217,7 @@ fun Focusable(
     content: @Composable (focused: Boolean) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
-    // Nur im Test-Build: Position fürs Antippen im Emulator-Test (Touch) ins Protokoll
-    val qaMod = if (de.aze.iptv.BuildConfig.TEST_HOOKS && qaName != null) {
-        var last by remember { mutableStateOf("") }
-        androidx.compose.runtime.DisposableEffect(qaName) { onDispose { qaLog("GONE $qaName") } }
-        Modifier.onGloballyPositioned { c ->
-            val p = c.positionInWindow(); val vis = c.boundsInWindow()
-            val line = "POS $qaName|${(p.x + c.size.width / 2).toInt()}|${(p.y + c.size.height / 2).toInt()}|${vis.height.toInt()}"
-            if (line != last) { last = line; qaLog(line) }
-        }
-    } else Modifier
+    val qaMod = Modifier.qaPos(qaName)
     var longFired by remember { mutableStateOf(false) }
     // Nur auf OK reagieren, wenn der Tastendruck auch hier begonnen hat
     // (sonst würde das Loslassen eines langen OK, das ein Menü geöffnet hat, sofort etwas auslösen).
@@ -301,5 +292,19 @@ fun TvButton(
         ) {
             Text(label, color = fg, fontSize = 14.sp, fontWeight = if (focused || selected) FontWeight.Bold else FontWeight.Medium)
         }
+    }
+}
+
+
+/** Nur im Test-Build: Position eines antippbaren Elements ins Protokoll (Emulator-Test tippt dort hin). */
+@Composable
+fun Modifier.qaPos(name: String?): Modifier {
+    if (!de.aze.iptv.BuildConfig.TEST_HOOKS || name == null) return this
+    var last by remember { mutableStateOf("") }
+    androidx.compose.runtime.DisposableEffect(name) { onDispose { qaLog("GONE $name") } }
+    return this.onGloballyPositioned { c ->
+        val p = c.positionInWindow(); val vis = c.boundsInWindow()
+        val line = "POS $name|${(p.x + c.size.width / 2).toInt()}|${(p.y + c.size.height / 2).toInt()}|${vis.height.toInt()}"
+        if (line != last) { last = line; qaLog(line) }
     }
 }

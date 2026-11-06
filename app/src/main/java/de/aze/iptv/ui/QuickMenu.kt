@@ -70,6 +70,7 @@ fun QuickMenu(items: List<QuickItem>, onClose: () -> Unit) {
                         touched++
                     },
                     onFocus = { touched++ },
+                    qaName = "QM " + item.title,
                 ) { focused ->
                     Column(
                         modifier = Modifier

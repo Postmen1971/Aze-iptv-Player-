@@ -432,7 +432,60 @@ for b in "☰ Sender" "⋯ Menü" "⚽ Heute"; do
   else fail "Touch: Knopf „$b“ nicht da"; fi
   alive || { fail "Touch: App nach „$b“ weg"; break; }
 done
-note "Touch-Test" "$(qa | grep -E "SET_|SORT_OPEN|SORT_CLOSE|LIST_OPEN" | tail -30)"
+
+# ---- weitere Touch-Wege: Multi-View, Senderliste → Menü → Filme/Suchen, Sender antippen, Fußball, Schnellmenü
+WH=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); SW=${WH%x*}; SH=${WH#*x}
+bar() { adb shell input tap $((SW/3)) $((SH/3)); sleep 2; }
+swipe_r() { adb shell input swipe 60 $((SH/2)) $((SW/2)) $((SH/2)) 300; sleep 1.5; }
+seen_log() { [ "$(count "$1")" -gt "$2" ]; }
+# Multi-View
+bar; tap "⋯ Menü" && sleep 2
+if tap "QM Multi-View"; then
+  sleep 4; shot "test13-multiview"
+  N=$(count "MV_PICK 2")
+  tap "MV Bild 2" || fail "Touch: Multi-View – Bild 2 nicht antippbar"
+  sleep 2; G=$(qa | grep -o "POS MV [^|]*" | grep -v "MV Bild" | head -1 | sed 's/POS //')
+  if [ -n "$G" ] && tap "$G"; then
+    sleep 2; C=$(qa | grep -o "POS MV [^|]*" | grep -v "MV Bild" | sed 's/POS //' | grep -vF "$G" | tail -1)
+    [ -n "$C" ] && tap "$C"
+  fi
+  sleep 3; seen_log "MV_PICK 2" "$N" || fail "Touch: Multi-View – für Bild 2 ließ sich kein Sender wählen"
+  N=$(count "MV_TAP 0"); tap "MV Bild 1"; seen_log "MV_TAP 0" "$N" || fail "Touch: Multi-View – Bild 1 nicht wählbar"
+  tap "Anordnung" || fail "Touch: Multi-View – „Anordnung“ nicht antippbar"
+  sleep 2; N=$(count "MV_CLOSE"); tap "✕ Schließen" || adb shell input keyevent KEYCODE_BACK; sleep 3
+  seen_log "MV_CLOSE" "$N" || { fail "Touch: Multi-View schließt nicht"; adb shell input keyevent KEYCODE_BACK; sleep 2; }
+else fail "Touch: Schnellmenü – „Multi-View“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; sleep 1; fi
+alive || fail "Touch: App nach Multi-View weg"
+# Sender in der Liste antippen
+bar; tap "☰ Sender"; sleep 2
+N=$(count "FIRST_FRAME"); tap "C Test 4 Abbruch" || tap "C Test 1 Normal" || fail "Touch: Sender in der Liste nicht antippbar"
+sleep 4; seen_log "FIRST_FRAME" "$N" || fail "Touch: Antippen eines Senders schaltet nicht um"
+# Senderliste → Wischen → Gruppen → Menü → Filme
+bar; tap "☰ Sender"; sleep 2; swipe_r; qa | grep -q "POS G " || fail "Touch: Wischen nach rechts zeigt keine Gruppen"
+swipe_r
+if tap "M Filme"; then
+  sleep 6; shot "test13-filme"
+  tap "V 1" && { sleep 3; shot "test13-film"; tap "Zurück" || adb shell input keyevent KEYCODE_BACK; sleep 2; } || fail "Touch: Film-Cover nicht antippbar"
+  tap "Serien" || fail "Touch: Filme – „Serien“ nicht antippbar"
+  sleep 3; tap "📺 Live-TV" || { fail "Touch: Filme – „📺 Live-TV“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; }
+  sleep 3
+else fail "Touch: Menü – „Filme“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; adb shell input keyevent KEYCODE_BACK; fi
+alive || fail "Touch: App nach Filme weg"
+# Suchen
+bar; tap "☰ Sender"; sleep 2; swipe_r; swipe_r
+if tap "M Suchen"; then sleep 2; shot "test13-suche"; tap "Schließen" || { fail "Touch: Suche – „Schließen“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; }
+else fail "Touch: Menü – „Suchen“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; fi
+sleep 2
+# Fußball heute: Spiel antippen, zurück
+bar
+if tap "⚽ Heute"; then sleep 8
+  if qa | grep -q "POS F 0"; then tap "F 0"; sleep 3; shot "test13-spiel"; adb shell input keyevent KEYCODE_BACK; sleep 2; fi
+  adb shell input keyevent KEYCODE_BACK; sleep 2
+fi
+alive || fail "Touch: App nach Fußball weg"
+# Schnellmenü: Infoleiste umschalten
+bar; tap "⋯ Menü" && { tap "QM Infoleiste" || fail "Touch: Schnellmenü – „Infoleiste“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; sleep 1; }
+note "Touch-Test" "$(qa | grep -E "SET_|SORT_OPEN|SORT_CLOSE|LIST_OPEN|MV_|FIRST_FRAME" | tail -40)"
 alive || fail "Touch: App nicht mehr da"
 hang_check "Touch" "$T13"
 

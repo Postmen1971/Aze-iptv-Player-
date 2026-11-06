@@ -212,6 +212,7 @@ fun FootballGuide(
                         val n = d.channels[m.id].orEmpty().size
                         val planned = d.listed[m.id].orEmpty().size
                         Focusable(
+                            qaName = "F $i",
                             // Fokus-Anker auf der zuletzt gewählten Zeile – nach dem Schließen des Fensters geht es dort weiter
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(first) else Modifier),
                             // OK: gleich den TV-Plan mit Vorschau öffnen (wenn liveonsat Sender kennt), sonst die Übersicht

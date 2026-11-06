@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -136,6 +137,15 @@ fun MultiViewScreen(
         if (target != null) slots[active] = target else if (n != null) show("$n ?")
     }
 
+    // Touch (Tablet): Bild antippen = auswählen; gewähltes (oder leeres) Bild nochmal antippen = Sender wählen
+    fun tapSlot(i: Int) {
+        qaLog("MV_TAP $i")
+        if (active == i || slots[i] == null) { active = i; picker = true } else active = i
+    }
+    val ctxMv = LocalContext.current
+    val touchDevice = remember { !de.aze.iptv.player.FrameRate.isTv(ctxMv) }
+
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { qaLog("MV_CLOSE") } }
     BackHandler(enabled = !picker) { onExit(slots[active] ?: slots.firstOrNull { it != null }) }
 
     LaunchedEffect(picker) {
@@ -145,7 +155,7 @@ fun MultiViewScreen(
         }
     }
     LaunchedEffect(Unit) {
-        show("Multi-View · ◀ ▶ Bild wählen · OK Sender · Menü Anordnung")
+        show(if (touchDevice) "Multi-View · Bild antippen = wählen · nochmal antippen = Sender" else "Multi-View · ◀ ▶ Bild wählen · OK Sender · Menü Anordnung")
         // Wie viele gleichzeitige Verbindungen erlaubt das Abo? (Server + Login) – wichtigste Ursache für Standbilder
         val info = runCatching { app.connectionInfo(start?.channel) }.getOrNull() ?: return@LaunchedEffect
         delay(2_800)
@@ -200,7 +210,7 @@ fun MultiViewScreen(
     ) {
         @Composable
         fun slot(i: Int, modifier: Modifier, texture: Boolean = false) {
-            MvSlot(app, i, slots[i], active = i == active, texture = texture, labelInside = true, modifier = modifier)
+            MvSlot(app, i, slots[i], active = i == active, texture = texture, labelInside = true, modifier = modifier, onTap = { tapSlot(i) })
         }
 
         /** Nebeneinander: Sendername ÜBER dem Bild im freien Bereich, nicht im Bild. */
@@ -215,7 +225,7 @@ fun MultiViewScreen(
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(start = 4.dp),
                 )
-                MvSlot(app, i, ch, active = i == active, texture = false, labelInside = false, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                MvSlot(app, i, ch, active = i == active, texture = false, labelInside = false, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f), onTap = { tapSlot(i) })
             }
         }
         when (layout) {
@@ -254,13 +264,26 @@ fun MultiViewScreen(
             )
         }
 
+        // Tablet: Knöpfe zum Antippen (Fernbedienung braucht sie nicht)
+        if (touchDevice && !picker) {
+            Row(
+                Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp)).padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                TvButton("Sender für Bild ${active + 1}", onClick = { picker = true })
+                TvButton("Anordnung", onClick = { nextLayout() })
+                TvButton("✕ Schließen", onClick = { onExit(slots[active] ?: slots.firstOrNull { it != null }) })
+            }
+        }
+
         if (picker) {
             MvPicker(
                 app = app,
                 focusTick = pickerFocusTick,
                 onFocus = { pickerHasFocus = it },
                 title = "Sender für Bild ${active + 1}",
-                onPick = { nc -> slots[active] = nc; picker = false },
+                onPick = { nc -> slots[active] = nc; picker = false; qaLog("MV_PICK ${active + 1} ${nc.channel.name}") },
                 onClose = { picker = false },
             )
         }
@@ -278,7 +301,9 @@ private fun MvSlot(
     texture: Boolean,
     labelInside: Boolean,
     modifier: Modifier,
+    onTap: () -> Unit = {},
 ) {
+    val tapNow by androidx.compose.runtime.rememberUpdatedState(onTap)
     // Name im Bild (nur wo kein freier Platz ist): nach dem Umschalten kurz zeigen, dann ausblenden
     var showLabel by remember { mutableStateOf(true) }
     LaunchedEffect(channel?.channel?.key) {
@@ -309,6 +334,11 @@ private fun MvSlot(
             modifier = Modifier.align(Alignment.TopStart).padding(8.dp)
                 .background(Palette.Ground.copy(alpha = if (active) 0.8f else 0.55f), RoundedCornerShape(6.dp))
                 .padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+        // Fläche über dem Bild fürs Antippen (das Video selbst nimmt keine Berührungen an)
+        Box(
+            Modifier.matchParentSize().qaPos("MV Bild ${index + 1}")
+                .pointerInput(Unit) { androidx.compose.foundation.gestures.detectTapGestures(onTap = { tapNow() }) },
         )
     }
 }
@@ -633,7 +663,7 @@ private fun MvPicker(
 
 @Composable
 private fun PickRow(text: String, modifier: Modifier, onClick: () -> Unit, left: String? = null, right: String? = null) {
-    Focusable(modifier = modifier.fillMaxWidth(), onClick = onClick) { focused ->
+    Focusable(modifier = modifier.fillMaxWidth(), onClick = onClick, qaName = "MV " + text) { focused ->
         Row(
             Modifier
                 .fillMaxWidth()

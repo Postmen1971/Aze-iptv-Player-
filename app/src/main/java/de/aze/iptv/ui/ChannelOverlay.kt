@@ -187,6 +187,7 @@ fun ChannelOverlay(
                                         groupIndex = i; showGroups = false; true
                                     } else false
                                 },
+                            qaName = "G " + g.name,
                             onClick = {
                                 groupIndex = i
                                 showGroups = false
@@ -332,6 +333,7 @@ fun ChannelOverlay(
                                         }
                                     },
                                 onFocus = { focusedIdx = index; qaLog("LIST_ITEM_FOCUS $index") },
+                                qaName = "C " + nc.channel.name,
                                 onClick = {
                                     app.play(nc)
                                     onClose()
@@ -489,6 +491,7 @@ internal fun SideMenu(
             Focusable(
                 modifier = Modifier.fillMaxWidth().then(if (isFirst) Modifier.focusRequester(first) else Modifier),
                 onClick = action,
+                qaName = "M " + label,
             ) { focused ->
                 val fg = if (focused) Palette.OnAccent else if (danger) Palette.Live.copy(alpha = 0.85f) else Palette.TextSoft
                 Row(
