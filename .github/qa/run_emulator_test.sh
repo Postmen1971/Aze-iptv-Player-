@@ -422,7 +422,13 @@ N=$(count "SET_CLOSE"); adb shell input keyevent KEYCODE_BACK; sleep 2
 [ "$(count "SET_CLOSE")" -gt "$N" ] || fail "Touch: Zurück schließt die Einstellungen nicht"
 for b in "☰ Sender" "⋯ Menü" "⚽ Heute"; do
   adb shell input tap 300 300; sleep 2
-  if tap "$b"; then sleep 3; shot "test13-knopf"; adb shell input keyevent KEYCODE_BACK; sleep 2
+  if tap "$b"; then sleep 3; shot "test13-knopf"
+    if [ "$b" = "☰ Sender" ]; then   # Senderliste: Tippen aufs Bild daneben schließt sie (Zurück führt zu den Gruppen)
+      N=$(count "LIST_CLOSED"); W=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1); adb shell input tap $(( ${W%x*} - 15 )) $(( ${W#*x} / 2 )); sleep 2
+      [ "$(count "LIST_CLOSED")" -gt "$N" ] || { fail "Touch: Senderliste schließt nicht beim Tippen daneben"; adb shell input keyevent KEYCODE_BACK; }
+    else
+      adb shell input keyevent KEYCODE_BACK; sleep 2
+    fi
   else fail "Touch: Knopf „$b“ nicht da"; fi
   alive || { fail "Touch: App nach „$b“ weg"; break; }
 done
