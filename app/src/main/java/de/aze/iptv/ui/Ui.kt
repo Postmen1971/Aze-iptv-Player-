@@ -17,6 +17,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -210,15 +213,27 @@ fun Focusable(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     onFocus: (() -> Unit)? = null,
+    qaName: String? = null,
     content: @Composable (focused: Boolean) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
+    // Nur im Test-Build: Position fürs Antippen im Emulator-Test (Touch) ins Protokoll
+    val qaMod = if (de.aze.iptv.BuildConfig.TEST_HOOKS && qaName != null) {
+        var last by remember { mutableStateOf("") }
+        androidx.compose.runtime.DisposableEffect(qaName) { onDispose { qaLog("GONE $qaName") } }
+        Modifier.onGloballyPositioned { c ->
+            val p = c.positionInWindow(); val vis = c.boundsInWindow()
+            val line = "POS $qaName|${(p.x + c.size.width / 2).toInt()}|${(p.y + c.size.height / 2).toInt()}|${vis.height.toInt()}"
+            if (line != last) { last = line; qaLog(line) }
+        }
+    } else Modifier
     var longFired by remember { mutableStateOf(false) }
     // Nur auf OK reagieren, wenn der Tastendruck auch hier begonnen hat
     // (sonst würde das Loslassen eines langen OK, das ein Menü geöffnet hat, sofort etwas auslösen).
     var downSeen by remember { mutableStateOf(false) }
     Box(
         modifier = modifier
+            .then(qaMod)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus?.invoke()
@@ -260,7 +275,7 @@ fun TvButton(
     danger: Boolean = false,
     onClick: () -> Unit,
 ) {
-    Focusable(modifier = modifier, onClick = onClick) { focused ->
+    Focusable(modifier = modifier, onClick = onClick, qaName = label.trim()) { focused ->
         val shape = RoundedCornerShape(14.dp)
         val fg = when {
             focused -> Palette.OnAccent

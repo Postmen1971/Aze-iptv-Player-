@@ -107,6 +107,7 @@ fun PinScreen(
                         row.forEachIndexed { c, label ->
                             Focusable(
                                 modifier = if (r == 0 && c == 0) Modifier.focusRequester(firstKey) else Modifier,
+                                qaName = "PIN $label",
                                 onClick = {
                                     when (label) {
                                         "←" -> pin = pin.dropLast(1)

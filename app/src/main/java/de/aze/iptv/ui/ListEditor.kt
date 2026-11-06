@@ -88,6 +88,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             runCatching { req(key).requestFocus() }
         }
     }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { qaLog("SORT_CLOSE") } }
     BackHandler {
         when {
             movingGroup != null -> movingGroup = null
@@ -297,6 +298,7 @@ private fun ManageRow(
             onClick = { if (moving) onMoveEnd() else onToggle() },
             onLongClick = { if (!moving) onMoveStart() },
             onFocus = onFocus,
+            qaName = "ROW $title",
         ) { focused ->
             val shape = RoundedCornerShape(10.dp)
             Row(

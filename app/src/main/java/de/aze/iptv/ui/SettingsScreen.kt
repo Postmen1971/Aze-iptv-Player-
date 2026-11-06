@@ -119,6 +119,8 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
         "Sichern", "System", "Hilfe", "Über",
     )
     var helpVideo by remember { mutableStateOf<HelpVideo?>(null) }
+    LaunchedEffect(onTv, cat) { qaLog("SET_PANE " + if (onTv) "TV" else cats.getOrNull(cat)) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { qaLog("SET_CLOSE") } }
     helpVideo?.let { v ->
         HelpVideoPlayer(app, v.url, v.title, onExit = { helpVideo = null })
         return
@@ -276,7 +278,7 @@ private fun CategoryItem(
     onFocus: () -> Unit,
     onClick: () -> Unit,
 ) {
-    Focusable(modifier = modifier.fillMaxWidth(), onClick = onClick, onFocus = onFocus) { focused ->
+    Focusable(modifier = modifier.fillMaxWidth(), onClick = onClick, onFocus = onFocus, qaName = label) { focused ->
         // Aurora: Fokus = gefüllte Akzent-Pille, gewählter Bereich leicht im Akzentton, Punkt vorn
         val fg = if (focused) Palette.OnAccent else if (selected) Palette.Highlight else Palette.TextSoft
         Row(
