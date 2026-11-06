@@ -74,6 +74,12 @@ channel() {  # Sender per Zifferntaste wählen
   adb shell input keyevent "KEYCODE_$1"; sleep 0.3; adb shell input keyevent KEYCODE_DPAD_CENTER
 }
 
+# Bildschirm wie ein Fernseher: 1920×1080 quer, 960×540 dp (der Standard-Emulator war ein kleines Handy, 320 dp breit –
+# „Senderliste verwalten“ hatte dort für die Sender-Spalte 0 px Höhe)
+adb shell wm size 1920x1080 || true
+adb shell wm density 320 || true
+adb shell settings put system user_rotation 1 || true
+adb shell settings put system accelerometer_rotation 0 || true
 log "Installiere $APK"
 adb install -r "$APK" || { echo "::error::Installation fehlgeschlagen"; exit 1; }
 adb logcat -G 16M 2>/dev/null || true
