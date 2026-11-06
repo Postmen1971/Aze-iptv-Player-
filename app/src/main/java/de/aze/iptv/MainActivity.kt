@@ -74,11 +74,12 @@ class MainActivity : ComponentActivity() {
             }
             app.testOpenVod = intent?.getBooleanExtra("aze_test_vod", false) == true
             // Herzschlag aus dem Haupt-Thread alle 0,25 s: Lücken > 1,5 s = App hing (prüft der Emulator-Test)
-            lifecycleScope.launch { while (true) { kotlinx.coroutines.delay(250); lastBeat = android.os.SystemClock.uptimeMillis(); de.aze.iptv.ui.qaLog("BEAT") } }
+            lifecycleScope.launch { while (true) { kotlinx.coroutines.delay(250); lastBeat = android.os.SystemClock.uptimeMillis(); de.aze.iptv.ui.qaLog("BEAT ${beatNo++}") } }
             // Stockt der Haupt-Thread > 1 s: festhalten, WO er gerade hängt (zeigt der Emulator-Test als STALL)
             if (!stallWatch) {
                 stallWatch = true
                 val main = android.os.Looper.getMainLooper().thread
+                de.aze.iptv.ui.qaLog("STALL_WATCH an")
                 Thread {
                     var reported = 0L
                     while (true) {
@@ -300,6 +301,12 @@ private fun CoverLayer(content: @androidx.compose.runtime.Composable () -> Unit)
 /** Schreibt die Absturz-Ursache in eine Datei und gibt dann an Android weiter. */
 private class CrashLogger(private val file: java.io.File, private val next: Thread.UncaughtExceptionHandler?) : Thread.UncaughtExceptionHandler {
     override fun uncaughtException(t: Thread, e: Throwable) {
+        // Bekannter Compose-Fehler (BringIntoViewRequester) kommt über einen Coroutine-Fehler hierher:
+        // harmlos (es wird nur nicht hingescrollt) – nicht die ganze App beenden.
+        if (generateSequence(e) { it.cause }.any { it is IllegalStateException && it.message?.contains("BringIntoViewRequester") == true }) {
+            runCatching { de.aze.iptv.ui.qaLog("COMPOSE_BRING_INTO_VIEW abgefangen") }
+            return
+        }
         runCatching {
             val root = generateSequence(e) { it.cause }.last()
             file.writeText(
@@ -447,6 +454,8 @@ private val coverKeepScope = kotlinx.coroutines.CoroutineScope(
 
 
 @Volatile private var lastBeat = 0L
+// fortlaufende Nummer: sonst fasst Android gleiche Protokollzeilen zusammen („chatty“) und es sähe nach Hängern aus
+private var beatNo = 0L
 @Volatile private var stallWatch = false
 @Volatile private var loopGuarded = false
 

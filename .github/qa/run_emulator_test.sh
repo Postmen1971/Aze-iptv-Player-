@@ -11,9 +11,9 @@ FAILS=0
 STEP=0
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
-qa() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F "AzeQA" | grep -v " TICK " | grep -v ": BEAT$" ; }
+qa() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F "AzeQA" | grep -v " TICK " | grep -v ": BEAT [0-9]*$" ; }
 # größte Lücke im Herzschlag (Haupt-Thread) in Sekunden – je Prozess, ab Zeile „seit“ (Uhrzeit HH:MM:SS)
-beat_gap() { adb logcat -d -s AzeQA:I 2>/dev/null | grep ": BEAT$" | awk -v since="${1:-00:00:00}" '
+beat_gap() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -E ": BEAT [0-9]+$" | awk -v since="${1:-00:00:00}" '
   { split($2,t,":"); s=t[1]*3600+t[2]*60+t[3]; if ($2 < since) next;
     if (($3 in last) && s-last[$3] > max) max=s-last[$3]; last[$3]=s }
   END { printf "%.1f", max+0 }'; }

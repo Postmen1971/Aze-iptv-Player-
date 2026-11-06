@@ -1212,7 +1212,7 @@ fun PlayerScreen(
 internal fun qaLog(msg: String) {
     android.util.Log.i("AzeQA", msg)
     // auch ins Hänger-Protokoll auf dem Gerät (ohne die sekündlichen Messzeilen)
-    if (!msg.startsWith("TICK") && !msg.startsWith("MV_TICK") && msg != "BEAT") de.aze.iptv.data.HangLog.add(msg)
+    if (!msg.startsWith("TICK") && !msg.startsWith("MV_TICK") && !msg.startsWith("BEAT")) de.aze.iptv.data.HangLog.add(msg)
 }
 
 @Composable
