@@ -163,6 +163,8 @@ fun VodScreen(
         onOpen = { detail = it },
         onExit = onExit,
         onOpenSettings = onOpenSettings,
+        onFootball = onFootball,
+        onQuit = onQuit,
     )
 }
 
@@ -179,6 +181,8 @@ private fun Browse(
     onOpen: (VodItem) -> Unit,
     onExit: () -> Unit,
     onOpenSettings: () -> Unit,
+    onFootball: (() -> Unit)? = null,
+    onQuit: (() -> Unit)? = null,
 ) {
     var cats by remember(api, series) { mutableStateOf<List<VodCategory>?>(null) }
     var selected by remember(api, series) { mutableIntStateOf(0) }
