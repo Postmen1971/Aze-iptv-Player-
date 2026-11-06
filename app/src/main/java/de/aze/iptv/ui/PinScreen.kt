@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -87,8 +90,14 @@ fun PinScreen(
             .focusable(),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Text(title, color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        // niedrige Bildschirme (Handy quer): kompakter und scrollbar – sonst lag die untere Tastenreihe (0) außerhalb
+        val low = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 520
+        Column(
+            modifier = Modifier.verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(if (low) 8.dp else 18.dp),
+        ) {
+            Text(title, color = Palette.Text, fontSize = if (low) 20.sp else 26.sp, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 repeat(4) { i ->
                     Box(
@@ -118,7 +127,7 @@ fun PinScreen(
                             ) { focused ->
                                 Box(
                                     modifier = Modifier
-                                        .size(width = 76.dp, height = 56.dp)
+                                        .size(width = 76.dp, height = if (low) 44.dp else 56.dp)
                                         .background(if (focused) Palette.Accent else Palette.Raised, RoundedCornerShape(12.dp)),
                                     contentAlignment = Alignment.Center,
                                 ) {
