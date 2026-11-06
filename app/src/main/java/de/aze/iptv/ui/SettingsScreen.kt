@@ -931,7 +931,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         TvSwitch("Fehlersuche-Anzeige", "Messzeile oben links (Bilder/s, Vorrat, Zustand)", app.showDiag) { app.updateShowDiag(!app.showDiag) }
-        TvSwitch("Multi-View (Beta)", "2–4 Sender gleichzeitig – jedes Bild ist eine eigene Verbindung; aus = nicht im Schnellmenü", app.multiViewOn) { app.updateMultiViewOn(!app.multiViewOn) }
+        TvSwitch("Multi-View (Beta)", "2 Sender gleichzeitig – jedes Bild ist eine eigene Verbindung; aus = nicht im Schnellmenü", app.multiViewOn) { app.updateMultiViewOn(!app.multiViewOn) }
       }
         Text("Untertitel", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

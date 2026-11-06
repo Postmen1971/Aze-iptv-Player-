@@ -58,7 +58,8 @@ object Teletext {
     }
 
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
-    fun create(context: Context, onCrash: () -> Unit): WebView? {
+    fun create(context: Context, onReady: () -> Unit = {}, onCrash: () -> Unit): WebView? {
+        val t0 = android.os.SystemClock.elapsedRealtime()
         // Fire TV aktualisiert die Web-Anzeige manchmal im Hintergrund – dann schlägt das Anlegen fehl (kein Absturz)
         val web = runCatching { WebView(context) }.getOrNull() ?: return null
         web.isFocusable = false
@@ -69,7 +70,14 @@ object Teletext {
         web.settings.allowFileAccess = true
         web.settings.textZoom = 100
         web.addJavascriptInterface(Bridge(context, web), "SkorBridge")
+        qaLog("SKOR_CREATE ${android.os.SystemClock.elapsedRealtime() - t0} ms")
         web.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                if (url?.startsWith("file:") == true) {
+                    qaLog("SKOR_PAGE ${android.os.SystemClock.elapsedRealtime() - t0} ms")
+                    onReady()
+                }
+            }
             // Stürzt die Anzeige ab, nur den Videotext schließen – nicht die ganze App.
             override fun onRenderProcessGone(view: WebView?, detail: RenderProcessGoneDetail?): Boolean {
                 Handler(Looper.getMainLooper()).post { onCrash() }
@@ -97,6 +105,7 @@ object Teletext {
                     c.setRequestProperty("Accept", "application/json, application/rss+xml, application/xml, text/xml, */*")
                     c.setRequestProperty("Accept-Language", "de-DE,de;q=0.9,tr;q=0.8,en;q=0.7")
                     c.setRequestProperty("Accept-Encoding", "gzip")
+                    val t1 = android.os.SystemClock.elapsedRealtime()
                     val code = c.responseCode
                     var input: InputStream? = if (code >= 400) c.errorStream else c.inputStream
                     var body = ""
@@ -112,6 +121,7 @@ object Teletext {
                         }
                         body = runCatching { out.toString(cs) }.getOrElse { out.toString("UTF-8") }
                     }
+                    qaLog("SKOR_GET ${runCatching { URL(url).host }.getOrNull()} ${android.os.SystemClock.elapsedRealtime() - t1} ms")
                     deliver(id, true, code, body)
                 } catch (e: Exception) {
                     deliver(id, false, 0, "${e.javaClass.simpleName}: ${e.message}")

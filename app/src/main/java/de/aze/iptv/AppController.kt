@@ -925,6 +925,8 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     var testListEditor = false
     /** Test-Zugang: gleich Filme öffnen (nur im QA-Build) */
     var testOpenVod = false
+    /** „Fußball heute“ aus dem Menü der Filme gewählt → im Fernsehen öffnen */
+    var pendingFootball by mutableStateOf(false)
 
     /** Der zuletzt geschaute Sender (für OK = zurückspringen). */
     private var previousKey: String? = null

@@ -67,20 +67,24 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     val reqs = remember { HashMap<String, FocusRequester>() }
     var panelInfo by remember { mutableStateOf("") }
     fun req(key: String) = reqs.getOrPut(key) { FocusRequester() }
-    fun follow(state: androidx.compose.foundation.lazy.LazyListState, idx: Int, key: String) {
-        if (idx < 0) return
+    /**
+     * Verschieben mit Mitscrollen: ERST so scrollen, dass über bzw. unter dem Eintrag Platz ist, DANN verschieben.
+     * (Vorher wurde erst verschoben – der Eintrag rutschte kurz aus dem Bild und tauchte erst beim nächsten Druck wieder auf.)
+     */
+    fun moveWithScroll(state: androidx.compose.foundation.lazy.LazyListState, idx: Int, d: Int, key: String, move: () -> Unit) {
         moveScope.launch {
             val info = state.layoutInfo.visibleItemsInfo
             val first = info.firstOrNull()?.index ?: 0
             val last = info.lastOrNull()?.index ?: 0
             val count = (last - first + 1).coerceAtLeast(1)
+            val target = idx + d
             when {
-                idx <= first -> state.scrollToItem((idx - 1).coerceAtLeast(0))
-                idx >= last -> state.scrollToItem((idx - count + 2).coerceAtLeast(0))
+                d < 0 && target <= first -> state.scrollToItem((target - 1).coerceAtLeast(0))
+                d > 0 && target >= last -> state.scrollToItem((target - count + 2).coerceAtLeast(0))
             }
+            move()
             androidx.compose.runtime.withFrameNanos { }
             androidx.compose.runtime.withFrameNanos { }
-            kotlinx.coroutines.delay(30)
             runCatching { req(key).requestFocus() }
         }
     }
@@ -175,10 +179,11 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                             onToggle = { if (sorting) movingGroup = g.key else app.toggleGroupHidden(g.key) },
                             onMoveStart = { movingGroup = g.key; qaLog("SORT_START ${g.name} $i") },
                             onMove = { d ->
-                                app.moveGroup(g.key, d)
                                 val idx = app.editGroups.indexOfFirst { it.key == g.key }
-                                qaLog("SORT_MOVE ${g.name} $idx")
-                                follow(groupState, idx, "g:" + g.key)
+                                moveWithScroll(groupState, idx, d, "g:" + g.key) {
+                                    app.moveGroup(g.key, d)
+                                    qaLog("SORT_MOVE ${g.name} ${app.editGroups.indexOfFirst { it.key == g.key }}")
+                                }
                             },
                             onMoveEnd = { movingGroup = null; qaLog("SORT_END ${g.name} ${app.editGroups.indexOfFirst { it.key == g.key }}") },
                             onOpen = { selectedKey = g.key },
@@ -218,8 +223,8 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 onToggle = { if (sorting) movingChannel = ch.key else app.toggleChannelHidden(ch.key) },
                                 onMoveStart = { movingChannel = ch.key; qaLog("SORT_CH_START ${ch.name} $ci") },
                                 onMove = { d ->
-                                    app.moveChannel(g.key, ch.key, d)
-                                    follow(channelState, app.editGroups.firstOrNull { it.key == g.key }?.channels?.indexOfFirst { it.key == ch.key } ?: -1, "c:" + ch.key)
+                                    val idx = app.editGroups.firstOrNull { it.key == g.key }?.channels?.indexOfFirst { it.key == ch.key } ?: -1
+                                    moveWithScroll(channelState, idx, d, "c:" + ch.key) { app.moveChannel(g.key, ch.key, d) }
                                 },
                                 onMoveEnd = {
                                     movingChannel = null

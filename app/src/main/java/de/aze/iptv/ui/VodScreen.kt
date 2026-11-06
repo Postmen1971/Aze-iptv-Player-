@@ -107,7 +107,10 @@ private class Playing(val url: String, val title: String, val resumeKey: String,
  *  ◀ in den Kategorien öffnet das Menü (TV, Filme, Serien, Suchen, Einstellungen).
  */
 @Composable
-fun VodScreen(app: AppController, startWithSeries: Boolean, onExit: () -> Unit, onOpenSettings: () -> Unit = onExit) {
+fun VodScreen(
+    app: AppController, startWithSeries: Boolean, onExit: () -> Unit, onOpenSettings: () -> Unit = onExit,
+    onFootball: (() -> Unit)? = null, onQuit: (() -> Unit)? = null,
+) {
     val vodSources = app.vodSources
     var series by remember { mutableStateOf(startWithSeries) }
     // Emulator-Test: gleich den Test-Anbieter für Filme wählen
@@ -296,6 +299,9 @@ private fun Browse(
                     onSettings = onOpenSettings,
                     onPlaylist = { menu = false; query = null; onNextSource() },
                     onRight = { menu = false },
+                    // dasselbe Menü wie beim Fernsehen – auch „Fußball heute“ und „App beenden“
+                    onFootball = onFootball,
+                    onQuit = onQuit,
                 )
             }
             Column(

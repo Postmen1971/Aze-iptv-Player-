@@ -41,6 +41,11 @@ class MainActivity : ComponentActivity() {
         de.aze.iptv.data.Tmdb.init(applicationContext)
         de.aze.iptv.data.CoverStore.init(applicationContext)
         de.aze.iptv.data.VodDisk.init(applicationContext)
+        // Web-Anzeige (für SkorText) im Hintergrund vorwärmen: das erste Öffnen lädt sonst erst die ganze Chromium-Bibliothek
+        Thread {
+            Thread.sleep(4_000)
+            runCatching { android.webkit.WebSettings.getDefaultUserAgent(applicationContext) }
+        }.apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hideSystemBars()
 
@@ -209,7 +214,11 @@ class MainActivity : ComponentActivity() {
                     }
                     when (screen) {
                         Screen.PLAYER -> Unit
-                        Screen.VOD -> VodScreen(app, startWithSeries = vodSeries, onExit = { screen = Screen.PLAYER }, onOpenSettings = openSettings)
+                        Screen.VOD -> VodScreen(
+                            app, startWithSeries = vodSeries, onExit = { screen = Screen.PLAYER }, onOpenSettings = openSettings,
+                            onFootball = { app.pendingFootball = true; screen = Screen.PLAYER },
+                            onQuit = { finish() },
+                        )
                         Screen.PIN -> CoverLayer {
                             PinScreen(
                                 title = "PIN für die Einstellungen",

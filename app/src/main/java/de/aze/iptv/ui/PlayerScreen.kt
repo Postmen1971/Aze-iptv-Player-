@@ -390,11 +390,15 @@ fun PlayerScreen(
     var touchBar by remember { mutableStateOf(false) }
     var touchTick by remember { mutableIntStateOf(0) }
     var teletextWeb by remember { mutableStateOf<android.webkit.WebView?>(null) }
-    // Versteckter Videotext rechnet nicht weiter im Hintergrund
+    // SkorText lädt noch → Hinweis in der Bildmitte („SkorText startet …“)
+    var skorLoading by remember { mutableStateOf(false) }
+    // aus „Fußball heute“ im Menü der Filme: hier öffnen
+    LaunchedEffect(app.pendingFootball) { if (app.pendingFootball) { app.pendingFootball = false; football = true } }
+    // Versteckter Videotext rechnet nicht weiter im Hintergrund – bleibt aber 10 Minuten bereit (zweites Öffnen sofort)
     LaunchedEffect(teletext) {
         teletextWeb?.let { if (teletext) it.onResume() else it.onPause() }
-        // Videotext geschlossen: Anzeige sofort ganz freigeben (eine WebView braucht viel Speicher)
         if (!teletext && teletextWeb != null) {
+            delay(10 * 60_000L)
             val w = teletextWeb
             teletextWeb = null
             runCatching { w?.loadUrl("about:blank"); w?.destroy() }
@@ -716,7 +720,7 @@ fun PlayerScreen(
             KeyAction.PREV_CH -> app.step(-1)
             KeyAction.SEARCH -> search = true
             KeyAction.FOOTBALL -> football = true
-            KeyAction.SKORTEXT -> teletext = true
+            KeyAction.SKORTEXT -> { teletext = true; skorLoading = teletextWeb == null }
             KeyAction.MOVIES -> onOpenVod(false)
             KeyAction.SERIES -> onOpenVod(true)
             KeyAction.SETTINGS -> onOpenSettings()
@@ -842,7 +846,7 @@ fun PlayerScreen(
                     AndroidKeyEvent.KEYCODE_LAST_CHANNEL -> { app.playPrevious(); true }
                     AndroidKeyEvent.KEYCODE_CAPTIONS -> { quickMenu = true; true }
                     AndroidKeyEvent.KEYCODE_TV_TELETEXT -> {
-                        teletext = true; true
+                        teletext = true; skorLoading = teletextWeb == null; true
                     }
                     AndroidKeyEvent.KEYCODE_SEARCH -> {
                         search = true; true
@@ -1097,7 +1101,7 @@ fun PlayerScreen(
         }
 
         if (teletext) {
-            val w = teletextWeb ?: Teletext.create(context, onCrash = {
+            val w = teletextWeb ?: Teletext.create(context, onReady = { skorLoading = false }, onCrash = {
                 // Absturz der Anzeige: nur den Videotext schließen und beim nächsten Mal neu anlegen.
                 // Die kaputte Anzeige freigeben, sobald sie aus der Oberfläche entfernt ist.
                 val dead = teletextWeb
@@ -1106,6 +1110,17 @@ fun PlayerScreen(
                 android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ runCatching { dead?.destroy() } }, 500)
             })?.also { teletextWeb = it }
             if (w != null) TeletextView(web = w, modifier = Modifier.fillMaxSize())
+            if (skorLoading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(
+                        Modifier.background(Palette.PanelDark.copy(alpha = 0.92f), RoundedCornerShape(18.dp)).padding(horizontal = 34.dp, vertical = 22.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text("SkorText startet …", color = Palette.Text, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        Text("einen Moment bitte – Zurück bricht ab", color = Palette.TextMuted, fontSize = 14.sp)
+                    }
+                }
+            }
             else LaunchedEffect(Unit) {
                 teletext = false
                 app.message = "Videotext kann gerade nicht angezeigt werden – bitte gleich noch einmal versuchen."
@@ -1139,11 +1154,14 @@ fun PlayerScreen(
                     else TrackHelper.nextAudio(player)?.language?.let { app.updateAudioLanguage(it) }
                     tracksVersion++
                 },
-                if (app.multiViewOn) QuickItem("Multi-View", "Beta · 2–4 Sender") {
+                if (app.multiViewOn) QuickItem("Multi-View", "Beta · 2 Sender") {
                     quickMenu = false
                     mvSecond = null
                     multiView = true
                 } else null,
+                QuickItem("Infoleiste", if (app.nameDisplay == 3) "an" else "aus") {
+                    app.updateNameDisplay(if (app.nameDisplay == 3) 0 else 3)
+                },
                 QuickItem("Lippensynchron", msLabel(app.channelDelay(curCh?.key))) {
                     quickMenu = false
                     if (curCh != null) tool = 1
