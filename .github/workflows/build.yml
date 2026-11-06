@@ -220,8 +220,8 @@ jobs:
       - name: ffmpeg und Test-Server
         timeout-minutes: 12
         run: |
-          command -v ffmpeg >/dev/null || timeout 240 bash -c 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg' || true
-          if ! command -v ffmpeg >/dev/null; then
+          # ffmpeg MIT Texteinblendung (drawtext) – das fertige Programm hat sie immer
+          if ! ffmpeg -hide_banner -filters 2>/dev/null | grep -q drawtext; then
             curl -sSfL --retry 3 -o /tmp/ff.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
             mkdir -p /tmp/ff && tar -xJf /tmp/ff.tar.xz -C /tmp/ff --strip-components=1
             sudo cp /tmp/ff/ffmpeg /usr/local/bin/ffmpeg
