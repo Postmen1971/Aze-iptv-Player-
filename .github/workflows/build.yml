@@ -9,6 +9,10 @@ on:
         description: "Emulator-Test überspringen (nur auf ausdrücklichen Wunsch)"
         type: boolean
         default: false
+      guide_only:
+        description: "Nur die Anleitung (Fotos) neu machen, keine Videos"
+        type: boolean
+        default: false
       record_help:
         description: "Erklär-Videos neu aufnehmen (Release „hilfe“)"
         type: boolean
@@ -239,15 +243,19 @@ jobs:
           disable-animations: true
           # Bildschirm wie ein Fernseher (quer, 1920×1080)
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -skin 1920x1080
-          script: bash .github/qa/record_help.sh qa/aze-qa-x86_64.apk; bash .github/qa/make_guide.sh qa/aze-qa-x86_64.apk
+          script: if [ "${{ inputs.guide_only }}" != "true" ]; then bash .github/qa/record_help.sh qa/aze-qa-x86_64.apk; fi; bash .github/qa/make_guide.sh qa/aze-qa-x86_64.apk
       - name: In Release „hilfe“ hochladen
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view hilfe >/dev/null 2>&1 || gh release create hilfe --title "Erklär-Videos" --notes "Erklär-Videos für die Hilfe in der App (werden automatisch aufgenommen)." --prerelease
-          gh release upload hilfe help-out/*.mp4 --clobber
+          if ls help-out/*.mp4 >/dev/null 2>&1; then gh release upload hilfe help-out/*.mp4 --clobber; fi
       - name: Anleitung (Webseite) bauen
-        run: python3 .github/qa/build_guide.py guide && ls guide/img | wc -l
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/qa/build_guide.py guide && ls guide/img | wc -l
+          (cd guide && zip -qr ../anleitung.zip .) && gh release upload hilfe anleitung.zip --clobber
       - uses: actions/upload-pages-artifact@v3
         with:
           path: guide
