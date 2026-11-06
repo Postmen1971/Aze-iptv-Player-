@@ -397,6 +397,7 @@ fun PlayerScreen(
     LaunchedEffect(Unit) { if (app.testSkorText) { app.testSkorText = false; delay(3_000); teletext = true; skorLoading = true } }
     // Versteckter Videotext rechnet nicht weiter im Hintergrund – bleibt aber 10 Minuten bereit (zweites Öffnen sofort)
     LaunchedEffect(teletext) {
+        if (!teletext && teletextWeb != null) qaLog("SKOR_CLOSE")
         teletextWeb?.let { if (teletext) it.onResume() else it.onPause() }
         if (!teletext && teletextWeb != null) {
             delay(10 * 60_000L)
@@ -749,6 +750,11 @@ fun PlayerScreen(
                 val code = e.nativeKeyEvent.keyCode
                 // Videotext offen: alle Tasten gehen an den Videotext.
                 if (teletext) {
+                    // Während SkorText noch startet: nur Zurück zählt (sonst landeten ungeduldige OK-Drücke in der Seite)
+                    if (skorLoading) {
+                        if (e.type == KeyEventType.KeyDown && code == AndroidKeyEvent.KEYCODE_BACK) { teletext = false; skorLoading = false }
+                        return@onKeyEvent true
+                    }
                     if (e.type == KeyEventType.KeyDown) {
                         val k = Teletext.mapKey(code)
                         val w = teletextWeb
@@ -1102,22 +1108,30 @@ fun PlayerScreen(
         }
 
         if (teletext) {
-            val w = teletextWeb ?: Teletext.create(context, onReady = { skorLoading = false }, onCrash = {
-                // Absturz der Anzeige: nur den Videotext schließen und beim nächsten Mal neu anlegen.
-                // Die kaputte Anzeige freigeben, sobald sie aus der Oberfläche entfernt ist.
-                val dead = teletextWeb
-                teletext = false
-                teletextWeb = null
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ runCatching { dead?.destroy() } }, 500)
-            })?.also { teletextWeb = it }
-            if (w == null) LaunchedEffect(Unit) {
-                qaLog("SKOR_FAIL Anzeige ließ sich nicht anlegen")
-                app.message = "SkorText konnte nicht starten – bitte nochmal versuchen"
-                teletext = false
+            // Erst den Hinweis zeigen, DANN die Web-Anzeige anlegen (das erste Anlegen dauert auf dem Gerät einige Sekunden –
+            // vorher war in dieser Zeit nichts zu sehen und das Schnellmenü wirkte eingefroren)
+            LaunchedEffect(Unit) {
+                if (teletextWeb != null) return@LaunchedEffect
+                skorLoading = true
+                androidx.compose.runtime.withFrameNanos { }
+                androidx.compose.runtime.withFrameNanos { }
+                val created = Teletext.create(context, onReady = { skorLoading = false }, onCrash = {
+                    // Absturz der Anzeige: nur den Videotext schließen und beim nächsten Mal neu anlegen.
+                    val dead = teletextWeb
+                    teletext = false
+                    teletextWeb = null
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ runCatching { dead?.destroy() } }, 500)
+                })
+                if (created == null) {
+                    qaLog("SKOR_FAIL Anzeige ließ sich nicht anlegen")
+                    app.message = "SkorText konnte nicht starten – bitte gleich nochmal versuchen"
+                    skorLoading = false
+                    teletext = false
+                } else teletextWeb = created
             }
-            if (w != null) TeletextView(web = w, modifier = Modifier.fillMaxSize())
+            teletextWeb?.let { TeletextView(web = it, modifier = Modifier.fillMaxSize()) }
             if (skorLoading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)), contentAlignment = Alignment.Center) {
                     Column(
                         Modifier.background(Palette.PanelDark.copy(alpha = 0.92f), RoundedCornerShape(18.dp)).padding(horizontal = 34.dp, vertical = 22.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1126,10 +1140,6 @@ fun PlayerScreen(
                         Text("einen Moment bitte – Zurück bricht ab", color = Palette.TextMuted, fontSize = 14.sp)
                     }
                 }
-            }
-            else LaunchedEffect(Unit) {
-                teletext = false
-                app.message = "Videotext kann gerade nicht angezeigt werden – bitte gleich noch einmal versuchen."
             }
         }
 

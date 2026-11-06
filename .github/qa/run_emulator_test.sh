@@ -376,6 +376,7 @@ adb shell am start -S -n $PKG/.MainActivity --ez aze_test_skortext true >/dev/nu
 wait_for "SKOR_PAGE" 1 40 || fail "SkorText: Seite kam nicht ($(qa | grep -E "SKOR_" | tail -3 | tr '\n' ' '))"
 [ "$(count "SKOR_FAIL")" -eq 0 ] || fail "SkorText: Anzeige ließ sich nicht anlegen"
 sleep 5; shot "test12-skortext"
+[ "$(count "SKOR_CLOSE")" -eq 0 ] || fail "SkorText: ging nach dem Laden von selbst wieder zu"
 note "SkorText" "$(qa | grep -E "SKOR_" | head -12)"
 adb shell input keyevent KEYCODE_BACK; sleep 2
 alive || fail "SkorText: App nach dem Schließen nicht mehr da"
