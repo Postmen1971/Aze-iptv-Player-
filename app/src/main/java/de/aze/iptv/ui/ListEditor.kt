@@ -139,12 +139,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                             visible = !g.hidden,
                             moving = movingGroup == g.key,
                             active = selected?.key == g.key,
-                            modifier = Modifier.focusRequester(req("g:" + g.key))
-                                // ▶ springt über die normale Fokus-Steuerung zum ersten Sender (kein eigenes requestFocus → kein Absturz)
-                                .focusProperties {
-                                    val c0 = selected?.channels?.firstOrNull()?.key
-                                    right = if (c0 != null && channelState.layoutInfo.visibleItemsInfo.any { it.index == 0 }) req("c:" + c0) else FocusRequester.Default
-                                },
+                            modifier = Modifier.focusRequester(req("g:" + g.key)),
                             onFocus = { if (movingGroup == null) selectedKey = g.key; qaLog("SORT_G_FOCUS $i") },
                             onToggle = { if (sorting) movingGroup = g.key else app.toggleGroupHidden(g.key) },
                             onMoveStart = { movingGroup = g.key; qaLog("SORT_START ${g.name} $i") },
@@ -183,11 +178,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 visible = ch.key !in hidden,
                                 moving = movingChannel == ch.key,
                                 active = false,
-                                modifier = Modifier.focusRequester(req("c:" + ch.key))
-                                    .focusProperties {
-                                        val si = app.editGroups.indexOfFirst { it.key == selectedKey }
-                                        left = if (selectedKey != null && groupState.layoutInfo.visibleItemsInfo.any { it.index == si }) req("g:" + selectedKey) else FocusRequester.Default
-                                    },
+                                modifier = Modifier.focusRequester(req("c:" + ch.key)),
                                 onFocus = { qaLog("SORT_CH_FOCUS $ci") },
                                 onToggle = { if (sorting) movingChannel = ch.key else app.toggleChannelHidden(ch.key) },
                                 onMoveStart = { movingChannel = ch.key; qaLog("SORT_CH_START ${ch.name} $ci") },
@@ -301,7 +292,8 @@ private fun ManageRow(
             TvButton("▼", onClick = { onMove(+1) })
             TvButton("✓", onClick = onMoveEnd)
         } else if (onOpen != null) {
-            TvButton("›", onClick = onOpen)
+            // nur zum Antippen (Tablet) – mit der Fernbedienung springt ▶ direkt in die Senderliste daneben
+            TvButton("›", modifier = Modifier.focusProperties { canFocus = false }, onClick = onOpen)
         }
     }
 }
