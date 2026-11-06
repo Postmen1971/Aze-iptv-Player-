@@ -35,19 +35,30 @@ stop() {
   log "aufgenommen: $NAME ($t s)"
 }
 
-# Texte einbrennen (jede Zeile ab ihrer Zeit bis zur nächsten)
+# Texte einbrennen: jede Zeile als Bild (Chrome rendert sie, unabhängig von ffmpeg-Schriftfiltern) und einblenden
+capimg() {  # capimg <text> <png>
+  local html; html=$(mktemp --suffix=.html)
+  printf '%s' "<html><body style=\"margin:0;background:transparent;display:flex;justify-content:center;align-items:flex-end;height:170px\"><div style=\"font:700 30px DejaVu Sans,Arial,sans-serif;color:#fff;background:rgba(11,21,48,.9);border-radius:18px;padding:14px 26px;max-width:1150px;text-align:center;line-height:1.3\">$1</div></body></html>" > "$html"
+  google-chrome --headless=new --disable-gpu --hide-scrollbars --default-background-color=00000000 \
+    --window-size=1280,170 --screenshot="$2" "file://$html" >/dev/null 2>&1
+}
 burn() {
-  local name=$1 extra=${2:-}
-  local f="caps/$name.txt" filters="" i=0 prev_t="" prev_txt=""
+  local name=$1 f="caps/$1.txt" inputs="" chain="" i=0 last="[0:v]" prev_t="" prev_txt=""
   while IFS='|' read -r t txt; do
     if [ -n "$prev_t" ] && [ -n "$prev_txt" ]; then
-      i=$((i+1)); printf '%s' "$prev_txt" | fold -s -w 58 > "caps/$name-$i.txt"
-      filters="$filters,drawtext=fontfile=$FONT:textfile=caps/$name-$i.txt:fontsize=28:line_spacing=8:fontcolor=white:box=1:boxcolor=0x0b1530@0.88:boxborderw=22:x=(w-text_w)/2:y=h-text_h-48:enable='between(t,$prev_t,$t)'"
+      i=$((i+1)); capimg "$prev_txt" "caps/$name-$i.png"
+      if [ -s "caps/$name-$i.png" ]; then
+        inputs="$inputs -i caps/$name-$i.png"
+        chain="$chain${last}[$i:v]overlay=0:H-h-30:enable='between(t,$prev_t,$t)'[v$i];"
+        last="[v$i]"
+      fi
     fi
     prev_t=$t; prev_txt=$txt
   done < "$f"
-  ffmpeg -loglevel error -y -i "raw/$name.mp4" $extra -vf "fps=30${filters}" \
-    -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$name.mp4"
+  if [ -z "$chain" ]; then cp "raw/$name.mp4" "$OUT/$name.mp4"; return; fi
+  ffmpeg -loglevel error -y -i "raw/$name.mp4" $inputs -filter_complex "${chain%;}" -map "$last" \
+    -r 30 -c:v libx264 -preset veryfast -crf 24 -pix_fmt yuv420p -movflags +faststart -an "$OUT/$name.mp4" \
+    || { echo "::error::Video $name: Texte konnten nicht eingeblendet werden"; cp "raw/$name.mp4" "$OUT/$name.mp4"; }
   log "fertig: $OUT/$name.mp4"
 }
 
