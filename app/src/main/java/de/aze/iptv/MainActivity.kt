@@ -76,6 +76,7 @@ class MainActivity : ComponentActivity() {
             }
             app.testOpenVod = intent?.getBooleanExtra("aze_test_vod", false) == true
             app.testSkorText = intent?.getBooleanExtra("aze_test_skortext", false) == true
+            if (intent?.getBooleanExtra("aze_test_football", false) == true) app.pendingFootball = true
             // Herzschlag aus dem Haupt-Thread alle 0,25 s: Lücken > 1,5 s = App hing (prüft der Emulator-Test)
             lifecycleScope.launch { while (true) { kotlinx.coroutines.delay(250); lastBeat = android.os.SystemClock.uptimeMillis(); de.aze.iptv.ui.qaLog("BEAT ${beatNo++}") } }
             // Stockt der Haupt-Thread > 1 s: festhalten, WO er gerade hängt (zeigt der Emulator-Test als STALL)

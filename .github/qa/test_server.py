@@ -47,6 +47,18 @@ ONE_BUSY = False
 ONE_FREE_AT = 0.0
 
 
+DEMO_GROUPS = [
+    ("DE Deutsch", ["Das Erste HD", "ZDF HD", "RTL HD", "SAT.1 HD", "ProSieben HD", "VOX HD", "kabel eins HD", "RTL ZWEI HD", "Nitro HD", "3sat HD"]),
+    ("DE Sport", ["Sky Sport Bundesliga 1 HD", "Sky Sport Bundesliga 2 HD", "Sky Sport Top Event HD", "Sky Sport Mix HD", "DAZN 1 HD", "DAZN 2 HD", "Sport1 HD", "Eurosport 1 HD", "sportdigital HD", "MagentaSport 1"]),
+    ("TR Ulusal", ["TRT 1 HD", "ATV HD", "Show TV HD", "Kanal D HD", "Star TV HD", "TV8 HD", "NOW HD", "Beyaz TV HD"]),
+    ("TR Spor", ["beIN SPORTS 1 HD", "beIN SPORTS 2 HD", "beIN SPORTS 3 HD", "S Sport HD", "S Sport 2 HD", "TRT Spor HD", "A Spor HD", "Tivibu Spor 1 HD"]),
+    ("UK Sport", ["Sky Sports Main Event HD", "Sky Sports Premier League HD", "TNT Sports 1 HD", "TNT Sports 2 HD"]),
+]
+DEMO = "#EXTM3U\n" + "".join(
+    '#EXTINF:-1 group-title="{g}",{n}\nhttp://10.0.2.2:{p}/ok2.ts?d={i}\n'.format(g=g, n=n, p=8090, i=abs(hash(n)) % 100000)
+    for g, names in DEMO_GROUPS for n in names
+)
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
 
@@ -64,6 +76,8 @@ class Handler(BaseHTTPRequestHandler):
             time.sleep(0.05)
             with open(os.path.join(MEDIA, "poster.jpg"), "rb") as fh:
                 return self.send_body(fh.read(), "image/jpeg")
+        if path == "demo.m3u":  # wirklichkeitsnahe Namen für die Erklär-Videos (Bild kommt vom Test-Sender)
+            return self.send_body(DEMO.encode(), "audio/x-mpegurl")
         if path == "list.m3u":
             body = PLAYLIST.encode()
             self.send_response(200)

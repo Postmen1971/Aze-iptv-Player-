@@ -107,14 +107,22 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
-    var cat by remember { mutableStateOf(0) }
+    var cat by remember { mutableStateOf(1) }
+    // Fokus auf „Fernsehen“: rechts statt eines Bereichs das Aze-Logo und „OK = zurück zum Fernsehen“
+    var onTv by remember { mutableStateOf(app.hasAnySource) }
     // Standard: das Wichtigste. „Erweitert“ blendet Technik (Netzwerk, Puffer, Player …) zusätzlich ein.
     // Jeder Bereich hat genau ein Thema – so ist eindeutig, wo was steht.
-    val cats = listOfNotNull(
-        "Playlists", "Senderliste", "Favoriten", "Filme & Serien", "YouTube Live", "Fußball",
-        "Programm (EPG)", "Wiedergabe", "Bedienung", "Aussehen", "Sicherheit", "Sichern",
-        if (app.expertMode) "Netzwerk" else null, "Autostart", "App-Update", "Hilfe & Fehlersuche", "Über",
+    // Wenige Bereiche mit Alltags-Namen – jeder mit einer kurzen Zeile, was drin ist (für Laien leicht zu finden)
+    val cats = listOf(
+        "Suchen", "Sender & Playlists", "Senderliste & Favoriten", "Filme & Serien", "Fußball",
+        "Bild & Ton", "Programmzeitschrift", "Fernbedienung", "Aussehen", "PIN & Kinderschutz",
+        "Sichern", "System", "Hilfe", "Über",
     )
+    var helpVideo by remember { mutableStateOf<HelpVideo?>(null) }
+    helpVideo?.let { v ->
+        HelpVideoPlayer(app, v.url, v.title, onExit = { helpVideo = null })
+        return
+    }
 
     // Kompakt: links die Bereiche, rechts nur der gewählte Bereich.
     Row(modifier = Modifier.fillMaxSize().background(Palette.ScreenBrush)) {
@@ -141,15 +149,16 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     Text("Version ${BuildConfig.VERSION_NAME}", color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
-            CategoryItem("← Fernsehen", selected = false, modifier = Modifier.focusRequester(firstFocus), onFocus = {}, onClick = onClose)
+            CategoryItem("Fernsehen", selected = false, icon = LineIcon.TV, modifier = Modifier.focusRequester(firstFocus), onFocus = { if (app.hasAnySource) onTv = true }, onClick = onClose)
             cats.forEachIndexed { i, name ->
-                CategoryItem(name, selected = i == cat, onFocus = { cat = i }, onClick = { cat = i })
+                // gewählter Bereich nur markiert, solange nicht „Fernsehen“ den Fokus hat (sonst zwei Markierungen gleichzeitig)
+                CategoryItem(name, selected = i == cat && !onTv, icon = CATEGORY_ICON[name], onFocus = { onTv = false; cat = i }, onClick = { cat = i })
             }
             Spacer(Modifier.height(14.dp))
             CategoryItem(
                 if (app.expertMode) "Erweitert: an" else "Erweitert: aus",
                 selected = app.expertMode, onFocus = {},
-                onClick = { app.updateExpertMode(!app.expertMode); cat = 0 },
+                onClick = { app.updateExpertMode(!app.expertMode); cat = cats.indexOf("System") },
             )
         }
         Column(
@@ -160,24 +169,39 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 .padding(horizontal = 30.dp, vertical = 26.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            if (onTv) {
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 80.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    AzeLogo(120.dp)
+                    Text("Aze-IPTV", color = Palette.Text, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    Text("OK = zurück zum Fernsehen", color = Palette.TextSoft, fontSize = 18.sp)
+                    Text("▼ wählt einen Bereich der Einstellungen", color = Palette.TextMuted, fontSize = 15.sp)
+                }
+                return@Column
+            }
             // Seitentitel des gewählten Bereichs
             cats.getOrNull(cat)?.let { Text(it, color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp)) }
             app.message?.let {
                 Text(it, color = Palette.TextSoft, fontSize = 13.sp)
             }
+            CATEGORY_HINT[cats.getOrNull(cat)]?.let { Text(it, color = Palette.TextMuted, fontSize = 14.sp) }
             when (cats.getOrNull(cat)) {
-                "Playlists" -> {
+                "Suchen" -> SettingsSearch(onGo = { name -> cat = cats.indexOf(name).coerceAtLeast(0) })
+                "Sender & Playlists" -> {
                     PhoneInputSection(app)
                     PlaylistSection(app)
                     FreeListSection(app)
-                }
-                "YouTube Live" -> YouTubeSection(app)
-                "Senderliste" -> {
-                    ListEditSection(app, onEditList = { editingList = true })
+                    YouTubeSection(app)
                     RefreshSection(app)
+                }
+                "Senderliste & Favoriten" -> {
+                    ListEditSection(app, onEditList = { editingList = true })
+                    FavoritesSection(app)
                     PlaybackSection(app, onEditList = { editingList = true }, part = 1)
                 }
-                "Favoriten" -> FavoritesSection(app)
                 "Filme & Serien" -> {
                     VodCoverSection(app)
                     Section("Kategorien ausblenden") {
@@ -190,12 +214,11 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     PlaybackSection(app, onEditList = { editingList = true }, part = 3)
                 }
                 "Fußball" -> LearnedChannelsSection(app)
-                "Bedienung" -> ControlsSection(app)
+                "Fernbedienung" -> ControlsSection(app)
                 "Aussehen" -> AppearanceSection(app)
-                "Wiedergabe" -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
-                "Programm (EPG)" -> EpgSection(app)
-                "Netzwerk" -> NetworkSection(app)
-                "Sicherheit" -> Section("Sicherheit") {
+                "Bild & Ton" -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
+                "Programmzeitschrift" -> EpgSection(app)
+                "PIN & Kinderschutz" -> Section("PIN & Kinderschutz") {
                     Text(
                         if (app.pinIsDefault) "Die PIN ist noch 0000. Bitte eine eigene PIN festlegen."
                         else "Die Einstellungen sind mit deiner PIN geschützt.",
@@ -229,9 +252,15 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     TvButton("PIN ändern", onClick = { pinStep = 1 })
                 }
                 "Sichern" -> BackupSection(app)
-                "Autostart" -> AutostartSection(app)
-                "App-Update" -> UpdateSection()
-                "Hilfe & Fehlersuche" -> AboutSection(app, help = true)
+                "System" -> {
+                    UpdateSection()
+                    AutostartSection(app)
+                    if (app.expertMode) NetworkSection(app)
+                }
+                "Hilfe" -> {
+                    HelpVideosSection(onPlay = { helpVideo = it })
+                    AboutSection(app, help = true)
+                }
                 else -> AboutSection(app)
             }
         }
@@ -243,6 +272,7 @@ private fun CategoryItem(
     label: String,
     selected: Boolean,
     modifier: Modifier = Modifier,
+    icon: LineIcon? = null,
     onFocus: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -260,7 +290,8 @@ private fun CategoryItem(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(Modifier.size(8.dp).background(if (focused) Palette.OnAccent else if (selected) Palette.Highlight else Palette.Line, androidx.compose.foundation.shape.CircleShape))
+            if (icon != null) LineIconView(icon, fg, 20.dp)
+            else Box(Modifier.size(8.dp).background(if (focused) Palette.OnAccent else if (selected) Palette.Highlight else Palette.Line, androidx.compose.foundation.shape.CircleShape))
             Text(
                 label, color = fg, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -1512,3 +1543,104 @@ private fun BackupSection(app: AppController) {
         )
     }
 }
+
+
+/** Was in welchem Bereich steht – eine Zeile unter dem Titel */
+private val CATEGORY_HINT = mapOf(
+    "Suchen" to "Tippe ein Stichwort – die App zeigt dir, wo die Einstellung ist.",
+    "Sender & Playlists" to "Playlist hinzufügen (auch vom Handy), freie Sender, YouTube, Senderliste neu laden.",
+    "Senderliste & Favoriten" to "Gruppen und Sender sortieren, ausblenden, umbenennen – und deine Favoriten.",
+    "Filme & Serien" to "Cover schneller laden, Kategorien ausblenden, IMDb-Bewertung.",
+    "Fußball" to "Sender, die die App für „Fußball heute“ gelernt hat.",
+    "Bild & Ton" to "Ton-Bild-Synchron (Lippensynchron), Bildformat, Wiedergabe.",
+    "Programmzeitschrift" to "EPG: was gerade läuft und was danach kommt.",
+    "Fernbedienung" to "Tasten belegen, Umschalten, Infoleiste beim Umschalten.",
+    "Aussehen" to "Farben und Design der App.",
+    "PIN & Kinderschutz" to "PIN für die Einstellungen, Erwachsenen-Filter.",
+    "Sichern" to "Alle Einstellungen per Code sichern und auf ein anderes Gerät holen.",
+    "System" to "App-Update, Autostart beim Einschalten" + " und (bei „Erweitert“) Netzwerk.",
+    "Hilfe" to "Erklär-Videos, Zwischenspeicher leeren, Hänger-Protokoll.",
+    "Über" to "Version und Hinweise.",
+)
+
+/** Stichwörter → Bereich (für „Suchen“) */
+private val SETTINGS_INDEX = listOf(
+    Triple("Playlist hinzufügen", "playlist m3u xtream anbieter link zugang hinzufügen", "Sender & Playlists"),
+    Triple("Playlist vom Handy eingeben", "handy telefon qr code eingeben tippen", "Sender & Playlists"),
+    Triple("Freie Sender", "frei iptv-org kostenlos", "Sender & Playlists"),
+    Triple("YouTube Live", "youtube live kanal", "Sender & Playlists"),
+    Triple("Senderliste neu laden", "aktualisieren neu laden refresh", "Sender & Playlists"),
+    Triple("Sender sortieren / ausblenden / umbenennen", "sortieren reihenfolge verschieben ausblenden verstecken umbenennen gruppe kategorie", "Senderliste & Favoriten"),
+    Triple("Favoriten", "favorit stern nummer", "Senderliste & Favoriten"),
+    Triple("Senderliste am Handy/PC bearbeiten", "pc computer browser handy bearbeiten", "Senderliste & Favoriten"),
+    Triple("Cover schneller laden", "cover bild poster tmdb schnell langsam", "Filme & Serien"),
+    Triple("Film-Kategorien ausblenden", "kategorie land ausblenden filme serien", "Filme & Serien"),
+    Triple("IMDb-Bewertung", "imdb bewertung sterne", "Filme & Serien"),
+    Triple("Gelernte Fußball-Sender", "fußball fussball liveonsat gelernt tv-plan", "Fußball"),
+    Triple("Lippensynchron (Ton-Bild)", "ton bild synchron lippen verzögerung versatz audio", "Bild & Ton"),
+    Triple("Bildformat / Wiedergabe", "bild format zoom wiedergabe puffer 4k", "Bild & Ton"),
+    Triple("Programmzeitschrift (EPG)", "epg programm sendung zeitschrift", "Programmzeitschrift"),
+    Triple("Tastenbelegung", "taste fernbedienung belegen rot grün gelb blau lang", "Fernbedienung"),
+    Triple("Infoleiste beim Umschalten", "infoleiste info leiste sendername anzeigen dauer sekunden", "Fernbedienung"),
+    Triple("Farben / Design", "farbe design aussehen aurora thema", "Aussehen"),
+    Triple("PIN ändern", "pin passwort sperre", "PIN & Kinderschutz"),
+    Triple("Erwachsenen-Filter", "erwachsene kinder filter schutz", "PIN & Kinderschutz"),
+    Triple("Einstellungen sichern / wiederherstellen", "sichern backup code wiederherstellen neues gerät", "Sichern"),
+    Triple("App-Update", "update aktualisieren version neu", "System"),
+    Triple("Autostart", "autostart start einschalten", "System"),
+    Triple("Erklär-Videos", "hilfe video anleitung erklärung", "Hilfe"),
+    Triple("Zwischenspeicher leeren", "speicher cache leeren platz", "Hilfe"),
+    Triple("Hänger-Protokoll", "hänger protokoll fehler log absturz", "Hilfe"),
+)
+
+@Composable
+private fun SettingsSearch(onGo: (String) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    var entering by remember { mutableStateOf(false) }
+    Section("Einstellung suchen") {
+        TvButton(if (query.isBlank()) "Stichwort eingeben …" else "Suche: $query", selected = true, onClick = { entering = true })
+        val q = query.trim().lowercase()
+        val hits = if (q.isEmpty()) SETTINGS_INDEX else SETTINGS_INDEX.filter { (t, k, _) -> t.lowercase().contains(q) || k.contains(q) }
+        if (hits.isEmpty()) Text("Nichts gefunden – versuch ein anderes Wort.", color = Palette.TextMuted, fontSize = 14.sp)
+        hits.forEach { (title, _, area) ->
+            TvButton("$title  →  $area", onClick = { onGo(area) })
+        }
+    }
+    if (entering) {
+        InputDialog(
+            label = "Wonach suchst du? (z. B. Cover, PIN, Taste, sortieren)",
+            initial = query, password = false, keyboard = KeyboardType.Text,
+            onDone = { query = it; entering = false },
+            onCancel = { entering = false },
+        )
+    }
+}
+
+/** Erklär-Videos: liegen auf GitHub (Release „hilfe“), werden direkt abgespielt – nichts wird auf dem Gerät gespeichert */
+internal class HelpVideo(val title: String, val url: String)
+
+private val HELP_VIDEOS = listOf(
+    HelpVideo("Playlist mit dem Handy eingeben", "https://github.com/Postmen1971/Aze-iptv-Player-/releases/download/hilfe/hilfe-playlist.mp4"),
+    HelpVideo("Senderliste bearbeiten und sortieren", "https://github.com/Postmen1971/Aze-iptv-Player-/releases/download/hilfe/hilfe-senderliste.mp4"),
+    HelpVideo("Fußball heute im TV", "https://github.com/Postmen1971/Aze-iptv-Player-/releases/download/hilfe/hilfe-fussball.mp4"),
+)
+
+@Composable
+private fun HelpVideosSection(onPlay: (HelpVideo) -> Unit) {
+    Section("Erklär-Videos") {
+        Text("Kurze Videos, die zeigen, wie es geht. Zurück beendet das Video.", color = Palette.TextMuted, fontSize = 13.sp)
+        HELP_VIDEOS.forEach { v -> TvButton("▶  ${v.title}", onClick = { onPlay(v) }) }
+    }
+}
+
+
+/** Symbole links wie bei TiviMate (wo es ein passendes gibt) */
+private val CATEGORY_ICON = mapOf(
+    "Suchen" to LineIcon.SEARCH,
+    "Sender & Playlists" to LineIcon.PLAYLIST,
+    "Senderliste & Favoriten" to LineIcon.TV,
+    "Filme & Serien" to LineIcon.MOVIE,
+    "Fußball" to LineIcon.FOOTBALL,
+    "PIN & Kinderschutz" to LineIcon.EYE_OFF,
+    "System" to LineIcon.SETTINGS,
+)

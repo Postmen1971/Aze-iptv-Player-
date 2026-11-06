@@ -9,6 +9,10 @@ on:
         description: "Emulator-Test überspringen (nur auf ausdrücklichen Wunsch)"
         type: boolean
         default: false
+      record_help:
+        description: "Erklär-Videos neu aufnehmen (Release „hilfe“)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -188,3 +192,56 @@ jobs:
           name: Aze-IPTV-Player 1.0.${{ github.run_number }}${{ needs.build.outputs.label }}
           body: ${{ github.event.head_commit.message }}
           files: out/*.apk
+
+  # Erklär-Videos: der Emulator bedient die echte App und filmt sie; Ergebnis kommt in den Release „hilfe“
+  help-videos:
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_help }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: KVM freischalten
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/download-artifact@v4
+        with:
+          name: qa-apk
+          path: qa
+      - name: Test-Videos aus dem Zwischenspeicher
+        id: media
+        uses: actions/cache@v4
+        with:
+          path: .github/qa/media
+          key: qa-media-${{ hashFiles('.github/qa/make_media.sh') }}
+      - name: ffmpeg und Test-Server
+        timeout-minutes: 12
+        run: |
+          command -v ffmpeg >/dev/null || timeout 240 bash -c 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ffmpeg' || true
+          if ! command -v ffmpeg >/dev/null; then
+            curl -sSfL --retry 3 -o /tmp/ff.tar.xz https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+            mkdir -p /tmp/ff && tar -xJf /tmp/ff.tar.xz -C /tmp/ff --strip-components=1
+            sudo cp /tmp/ff/ffmpeg /usr/local/bin/ffmpeg
+          fi
+          [ "${{ steps.media.outputs.cache-hit }}" = "true" ] || bash .github/qa/make_media.sh
+          nohup python3 .github/qa/test_server.py 8090 > qa-server.log 2>&1 &
+          sleep 2; curl -sf http://127.0.0.1:8090/demo.m3u | head -3
+      - name: Videos aufnehmen
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: default
+          ram-size: 2048M
+          disable-animations: true
+          # Bildschirm wie ein Fernseher (quer, 1920×1080)
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -skin 1920x1080
+          script: bash .github/qa/record_help.sh qa/aze-qa-x86_64.apk
+      - name: In Release „hilfe“ hochladen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view hilfe >/dev/null 2>&1 || gh release create hilfe --title "Erklär-Videos" --notes "Erklär-Videos für die Hilfe in der App (werden automatisch aufgenommen)." --prerelease
+          gh release upload hilfe help-out/*.mp4 --clobber

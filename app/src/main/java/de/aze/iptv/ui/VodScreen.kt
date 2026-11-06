@@ -1323,3 +1323,10 @@ internal suspend fun runCoverStock(app: AppController, ctx: android.content.Cont
         }
     }
 }
+
+
+/** Erklär-Video aus den Einstellungen abspielen (gleicher Player wie bei Filmen) */
+@Composable
+internal fun HelpVideoPlayer(app: AppController, url: String, title: String, onExit: () -> Unit) {
+    VodPlayer(app, Playing(url, title, "hilfe:$title", 0L)) { _, _ -> onExit() }
+}

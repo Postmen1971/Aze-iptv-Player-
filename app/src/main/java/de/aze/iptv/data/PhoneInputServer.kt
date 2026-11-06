@@ -38,6 +38,7 @@ class PhoneInputServer(
     @Volatile private var running = false
 
     fun start(): Boolean {
+        if (de.aze.iptv.BuildConfig.TEST_HOOKS) de.aze.iptv.ui.qaLog("PHONE_CODE $code")  // nur Test-Build (Erklär-Video)
         val s = runCatching { ServerSocket().apply { reuseAddress = true; bind(InetSocketAddress(8080)) } }
             .recoverCatching { ServerSocket(0) }
             .getOrNull() ?: return false
