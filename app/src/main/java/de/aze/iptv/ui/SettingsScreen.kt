@@ -261,6 +261,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 }
                 "Hilfe" -> {
                     HelpVideosSection(onPlay = { helpVideo = it })
+                    GuideSection()
                     AboutSection(app, help = true)
                 }
                 else -> AboutSection(app)
@@ -1632,6 +1633,23 @@ private fun HelpVideosSection(onPlay: (HelpVideo) -> Unit) {
     Section("Erklär-Videos") {
         Text("Kurze Videos, die zeigen, wie es geht. Zurück beendet das Video.", color = Palette.TextMuted, fontSize = 13.sp)
         HELP_VIDEOS.forEach { v -> TvButton("▶  ${v.title}", onClick = { onPlay(v) }) }
+    }
+}
+
+/** Anleitung mit Bildern (Webseite) – QR-Code mit dem Handy scannen */
+const val GUIDE_URL = "https://postmen1971.github.io/Aze-iptv-Player-/"
+
+@Composable
+private fun GuideSection() {
+    Section("Anleitung mit Bildern") {
+        Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            QrCode(GUIDE_URL, 150.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Schritt für Schritt erklärt – mit Bildern aus der App.", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text("QR-Code mit der Handy-Kamera scannen oder im Browser öffnen:", color = Palette.TextMuted, fontSize = 13.sp)
+                Text(GUIDE_URL, color = Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 

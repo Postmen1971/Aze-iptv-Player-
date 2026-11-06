@@ -199,7 +199,7 @@ jobs:
     needs: build
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.record_help }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
       - name: KVM freischalten
@@ -239,10 +239,29 @@ jobs:
           disable-animations: true
           # Bildschirm wie ein Fernseher (quer, 1920×1080)
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -skin 1920x1080
-          script: bash .github/qa/record_help.sh qa/aze-qa-x86_64.apk
+          script: bash .github/qa/record_help.sh qa/aze-qa-x86_64.apk; bash .github/qa/make_guide.sh qa/aze-qa-x86_64.apk
       - name: In Release „hilfe“ hochladen
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view hilfe >/dev/null 2>&1 || gh release create hilfe --title "Erklär-Videos" --notes "Erklär-Videos für die Hilfe in der App (werden automatisch aufgenommen)." --prerelease
           gh release upload hilfe help-out/*.mp4 --clobber
+      - name: Anleitung (Webseite) bauen
+        run: python3 .github/qa/build_guide.py guide && ls guide/img | wc -l
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: guide
+  guide-page:
+    needs: help-videos
+    runs-on: ubuntu-24.04
+    # einmalig nötig: GitHub → Settings → Pages → Source: „GitHub Actions“
+    continue-on-error: true
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

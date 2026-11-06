@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -338,7 +339,7 @@ private fun MvSlot(
         // Fläche über dem Bild fürs Antippen (das Video selbst nimmt keine Berührungen an)
         Box(
             Modifier.matchParentSize().qaPos("MV Bild ${index + 1}")
-                .pointerInput(Unit) { androidx.compose.foundation.gestures.detectTapGestures(onTap = { tapNow() }) },
+                .pointerInput(Unit) { detectTapGestures(onTap = { tapNow() }) },
         )
     }
 }
