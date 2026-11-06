@@ -59,11 +59,11 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
     val groupState = androidx.compose.foundation.lazy.rememberLazyListState()
     val channelState = androidx.compose.foundation.lazy.rememberLazyListState()
     val moveScope = androidx.compose.runtime.rememberCoroutineScope()
-    val movingReq = remember { FocusRequester() }
-    // ▶ von den Kategorien direkt zum ersten Sender, ◀ zurück zur gewählten Kategorie
-    val firstChannelReq = remember { FocusRequester() }
-    val selectedGroupReq = remember { FocusRequester() }
-    fun follow(state: androidx.compose.foundation.lazy.LazyListState, idx: Int) {
+    // Je Eintrag ein fester FocusRequester (die Modifier-Kette eines Eintrags ändert sich nie –
+    // wechselnde Kette am fokussierten Eintrag führte zum Absturz „BringIntoViewRequester … before parents are placed“)
+    val reqs = remember { HashMap<String, FocusRequester>() }
+    fun req(key: String) = reqs.getOrPut(key) { FocusRequester() }
+    fun follow(state: androidx.compose.foundation.lazy.LazyListState, idx: Int, key: String) {
         if (idx < 0) return
         moveScope.launch {
             val info = state.layoutInfo.visibleItemsInfo
@@ -77,7 +77,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             androidx.compose.runtime.withFrameNanos { }
             androidx.compose.runtime.withFrameNanos { }
             kotlinx.coroutines.delay(30)
-            runCatching { movingReq.requestFocus() }
+            runCatching { req(key).requestFocus() }
         }
     }
     BackHandler {
@@ -87,14 +87,13 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             else -> onClose()
         }
     }
-    val firstGroup = remember { FocusRequester() }
     // Fokus auf die erste Gruppe – auch wenn die Senderliste erst nach dem Öffnen fertig geladen ist
     val hasGroups = app.editGroups.isNotEmpty()
     LaunchedEffect(hasGroups) {
         if (!hasGroups) return@LaunchedEffect
         withFrameNanos { }
         withFrameNanos { }
-        runCatching { firstGroup.requestFocus() }
+        app.editGroups.firstOrNull()?.let { runCatching { req("g:" + it.key).requestFocus() } }
         qaLog("SORT_OPEN ${app.editGroups.size} Gruppen")
     }
 
@@ -140,12 +139,11 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                             visible = !g.hidden,
                             moving = movingGroup == g.key,
                             active = selected?.key == g.key,
-                            modifier = (if (i == 0) Modifier.focusRequester(firstGroup) else Modifier)
-                                .then(if (movingGroup == g.key) Modifier.focusRequester(movingReq) else Modifier)
-                                .then(if (selected?.key == g.key && movingGroup == null) Modifier.focusRequester(selectedGroupReq) else Modifier)
+                            modifier = Modifier.focusRequester(req("g:" + g.key))
                                 // ▶ springt über die normale Fokus-Steuerung zum ersten Sender (kein eigenes requestFocus → kein Absturz)
                                 .focusProperties {
-                                    right = if (channelState.layoutInfo.visibleItemsInfo.any { it.index == 0 }) firstChannelReq else FocusRequester.Default
+                                    val c0 = selected?.channels?.firstOrNull()?.key
+                                    right = if (c0 != null && channelState.layoutInfo.visibleItemsInfo.any { it.index == 0 }) req("c:" + c0) else FocusRequester.Default
                                 },
                             onFocus = { if (movingGroup == null) selectedKey = g.key; qaLog("SORT_G_FOCUS $i") },
                             onToggle = { if (sorting) movingGroup = g.key else app.toggleGroupHidden(g.key) },
@@ -154,7 +152,7 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 app.moveGroup(g.key, d)
                                 val idx = app.editGroups.indexOfFirst { it.key == g.key }
                                 qaLog("SORT_MOVE ${g.name} $idx")
-                                follow(groupState, idx)
+                                follow(groupState, idx, "g:" + g.key)
                             },
                             onMoveEnd = { movingGroup = null; qaLog("SORT_END ${g.name} ${app.editGroups.indexOfFirst { it.key == g.key }}") },
                             onOpen = { selectedKey = g.key },
@@ -185,18 +183,17 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                                 visible = ch.key !in hidden,
                                 moving = movingChannel == ch.key,
                                 active = false,
-                                modifier = (if (movingChannel == ch.key) Modifier.focusRequester(movingReq) else Modifier)
-                                    .then(if (ci == 0) Modifier.focusRequester(firstChannelReq) else Modifier)
+                                modifier = Modifier.focusRequester(req("c:" + ch.key))
                                     .focusProperties {
                                         val si = app.editGroups.indexOfFirst { it.key == selectedKey }
-                                        left = if (groupState.layoutInfo.visibleItemsInfo.any { it.index == si }) selectedGroupReq else FocusRequester.Default
+                                        left = if (selectedKey != null && groupState.layoutInfo.visibleItemsInfo.any { it.index == si }) req("g:" + selectedKey) else FocusRequester.Default
                                     },
                                 onFocus = { qaLog("SORT_CH_FOCUS $ci") },
                                 onToggle = { if (sorting) movingChannel = ch.key else app.toggleChannelHidden(ch.key) },
                                 onMoveStart = { movingChannel = ch.key; qaLog("SORT_CH_START ${ch.name} $ci") },
                                 onMove = { d ->
                                     app.moveChannel(g.key, ch.key, d)
-                                    follow(channelState, app.editGroups.firstOrNull { it.key == g.key }?.channels?.indexOfFirst { it.key == ch.key } ?: -1)
+                                    follow(channelState, app.editGroups.firstOrNull { it.key == g.key }?.channels?.indexOfFirst { it.key == ch.key } ?: -1, "c:" + ch.key)
                                 },
                                 onMoveEnd = {
                                     movingChannel = null

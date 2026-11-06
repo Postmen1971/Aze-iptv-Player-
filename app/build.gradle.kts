@@ -55,6 +55,8 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")
             buildConfigField("boolean", "TEST_HOOKS", "true")
+            // lesbare Absturzmeldungen im Emulator-Test (Namen nicht verschleiern)
+            proguardFiles("proguard-qa.pro")
         }
     }
 

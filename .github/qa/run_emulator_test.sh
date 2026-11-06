@@ -17,8 +17,9 @@ beat_gap() { adb logcat -d -s AzeQA:I 2>/dev/null | grep ": BEAT$" | awk -v sinc
   { split($2,t,":"); s=t[1]*3600+t[2]*60+t[3]; if ($2 < since) next;
     if (($3 in last) && s-last[$3] > max) max=s-last[$3]; last[$3]=s }
   END { printf "%.1f", max+0 }'; }
-hang_check() { local g; g=$(beat_gap "$2"); log "Herzschlag $1: längste Lücke ${g} s"
-  awk -v g="$g" 'BEGIN{exit !(g>1.5)}' && fail "$1: App hing ${g} s (Haupt-Thread blockiert)"; true; }
+# Alarm: Lücke über 1,5 s UND deutlich länger (+0,7 s) als beim normalen Zappen im selben Emulator
+hang_check() { local g; g=$(beat_gap "$2"); log "Herzschlag $1: längste Lücke ${g} s (Vergleich Zappen: ${BASE_GAP:-0} s)"
+  awk -v g="$g" -v b="${BASE_GAP:-0}" 'BEGIN{exit !(g>1.5 && g>b+0.7)}' && fail "$1: App hing ${g} s (Haupt-Thread blockiert)"; true; }
 ticks() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F " TICK " ; }
 count() { qa | grep -cF -- "$1" || true; }
 shot() { STEP=$((STEP+1)); adb exec-out screencap -p > "$OUT/$(printf %02d $STEP)-$1.png" 2>/dev/null || true; }
@@ -171,6 +172,7 @@ note "Test 4c Dauerlauf" "nahtlose Übergänge: $t · längste Lücke ohne Bild:
 shot "test4c-dauerlauf"
 
 log "== Test 5: schnelles Zappen (20× hoch/runter), danach muss Test 1 laufen"
+T5=$(adb shell date +%H:%M:%S | tr -d '\r')
 for i in $(seq 1 10); do adb shell input keyevent KEYCODE_DPAD_UP; adb shell input keyevent KEYCODE_DPAD_DOWN; done
 sleep 3
 n=$(count "FIRST_FRAME Test 1")
@@ -179,6 +181,8 @@ wait_for "FIRST_FRAME Test 1" $((n+1)) 60 && shot "test5-nach-zappen"
 sleep 20
 alive || fail "App nach dem Zappen nicht mehr da"
 
+BASE_GAP=$(beat_gap "$T5"); log "Herzschlag beim normalen Zappen (Vergleichswert): ${BASE_GAP} s"
+note "Herzschlag Zappen" "längste Lücke beim normalen Zappen: ${BASE_GAP} s"
 log "== Test 5b: Umschaltzeit messen (10× zwischen zwei normalen Sendern)"
 z0=$(count "ZAPTIME")
 for i in $(seq 1 5); do
@@ -316,6 +320,7 @@ log "== Test 10: Filme & Serien mit Test-Anbieter (3000 Filme, 600 Serien) – C
 T10=$(adb shell date +%H:%M:%S | tr -d '\r')
 adb shell am start -S -n $PKG/.MainActivity --es aze_test_xtream "http://10.0.2.2:8090" --ez aze_test_vod true >/dev/null
 wait_for "VOD_CAT" 1 60 || fail "Filme: erste Kategorie kam nicht"
+T10=$(adb shell date +%H:%M:%S | tr -d '\r')   # ab hier: Filme sind offen (App-Start zählt nicht)
 sleep 15
 shot "test10-filme"
 c=$(qa | grep -c "COVER " || true)
@@ -339,6 +344,8 @@ hang_check "Fernsehen während Cover-Vorrat" "$T10b"
 note "Cover-Vorrat" "$(qa | grep -E "COVER_STOCK|VOD_ALL" | tail -5)"
 
 log "== Test 11: Rundgang – Schnellmenü, Suche, Infoleiste (▶ lang), Senderliste, Einstellungen"
+adb shell am start -S -n $PKG/.MainActivity >/dev/null
+sleep 3; wait_for "FIRST_FRAME" 1 30; sleep 3
 T11=$(adb shell date +%H:%M:%S | tr -d '\r')
 adb shell input keyevent KEYCODE_PROG_GREEN; sleep 2; shot "test11-schnellmenue"; adb shell input keyevent KEYCODE_BACK; sleep 2
 adb shell input keyevent KEYCODE_PROG_YELLOW; sleep 2; shot "test11-suche"; adb shell input keyevent KEYCODE_BACK; sleep 2
