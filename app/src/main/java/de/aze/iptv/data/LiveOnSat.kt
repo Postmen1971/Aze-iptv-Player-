@@ -54,9 +54,34 @@ object LiveOnSat {
             if (pages == 1 || u.contains("start_dd")) debugFile?.let { f -> runCatching { f.writeText(html) } }
             parse(html).forEach { f -> all.putIfAbsent(Football.norm(f.home) + "|" + Football.norm(f.away), f) }
         }
+        if (all.isEmpty()) {
+            // liveonsat sperrt manche Anschlüsse (HTTP 403) → Ersatz: Liste, die SkorText alle 30 min auf GitHub ablegt
+            val fromFeed = runCatching { feed() }.getOrElse { errors.add("GitHub: " + (it.message ?: "Fehler")); emptyList() }
+            if (fromFeed.isNotEmpty()) {
+                lastStatus = "liveonsat gesperrt – Ersatzliste von GitHub: ${fromFeed.size} Spiele"
+                return fromFeed
+            }
+        }
         lastStatus = if (pages == 0) "nicht erreichbar (" + errors.joinToString(", ") + ")"
         else "${bytes / 1024} KB geladen, ${all.size} Spiele mit Sendern erkannt"
         return all.values.toList()
+    }
+
+    private const val FEED = "https://raw.githubusercontent.com/Postmen1971/SkorText/feed/liveonsat.json"
+    private val dateLine = Regex("""(?i)^(monday|tuesday|wednesday|thursday|friday|saturday|sunday),""")
+
+    /** Spiele von heute aus der GitHub-Liste (gleiche Daten wie liveonsat, nur zwischengespeichert) */
+    private fun feed(): List<Fixture> {
+        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+        val root = org.json.JSONObject(fetch(FEED))
+        val arr = root.optJSONArray("fixtures") ?: return emptyList()
+        return (0 until arr.length()).mapNotNull { i ->
+            val o = arr.optJSONObject(i) ?: return@mapNotNull null
+            if (o.optString("date") != today) return@mapNotNull null
+            val ch = o.optJSONArray("channels") ?: return@mapNotNull null
+            val list = (0 until ch.length()).map { ch.optString(it) }.filter { it.isNotBlank() && !dateLine.containsMatchIn(it) }
+            if (list.isEmpty()) null else Fixture(o.optString("home"), o.optString("away"), list)
+        }
     }
 
     /** Zur Fehlersuche: Spiele bei liveonsat, in denen eine der beiden Mannschaften vorkommt. */

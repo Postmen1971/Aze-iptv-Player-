@@ -74,8 +74,9 @@ sleep 6
 rec hilfe-playlist
 cap "Beim ersten Start öffnen sich die Einstellungen: „Sender & Playlists“"
 sleep 4
-k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN 1.5     # links auf „Sender & Playlists“
-k KEYCODE_DPAD_RIGHT 1.5; k KEYCODE_DPAD_DOWN 2   # rechts auf „Handy-Eingabe starten“
+# erster Tastendruck holt den Fokus auf „Fernsehen“, dann 2× ▼ = „Sender & Playlists“
+k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN 1.5
+k KEYCODE_DPAD_RIGHT 2   # ▶ landet direkt auf „Handy-Eingabe starten“
 cap "„Handy-Eingabe starten“ mit OK drücken"
 k KEYCODE_DPAD_CENTER 3
 cap "QR-Code mit dem Handy scannen – oder die Adresse im Handy-Browser öffnen"
@@ -107,7 +108,7 @@ sleep 2
 cap "Links „Senderliste & Favoriten“ wählen"
 k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN 2
 cap "„Senderliste bearbeiten öffnen“ mit OK"
-k KEYCODE_DPAD_RIGHT 1.5; k KEYCODE_DPAD_DOWN 1.5; k KEYCODE_DPAD_CENTER 3
+k KEYCODE_DPAD_RIGHT 2; k KEYCODE_DPAD_CENTER 3   # ▶ landet direkt auf „Senderliste bearbeiten öffnen“
 cap "Links die Kategorien, rechts ihre Sender"
 k KEYCODE_DPAD_DOWN; k KEYCODE_DPAD_DOWN 2
 cap "Verschieben: OK lang drücken, mit ▲▼ an die neue Stelle, OK legt ab"
