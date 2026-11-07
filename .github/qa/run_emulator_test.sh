@@ -465,7 +465,7 @@ if tap "QM Multi-View"; then
   tap "MV Bild 2" || fail "Touch: Multi-View – Bild 2 nicht antippbar"
   sleep 2; G=$(qa | grep -o "POS MV [^|]*" | grep -v "MV Bild" | head -1 | sed 's/POS //')
   if [ -n "$G" ] && tap "$G"; then
-    sleep 2; C=$(qa | grep -o "POS MV [^|]*" | grep -v "MV Bild" | sed 's/POS //' | grep -vF "$G" | tail -1)
+    sleep 2; C=$(qa | grep -oE "POS MV [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]+" | grep -v "MV Bild" | tail -8 | awk -F'|' '$4>=60' | head -2 | tail -1 | cut -d'|' -f1 | sed 's/POS //')
     [ -n "$C" ] && tap "$C"
   fi
   sleep 3; seen_log "MV_PICK 2" "$N" || fail "Touch: Multi-View – für Bild 2 ließ sich kein Sender wählen"
@@ -486,6 +486,9 @@ bar; tap "☰ Sender"; sleep 2; swipe_r; qa | grep -q "POS G " || fail "Touch: W
 swipe_r
 if tap "M Filme"; then
   sleep 6; shot "test13-filme"
+  # Filter steht evtl. auf einer Playlist ohne Filme: „Playlist: …“ antippen, bis Cover da sind
+  for p in 1 2 3; do qa | tail -400 | grep -q "POS V 1|" && break
+    P=$(qa | grep -oE "POS Playlist: [^|]*" | tail -1 | sed 's/POS //'); [ -n "$P" ] && tap "$P"; sleep 4; done
   tap "V 1" && { sleep 3; shot "test13-film"; tap "Zurück" || adb shell input keyevent KEYCODE_BACK; sleep 2; } || fail "Touch: Film-Cover nicht antippbar"
   tap "Serien" || fail "Touch: Filme – „Serien“ nicht antippbar"
   sleep 3; tap "📺 Live-TV" || { fail "Touch: Filme – „📺 Live-TV“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; }
