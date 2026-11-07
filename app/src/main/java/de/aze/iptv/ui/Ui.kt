@@ -304,7 +304,7 @@ fun Modifier.qaPos(name: String?): Modifier {
     androidx.compose.runtime.DisposableEffect(name) { onDispose { qaLog("GONE $name") } }
     return this.onGloballyPositioned { c ->
         val p = c.positionInWindow(); val vis = c.boundsInWindow()
-        val line = "POS $name|${(p.x + c.size.width / 2).toInt()}|${(p.y + c.size.height / 2).toInt()}|${vis.height.toInt()}"
+        val line = "POS $name|${(p.x + c.size.width / 2).toInt()}|${(p.y + c.size.height / 2).toInt()}|${minOf(vis.height, vis.width).toInt()}|${vis.width.toInt()}"
         if (line != last) { last = line; qaLog(line) }
     }
 }

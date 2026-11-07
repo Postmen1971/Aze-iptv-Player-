@@ -73,20 +73,32 @@ max_gap() {
 # ── Touch (Tablet): die App (Test-Build) schreibt die Position jedes Knopfs ins Protokoll (POS Name|x|y|sichtbare Höhe)
 # echte Bildschirmgröße wie gerade gedreht (wm size zeigt im Querformat die Hochformat-Werte!)
 scr() { adb shell dumpsys window displays 2>/dev/null | grep -o 'cur=[0-9]*x[0-9]*' | head -1 | cut -d= -f2; }
-tap() {  # tap "Name": Knopf antippen (scrollt bei Bedarf); 1 = nicht da
-  local H; H=$(scr | cut -dx -f2); H=${H:-1000}
-  for try in 1 2 3 4 5; do
+tap() {  # tap "Name": Knopf antippen (scrollt bei Bedarf, auch seitlich); 1 = nicht da
+  local WH W H; WH=$(scr); W=${WH%x*}; H=${WH#*x}; W=${W:-1000}; H=${H:-1000}
+  for try in 1 2 3 4 5 6 7 8; do
     local l; l=$(qa | grep -F -e "POS $1|" -e "GONE $1" | sed 's/.*AzeQA[^:]*: //' | tail -1)
     case "$l" in
-      "POS $1|"*) local x y v; IFS='|' read -r _ x y v <<<"$l"
+      "POS $1|"*) local x y v w; IFS='|' read -r _ x y v w <<<"$l"
         if [ "$v" -ge 10 ]; then adb shell input tap "$x" "$y"; sleep 1.5; return 0; fi
-        echo "  (tap $1: verdeckt bei y=$y, Bildschirm-Höhe $H → wischen)"
-        if [ "$y" -gt $((H/2)) ]; then adb shell input swipe "$x" $((H*3/4)) "$x" $((H/4)) 400; else adb shell input swipe "$x" $((H/4)) "$x" $((H*3/4)) 400; fi
-        sleep 1 ;;
+        echo "  (tap $1: verdeckt bei x=$x y=$y, Bildschirm $WH → wischen)"
+        if [ "$x" -gt "$W" ]; then adb shell input swipe $((W*3/4)) "$y" $((W/4)) "$y" 500
+        elif [ "$x" -lt 0 ]; then adb shell input swipe $((W/4)) "$y" $((W*3/4)) "$y" 500
+        elif [ "$y" -gt $((H/2)) ]; then adb shell input swipe "$x" $((H*3/4)) "$x" $((H/4)) 500
+        else adb shell input swipe "$x" $((H/4)) "$x" $((H*3/4)) 500; fi
+        sleep 1.2 ;;
       *) sleep 1 ;;
     esac
   done
   return 1
+}
+# Fernsehbild ohne offenes Fenster, dann Knopfleiste zeigen
+list_open() { [ "$(qa | grep -E ": LIST_(OPEN|CLOSED)" | tail -1 | grep -c LIST_OPEN)" -eq 1 ]; }
+bar() {
+  local WH; WH=$(scr); local W=${WH%x*} H=${WH#*x}
+  if list_open; then adb shell input tap $((W-15)) $((H/2)); sleep 1.5; fi
+  local l; l=$(qa | grep -F -e "POS ☰ Sender|" -e "GONE ☰ Sender" | tail -1)
+  case "$l" in *"POS ☰ Sender|"*) return 0 ;; esac
+  adb shell input tap $((W/2)) $((H*2/3)); sleep 2
 }
 last_is() { [ "$(qa | grep -E "$1" | tail -1 | sed 's/.*AzeQA[^:]*: //')" = "$2" ]; }
 
@@ -424,7 +436,7 @@ N=$(count "SORT_CLOSE"); adb shell input keyevent KEYCODE_BACK; sleep 2
 N=$(count "SET_CLOSE"); adb shell input keyevent KEYCODE_BACK; sleep 2
 [ "$(count "SET_CLOSE")" -gt "$N" ] || fail "Touch: Zurück schließt die Einstellungen nicht"
 for b in "☰ Sender" "⋯ Menü" "⚽ Heute"; do
-  adb shell input tap 300 300; sleep 2
+  bar
   if tap "$b"; then sleep 3; shot "test13-knopf"
     if [ "$b" = "☰ Sender" ]; then   # Senderliste: Tippen aufs Bild daneben schließt sie (Zurück führt zu den Gruppen)
       N=$(count "LIST_CLOSED"); W=$(scr); adb shell input tap $(( ${W%x*} - 15 )) $(( ${W#*x} / 2 )); sleep 2
@@ -438,7 +450,6 @@ done
 
 # ---- weitere Touch-Wege: Multi-View, Senderliste → Menü → Filme/Suchen, Sender antippen, Fußball, Schnellmenü
 WH=$(scr); SW=${WH%x*}; SH=${WH#*x}; log "Bildschirm: $WH"
-bar() { adb shell input tap $((SW/3)) $((SH/3)); sleep 2; }
 swipe_r() { adb shell input swipe 60 $((SH/2)) $((SW/2)) $((SH/2)) 300; sleep 1.5; }
 seen_log() { [ "$(count "$1")" -gt "$2" ]; }
 # Multi-View
@@ -461,7 +472,8 @@ else fail "Touch: Schnellmenü – „Multi-View“ nicht antippbar"; adb shell 
 alive || fail "Touch: App nach Multi-View weg"
 # Sender in der Liste antippen
 bar; tap "☰ Sender"; sleep 2
-N=$(count "FIRST_FRAME"); tap "C Test 4 Abbruch" || tap "C Test 1 Normal" || fail "Touch: Sender in der Liste nicht antippbar"
+N=$(count "FIRST_FRAME"); C=$(qa | grep -oE "POS C [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]{2,}" | tail -1 | cut -d'|' -f1 | sed 's/POS //')
+if [ -z "$C" ] || ! tap "$C"; then fail "Touch: Sender in der Liste nicht antippbar (${C:-keiner sichtbar})"; fi
 sleep 4; seen_log "FIRST_FRAME" "$N" || fail "Touch: Antippen eines Senders schaltet nicht um"
 # Senderliste → Wischen → Gruppen → Menü → Filme
 bar; tap "☰ Sender"; sleep 2; swipe_r; qa | grep -q "POS G " || fail "Touch: Wischen nach rechts zeigt keine Gruppen"
