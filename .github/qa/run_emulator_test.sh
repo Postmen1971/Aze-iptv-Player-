@@ -431,6 +431,8 @@ for d in 0 0 0 0; do tap "PIN $d" || { fail "Touch: PIN-Taste $d nicht antippbar
 sleep 2; shot "test13-einstellungen"
 for c in "Sender & Playlists" "Senderliste & Favoriten" "Filme & Serien" "Fußball" "Bild & Ton" "Programmzeitschrift" "Fernbedienung" "Aussehen" "PIN & Kinderschutz" "Sichern" "System" "Hilfe" "Über" "Suchen"; do
   if ! tap "$c"; then fail "Touch: Bereich „$c“ nicht antippbar"; continue; fi
+  # Liste rollte noch nach (Nachbar getroffen) → einmal neu antippen
+  last_is "SET_PANE" "SET_PANE $c" || { sleep 1.5; tap "$c"; }
   last_is "SET_PANE" "SET_PANE $c" || { fail "Touch: Bereich „$c“ öffnet sich nicht ($(qa | grep SET_PANE | tail -1 | sed 's/.*: //'))"; shot "test13-bereich"; }
 done
 tap "Senderliste & Favoriten"; tap "Senderliste bearbeiten öffnen" || fail "Touch: „Senderliste bearbeiten öffnen“ nicht antippbar"
