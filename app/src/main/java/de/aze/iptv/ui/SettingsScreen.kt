@@ -688,6 +688,7 @@ private fun PhoneInputSection(app: AppController) {
                         Text("Code:", color = Palette.TextSoft, fontSize = 18.sp)
                         Text(s.code, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
                     }
+                    LinkOpenButton(address?.let { "$it/?c=${s.code}" } ?: "", "🔗 Hier auf dem Gerät öffnen")
                 }
             }
             Text("Schließt sich nach der Eingabe oder nach 5 Minuten von selbst.", color = Palette.TextMuted, fontSize = 13.sp)
@@ -747,6 +748,7 @@ private fun WebEditSection(app: AppController) {
                         Text("Code:", color = Palette.TextSoft, fontSize = 18.sp)
                         Text(s.code, color = Palette.Accent, fontSize = 30.sp, fontWeight = FontWeight.Bold)
                     }
+                    LinkOpenButton(address?.let { "$it/?c=${s.code}" } ?: "", "🔗 Hier auf dem Gerät öffnen")
                 }
             }
             Text("Bleibt offen, solange du bearbeitest; schließt sich 30 Minuten nach der letzten Änderung.", color = Palette.TextMuted, fontSize = 13.sp)
@@ -1648,6 +1650,7 @@ private fun GuideSection() {
                 Text("Schritt für Schritt erklärt – mit Bildern aus der App.", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Text("QR-Code mit der Handy-Kamera scannen oder im Browser öffnen:", color = Palette.TextMuted, fontSize = 13.sp)
                 Text(GUIDE_URL, color = Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                LinkOpenButton(GUIDE_URL, "🔗 Anleitung öffnen")
             }
         }
     }

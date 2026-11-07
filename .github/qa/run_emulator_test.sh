@@ -435,6 +435,13 @@ for c in "Sender & Playlists" "Senderliste & Favoriten" "Filme & Serien" "Fußba
   last_is "SET_PANE" "SET_PANE $c" || { sleep 1.5; tap "$c"; }
   last_is "SET_PANE" "SET_PANE $c" || { fail "Touch: Bereich „$c“ öffnet sich nicht ($(qa | grep SET_PANE | tail -1 | sed 's/.*: //'))"; shot "test13-bereich"; }
 done
+# Links direkt antippen (öffnet den Browser)
+tap "Hilfe"; N=$(count "OPEN_URL"); tap "🔗 Anleitung öffnen" || fail "Touch: Hilfe – Link „Anleitung öffnen“ nicht antippbar"
+sleep 3; [ "$(count "OPEN_URL")" -gt "$N" ] || fail "Touch: Hilfe – Anleitung-Link öffnet nichts"
+adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3
+tap "Sender & Playlists"; tap "Handy-Eingabe starten" && { sleep 2; N=$(count "OPEN_URL"); tap "🔗 Hier auf dem Gerät öffnen" || fail "Touch: Handy-Eingabe – Link nicht antippbar"
+  sleep 3; [ "$(count "OPEN_URL")" -gt "$N" ] || fail "Touch: Handy-Eingabe – Link öffnet nichts"
+  adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3; tap "Beenden"; }
 tap "Senderliste & Favoriten"; tap "Senderliste bearbeiten öffnen" || fail "Touch: „Senderliste bearbeiten öffnen“ nicht antippbar"
 sleep 3; shot "test13-senderliste"
 [ "$(count "SORT_OPEN")" -ge 1 ] || fail "Touch: Senderliste verwalten öffnet sich nicht"

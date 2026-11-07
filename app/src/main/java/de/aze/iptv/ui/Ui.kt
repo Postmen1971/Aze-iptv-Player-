@@ -308,3 +308,19 @@ fun Modifier.qaPos(name: String?): Modifier {
         if (line != last) { last = line; qaLog(line) }
     }
 }
+
+
+/** Tablet/Handy: Link direkt antippen und im Browser öffnen (Fernseher ohne Browser brauchen das nicht). */
+@Composable
+fun LinkOpenButton(url: String, label: String = "🔗 Im Browser öffnen") {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val touch = remember { !de.aze.iptv.player.FrameRate.isTv(ctx) }
+    if (!touch || url.isBlank()) return
+    TvButton(label, onClick = {
+        qaLog("OPEN_URL $url")
+        runCatching {
+            ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.onFailure { android.widget.Toast.makeText(ctx, "Kein Browser gefunden", android.widget.Toast.LENGTH_LONG).show() }
+    })
+}
