@@ -65,18 +65,51 @@ object Backup {
         val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.ENCRYPT_MODE, keyFrom(secret, salt), GCMParameterSpec(128, iv))
-        val ct = c.doFinal(collect(context).toString().toByteArray(Charsets.UTF_8))
-        val blob = "AZE1:" + Base64.encodeToString(salt + iv + ct, Base64.NO_WRAP)
-        val link = HangLog.uploadText(blob) // https://paste.rs/XXXXX
-        val id = link.trim().substringAfterLast('/').substringBefore('.')
-        require(id.length in 3..12 && id.all { it.isLetterOrDigit() }) { "unerwartete Antwort" }
-        return "$id-${secret.substring(0, 5)}-${secret.substring(5)}"
+        // gepackt (gzip) – viel kleiner, große Senderlisten passen so sicher hinein
+        val packed = java.io.ByteArrayOutputStream().also { bos ->
+            java.util.zip.GZIPOutputStream(bos).use { it.write(collect(context).toString().toByteArray(Charsets.UTF_8)) }
+        }.toByteArray()
+        val ct = c.doFinal(packed)
+        val blob = "AZE2:" + Base64.encodeToString(salt + iv + ct, Base64.NO_WRAP)
+        val errors = mutableListOf<String>()
+        // 1. paste.rs
+        runCatching {
+            val link = HangLog.uploadText(blob) // https://paste.rs/XXXXX
+            val id = link.trim().substringAfterLast('/').substringBefore('.')
+            require(id.length in 3..12 && id.all { it.isLetterOrDigit() }) { "unerwartete Antwort" }
+            return "$id-${secret.substring(0, 5)}-${secret.substring(5)}"
+        }.onFailure { errors += "paste.rs: ${it.message}" }
+        // 2. Ersatz: dpaste.com (hält 1 Jahr)
+        runCatching {
+            val id = dpasteUpload(blob)
+            return "dp$id-${secret.substring(0, 5)}-${secret.substring(5)}"
+        }.onFailure { errors += "dpaste: ${it.message}" }
+        error(errors.joinToString(" · ") + " (Größe ${blob.length / 1024} KB)")
     }
 
-    /** Sicherung im Internet löschen (paste.rs, blockierend). Danach ist der Code wertlos. */
+    private fun isDpaste(id: String) = id.startsWith("dp") && id.length > 7
+
+    private fun dpasteUpload(blob: String): String {
+        val body = "content=" + java.net.URLEncoder.encode(blob, "UTF-8") + "&syntax=text&expiry_days=365"
+        val c = URL("https://dpaste.com/api/v2/").openConnection() as HttpURLConnection
+        try {
+            c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 15_000; c.readTimeout = 25_000
+            c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            c.setRequestProperty("User-Agent", "Aze-IPTV")
+            c.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+            if (c.responseCode !in 200..299) error("Hochladen fehlgeschlagen (${c.responseCode})")
+            val link = c.inputStream.bufferedReader().readText().trim()
+            val id = link.trimEnd('/').substringAfterLast('/')
+            require(id.length in 4..20 && id.all { it.isLetterOrDigit() }) { "unerwartete Antwort" }
+            return id
+        } finally { c.disconnect() }
+    }
+
+    /** Sicherung im Internet löschen (blockierend). Danach ist der Code wertlos. */
     fun delete(code: String) {
         val id = code.trim().replace(" ", "").split('-').firstOrNull { it.isNotEmpty() } ?: error("Code fehlt")
         require(id.all { it.isLetterOrDigit() }) { "Code stimmt nicht" }
+        if (isDpaste(id)) return // dpaste kann man nicht löschen – läuft nach einem Jahr ab; der Code wird hier vergessen
         val conn = URL("https://paste.rs/$id").openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "DELETE"; conn.connectTimeout = 15_000; conn.readTimeout = 20_000
@@ -92,19 +125,23 @@ object Backup {
         val id = parts[0]
         val secret = (parts[1] + parts[2]).uppercase()
         require(id.all { it.isLetterOrDigit() }) { "Code stimmt nicht" }
-        val conn = URL("https://paste.rs/$id").openConnection() as HttpURLConnection
+        val url = if (isDpaste(id)) "https://dpaste.com/${id.removePrefix("dp")}.txt" else "https://paste.rs/$id"
+        val conn = URL(url).openConnection() as HttpURLConnection
         val blob = try {
             conn.connectTimeout = 15_000; conn.readTimeout = 20_000
+            conn.setRequestProperty("User-Agent", "Aze-IPTV")
             if (conn.responseCode !in 200..299) error("Sicherung nicht gefunden (${conn.responseCode})")
             conn.inputStream.bufferedReader().readText().trim()
         } finally { conn.disconnect() }
-        require(blob.startsWith("AZE1:")) { "Das ist keine Aze-IPTV-Sicherung" }
-        val data = Base64.decode(blob.removePrefix("AZE1:"), Base64.NO_WRAP)
+        val gz = blob.startsWith("AZE2:")
+        require(gz || blob.startsWith("AZE1:")) { "Das ist keine Aze-IPTV-Sicherung" }
+        val data = Base64.decode(blob.substring(5), Base64.NO_WRAP)
         val salt = data.copyOfRange(0, 16)
         val c = Cipher.getInstance("AES/GCM/NoPadding")
         c.init(Cipher.DECRYPT_MODE, keyFrom(secret, salt), GCMParameterSpec(128, data, 16, 12))
-        val plain = runCatching { String(c.doFinal(data, 28, data.size - 28), Charsets.UTF_8) }
-            .getOrElse { error("Code stimmt nicht") }
+        val raw = runCatching { c.doFinal(data, 28, data.size - 28) }.getOrElse { error("Code stimmt nicht") }
+        val plain = if (gz) java.util.zip.GZIPInputStream(raw.inputStream()).use { String(it.readBytes(), Charsets.UTF_8) }
+            else String(raw, Charsets.UTF_8)
         val root = JSONObject(plain)
         for (name in PREFS) {
             val o = root.optJSONObject(name) ?: continue

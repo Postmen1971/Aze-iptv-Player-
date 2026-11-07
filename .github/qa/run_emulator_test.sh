@@ -446,7 +446,7 @@ if [ "$(count "BACKUP_OK")" -gt 0 ] && qa | grep -E "BACKUP_" | tail -1 | grep -
   tap "Ja, löschen" || fail "Touch: Sicherheitsfrage „Ja, löschen“ nicht antippbar"
   for w in 1 2 3 4 5 6 7 8; do [ "$(count "BACKUP_DELETED")" -gt 0 ] && break; sleep 1.5; done
   [ "$(count "BACKUP_DELETED")" -gt 0 ] || fail "Touch: Sicherung wurde nicht gelöscht"
-elif qa | grep -E "BACKUP_" | tail -1 | grep -q BACKUP_FAIL; then note "Sichern" "Internet (paste.rs) im Test nicht erreichbar: $(qa | grep BACKUP_FAIL | tail -1 | sed 's/.*BACKUP_FAIL//')"
+elif qa | grep -E "BACKUP_" | tail -1 | grep -q BACKUP_FAIL; then fail "Sichern geht nicht:$(qa | grep BACKUP_FAIL | tail -1 | sed 's/.*BACKUP_FAIL//')"
 else fail "Touch: „Sicherung erstellen“ zeigt kein Ergebnis"; fi
 # Links direkt antippen (öffnet den Browser)
 tap "Hilfe"; N=$(count "OPEN_URL"); tap "🔗 Anleitung öffnen" || fail "Touch: Hilfe – Link „Anleitung öffnen“ nicht antippbar"
