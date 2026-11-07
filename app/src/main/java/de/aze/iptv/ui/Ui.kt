@@ -141,7 +141,18 @@ val Schemes = listOf(
         text = Color(0xFFEEF3FA), textSoft = Color(0xFFC9D3E2), textMuted = Color(0xFF8A97AC),
         accent = Color(0xFFFF7A6B), onAccent = Color(0xFF2E0B07), highlight = Color(0xFFFF7A6B),
     ),
+    // Entwurf A (Aziz, 07.11.2026): ruhiges Nachtblau mit Türkis – Standard
+    ColorScheme(
+        "Aze Nachtblau",
+        ground = Color(0xFF0A1430), panel = Color(0xFF0E1A3A), panelDark = Color(0xFF070E22),
+        raised = Color(0xFF16264D), line = Color(0xFF223563),
+        text = Color(0xFFEEF3FF), textSoft = Color(0xFFB9C8E6), textMuted = Color(0xFF7F93BA),
+        accent = Color(0xFF3AD6C0), onAccent = Color(0xFF06122A), highlight = Color(0xFF3AD6C0),
+    ),
 )
+
+/** Index von „Aze Nachtblau“ (Standard-Design) in [Schemes] */
+val AzeIndex: Int get() = Schemes.indexOfFirst { it.name == "Aze Nachtblau" }
 
 /** Index von „Aurora“ in [Schemes] */
 val AuroraIndex: Int get() = Schemes.indexOfFirst { it.name == "Aurora" }
@@ -189,6 +200,12 @@ object Palette {
     val GroupBrush get() = Brush.verticalGradient(
         listOf(scheme.panelDark.copy(alpha = 0.94f), scheme.panelDark.copy(alpha = 0.94f)),
     )
+    /** Zweite Fokusfarbe (Verlauf Türkis → Blau) */
+    val Accent2 = Color(0xFF2B7CFF)
+    /** Fokus in Listen: zarter Verlauf im Akzentton (Text bleibt hell) */
+    val FocusTint get() = Brush.horizontalGradient(listOf(scheme.accent.copy(alpha = 0.24f), Accent2.copy(alpha = 0.14f)))
+    /** Fortschrittsbalken */
+    val ProgressBrush get() = Brush.horizontalGradient(listOf(scheme.accent, lerp(scheme.accent, Accent2, 0.7f)))
     /** Fokus: heller Verlauf */
     val FocusBrush get() = Brush.verticalGradient(listOf(scheme.accent, lerp(scheme.accent, scheme.highlight, 0.22f)))
 

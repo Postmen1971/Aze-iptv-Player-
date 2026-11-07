@@ -43,6 +43,10 @@ class Store(context: Context) {
             val neu = when (old) { 0 -> 0; 2 -> 1; 4 -> 2; else -> 1 }
             prefs.edit().putInt("scheme", neu).putBoolean("schemes2", true).apply()
         }
+        // Einmalig: neues Standard-Design „Aze Nachtblau“ (Entwurf A)
+        if (!prefs.getBoolean("designA", false)) {
+            prefs.edit().putInt("scheme", de.aze.iptv.ui.AzeIndex.coerceAtLeast(0)).putBoolean("designA", true).apply()
+        }
         // Einmalig: fest 50 Hz statt Umschalten je Sender (ständiges Umschalten beim Zappen ließ das Bild stehen)
         if (!prefs.getBoolean("tuned2", false)) {
             prefs.edit().putBoolean("afr", false).putBoolean("afr50", true).putInt("afrDelay", 6)

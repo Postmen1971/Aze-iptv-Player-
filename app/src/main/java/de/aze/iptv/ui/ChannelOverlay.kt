@@ -1,5 +1,7 @@
 package de.aze.iptv.ui
 
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.ui.focus.focusProperties
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -341,28 +343,35 @@ fun ChannelOverlay(
                                 onLongClick = { app.toggleFavorite(nc.channel) },
                             ) { focused ->
                                 val prog = app.epg.now(nc.channel)
+                                // Fokus: leicht größer, Akzent-Rahmen, zarter Verlauf (nur Zeichnen – kostet kaum Leistung)
+                                val sc by androidx.compose.animation.core.animateFloatAsState(if (focused) 1.03f else 1f, androidx.compose.animation.core.tween(120), label = "fs")
+                                val shape = RoundedCornerShape(12.dp)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(if (prog != null) 44.dp else 38.dp)
-                                        .background(
-                                            if (focused) Palette.Accent else if (playing) Palette.Highlight.copy(alpha = 0.16f) else Palette.PanelDark.copy(alpha = 0f),
-                                            RoundedCornerShape(10.dp),
+                                        .height(if (prog != null) 46.dp else 38.dp)
+                                        .graphicsLayer { scaleX = sc; scaleY = sc }
+                                        .then(
+                                            when {
+                                                focused -> Modifier.background(Palette.FocusTint, shape).border(2.dp, Palette.Accent, shape)
+                                                playing -> Modifier.background(Palette.Accent.copy(alpha = 0.10f), shape)
+                                                else -> Modifier
+                                            },
                                         )
                                         .padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
                                         "${nc.number}",
-                                        color = if (focused) Palette.OnAccent else if (playing) Palette.Highlight else Palette.TextMuted,
-                                        fontSize = 13.sp, fontWeight = FontWeight.Normal,
+                                        color = if (focused || playing) Palette.Accent else Palette.TextMuted,
+                                        fontSize = 13.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Normal,
                                         textAlign = TextAlign.End, modifier = Modifier.width(38.dp),
                                     )
                                     Spacer(Modifier.width(10.dp))
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             nc.channel.name,
-                                            color = if (focused) Palette.OnAccent else Palette.TextSoft,
+                                            color = if (focused) Palette.Text else Palette.TextSoft,
                                             fontSize = 15.sp,
                                             fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,
                                             maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -371,18 +380,18 @@ fun ChannelOverlay(
                                         if (prog != null) {
                                             Text(
                                                 prog.title,
-                                                color = if (focused) Palette.OnAccent else Palette.EpgText,
+                                                color = if (focused) Palette.TextSoft else Palette.EpgText,
                                                 fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                             )
-                                            Box(Modifier.fillMaxWidth().height(2.dp).background(if (focused) Palette.OnAccent.copy(alpha = 0.25f) else Palette.Line)) {
+                                            Box(Modifier.fillMaxWidth().height(3.dp).background(Palette.Line, RoundedCornerShape(2.dp))) {
                                                 Box(
-                                                    Modifier.fillMaxWidth(prog.progress(System.currentTimeMillis())).height(2.dp)
-                                                        .background(if (focused) Palette.OnAccent else Palette.Highlight),
+                                                    Modifier.fillMaxWidth(prog.progress(System.currentTimeMillis())).height(3.dp)
+                                                        .background(Palette.ProgressBrush, RoundedCornerShape(2.dp)),
                                                 )
                                             }
                                         }
                                     }
-                                    if (nc.favorite) Text("★", color = if (focused) Palette.OnAccent else Palette.Highlight, fontSize = 12.sp)
+                                    if (nc.favorite) Text("★", color = Palette.Accent, fontSize = 12.sp)
                                 }
                             }
                         }

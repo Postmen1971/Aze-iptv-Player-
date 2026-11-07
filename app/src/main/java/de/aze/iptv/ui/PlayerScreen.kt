@@ -1282,15 +1282,15 @@ internal fun ZapBar(app: AppController, cur: de.aze.iptv.data.NumberedChannel, q
             .fillMaxWidth()
             // näher an den unteren Bildrand
             .padding(start = 32.dp, end = 32.dp, bottom = 10.dp)
-            .background(Palette.PanelDark.copy(alpha = 0.92f), RoundedCornerShape(22.dp))
-            .border(1.dp, Palette.Line.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
+            .background(Palette.PanelDark.copy(alpha = 0.90f), RoundedCornerShape(20.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(20.dp))
             .padding(horizontal = 22.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("${cur.number}", color = Palette.Highlight, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("${cur.number}", color = Palette.Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Text(cur.channel.name, color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 Text(
                     "● LIVE", color = Palette.Live, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold,
@@ -1309,7 +1309,7 @@ internal fun ZapBar(app: AppController, cur: de.aze.iptv.data.NumberedChannel, q
                     Text(hm.format(java.util.Date(prog.start)) + " – " + hm.format(java.util.Date(prog.stop)), color = Palette.TextMuted, fontSize = 13.sp)
                 }
                 Box(Modifier.fillMaxWidth().height(5.dp).background(Palette.Raised, RoundedCornerShape(3.dp))) {
-                    Box(Modifier.fillMaxWidth(prog.progress(now)).height(5.dp).background(Palette.Highlight, RoundedCornerShape(3.dp)))
+                    Box(Modifier.fillMaxWidth(prog.progress(now)).height(5.dp).background(Palette.ProgressBrush, RoundedCornerShape(3.dp)))
                 }
                 next?.let { Text("Danach " + hm.format(java.util.Date(it.start)) + " " + it.title, color = Palette.TextMuted, fontSize = 13.sp, maxLines = 1) }
             } else {
