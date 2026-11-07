@@ -436,7 +436,7 @@ sleep 2; shot "test13-einstellungen"
 for c in "Sender & Playlists" "Senderliste & Favoriten" "Filme & Serien" "Fußball" "Bild & Ton" "Programmzeitschrift" "Fernbedienung" "Aussehen" "PIN & Kinderschutz" "Sichern" "System" "Hilfe" "Über" "Suchen"; do
   if ! tap "$c"; then fail "Touch: Bereich „$c“ nicht antippbar"; continue; fi
   # Liste rollte noch nach (Nachbar getroffen) → einmal neu antippen
-  last_is "SET_PANE" "SET_PANE $c" || { sleep 1.5; tap "$c"; }
+  for r in 1 2 3; do last_is "SET_PANE" "SET_PANE $c" && break; sleep 1.5; tap "$c"; done
   last_is "SET_PANE" "SET_PANE $c" || { fail "Touch: Bereich „$c“ öffnet sich nicht ($(qa | grep SET_PANE | tail -1 | sed 's/.*: //'))"; shot "test13-bereich"; }
 done
 # Sichern: Code muss erscheinen
