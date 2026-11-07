@@ -40,7 +40,8 @@ k KEYCODE_DPAD_LEFT 2; shot menue
 # ▶ zurück: Menü → Gruppen → Sender → Liste zu (Zurück in den Gruppen würde die App beenden)
 k KEYCODE_DPAD_RIGHT; k KEYCODE_DPAD_RIGHT; k KEYCODE_DPAD_RIGHT 2
 k KEYCODE_PROG_GREEN 2; shot schnellmenue; k KEYCODE_BACK 2
-k KEYCODE_PROG_YELLOW 2; shot suche; k KEYCODE_BACK 2
+start
+k KEYCODE_PROG_YELLOW 3; shot suche; k KEYCODE_BACK; k KEYCODE_BACK 2
 
 # ── Einstellungen: PIN und jeder Bereich (frisch gestartet)
 start
