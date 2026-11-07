@@ -168,6 +168,16 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: bash .github/qa/run_emulator_test.sh qa/aze-qa-x86_64.apk qa-out
 
+      - name: Test-Bilder in Release „qa-bilder“ (zum Ansehen ohne Anmeldung)
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ -d qa-out ] || exit 0
+          (cd qa-out && zip -qr ../qa-bilder.zip . -i '*.png' '*.txt')
+          gh release view qa-bilder >/dev/null 2>&1 || gh release create qa-bilder --title "Test-Bilder" --notes "Bilder und Protokoll vom letzten Emulator-Test" --prerelease
+          gh release upload qa-bilder qa-bilder.zip --clobber
       - name: Test-Ergebnis ablegen (Bilder, Protokoll)
         if: always()
         run: cp qa-server.log qa-out/ 2>/dev/null || true

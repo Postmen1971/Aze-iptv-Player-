@@ -7,6 +7,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -53,16 +55,29 @@ fun QuickMenu(items: List<QuickItem>, onClose: () -> Unit) {
         onClose()
     }
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+    // schmale Bildschirme (Tablet/Handy): in mehrere Zeilen umbrechen, damit alles sichtbar ist (vorher außerhalb rechts)
+    val perRow = ((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 24) / 112).coerceAtLeast(3)
+    Box(
+        modifier = Modifier.fillMaxSize()
+            // jede Berührung hält das Menü offen
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) { awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial); touched++ } } }
+            // Tippen daneben (aufs Bild) schließt das Menü
+            .pointerInput(Unit) { detectTapGestures(onTap = { onClose() }) },
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+      Column(
+        modifier = Modifier
+            .padding(bottom = 10.dp, start = 12.dp, end = 12.dp)
+            .background(Palette.Ground.copy(alpha = 0.72f), RoundedCornerShape(12.dp))
+            .padding(5.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+      ) {
+       items.chunked(perRow).forEachIndexed { r, rowItems ->
         Row(
-            modifier = Modifier
-                .padding(bottom = 10.dp, start = 12.dp, end = 12.dp)
-                .horizontalScroll(rememberScrollState())
-                .background(Palette.Ground.copy(alpha = 0.72f), RoundedCornerShape(12.dp))
-                .padding(5.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
         ) {
-            items.forEachIndexed { i, item ->
+            rowItems.forEachIndexed { j, item -> val i = r * perRow + j
                 Focusable(
                     modifier = if (i == 0) Modifier.focusRequester(first) else Modifier,
                     onClick = {
@@ -100,5 +115,7 @@ fun QuickMenu(items: List<QuickItem>, onClose: () -> Unit) {
                 }
             }
         }
+       }
+      }
     }
 }

@@ -79,13 +79,18 @@ tap() {  # tap "Name": Knopf antippen (scrollt bei Bedarf, auch seitlich); 1 = n
     local l; l=$(qa | grep -F -e "POS $1|" -e "GONE $1" | sed 's/.*AzeQA[^:]*: //' | tail -1)
     case "$l" in
       "POS $1|"*) local x y v w; IFS='|' read -r _ x y v w <<<"$l"
-        if [ "$v" -ge 10 ]; then adb shell input tap "$x" "$y"; sleep 1.5; return 0; fi
+        if [ "$v" -ge 10 ]; then
+          # erst tippen, wenn nichts mehr scrollt (sonst trifft man den Nachbarn)
+          sleep 0.6; local l2; l2=$(qa | grep -F -e "POS $1|" -e "GONE $1" | sed 's/.*AzeQA[^:]*: //' | tail -1)
+          if [ "$l2" = "$l" ]; then adb shell input tap "$x" "$y"; sleep 1.5; return 0; fi
+          continue
+        fi
         echo "  (tap $1: verdeckt bei x=$x y=$y, Bildschirm $WH → wischen)"
         if [ "$x" -gt "$W" ]; then adb shell input swipe $((W*3/4)) "$y" $((W/4)) "$y" 500
         elif [ "$x" -lt 0 ]; then adb shell input swipe $((W/4)) "$y" $((W*3/4)) "$y" 500
         elif [ "$y" -gt $((H/2)) ]; then adb shell input swipe "$x" $((H*3/4)) "$x" $((H/4)) 500
         else adb shell input swipe "$x" $((H/4)) "$x" $((H*3/4)) 500; fi
-        sleep 1.2 ;;
+        sleep 2 ;;
       *) sleep 1 ;;
     esac
   done
@@ -472,7 +477,8 @@ else fail "Touch: Schnellmenü – „Multi-View“ nicht antippbar"; adb shell 
 alive || fail "Touch: App nach Multi-View weg"
 # Sender in der Liste antippen
 bar; tap "☰ Sender"; sleep 2
-N=$(count "FIRST_FRAME"); C=$(qa | grep -oE "POS C [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]{2,}" | tail -1 | cut -d'|' -f1 | sed 's/POS //')
+N=$(count "FIRST_FRAME"); CUR=$(qa | grep -o "FIRST_FRAME .*" | tail -1 | sed 's/FIRST_FRAME //')
+C=$(qa | grep -oE "POS C [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]{2,}" | cut -d'|' -f1 | sed 's/POS //' | grep -vxF "C $CUR" | tail -1)
 if [ -z "$C" ] || ! tap "$C"; then fail "Touch: Sender in der Liste nicht antippbar (${C:-keiner sichtbar})"; fi
 sleep 4; seen_log "FIRST_FRAME" "$N" || fail "Touch: Antippen eines Senders schaltet nicht um"
 # Senderliste → Wischen → Gruppen → Menü → Filme
