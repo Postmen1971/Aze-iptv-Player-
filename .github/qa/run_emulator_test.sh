@@ -448,7 +448,9 @@ if [ "$(count "BACKUP_OK")" -gt 0 ] && qa | grep -E "BACKUP_" | tail -1 | grep -
   [ "$(count "BACKUP_DELETED")" -gt 0 ] || fail "Touch: Sicherung wurde nicht gelöscht"
 elif qa | grep -E "BACKUP_" | tail -1 | grep -q BACKUP_FAIL; then fail "Sichern geht nicht:$(qa | grep BACKUP_FAIL | tail -1 | sed 's/.*BACKUP_FAIL//')"
 else fail "Touch: „Sicherung erstellen“ zeigt kein Ergebnis"; fi
-# Links direkt antippen (öffnet den Browser)
+# Links direkt antippen (öffnet den Browser) – Einstellungen frisch öffnen
+adb shell am start -S -n $PKG/.MainActivity >/dev/null; sleep 8
+bar; tap "⚙ Einstellungen"; sleep 2; for d in 0 0 0 0; do tap "PIN $d"; done; sleep 2
 tap "Hilfe"; N=$(count "OPEN_URL"); tap "🔗 Anleitung öffnen" || fail "Touch: Hilfe – Link „Anleitung öffnen“ nicht antippbar"
 sleep 3; [ "$(count "OPEN_URL")" -gt "$N" ] || fail "Touch: Hilfe – Anleitung-Link öffnet nichts"
 adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3
