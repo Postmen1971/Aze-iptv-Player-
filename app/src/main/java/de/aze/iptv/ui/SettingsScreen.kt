@@ -1495,15 +1495,6 @@ private fun BackupSection(app: AppController) {
     var done by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     Section("Sichern & Wiederherstellen") {
-        Text("So geht's:", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text("1. „Sicherung erstellen“ drücken – du bekommst einen Code (und einen QR-Code).", color = Palette.TextSoft, fontSize = 14.sp)
-        Text("2. Den Code abfotografieren oder aufschreiben.", color = Palette.TextSoft, fontSize = 14.sp)
-        Text("3. Auf dem neuen Gerät (oder nach dem Neuinstallieren): „Wiederherstellen“ drücken und genau diesen Code eingeben.", color = Palette.TextSoft, fontSize = 14.sp)
-        Text(
-            "Gesichert wird alles: Playlists mit Zugangsdaten, Favoriten, Senderliste und alle Einstellungen. " +
-                "Die Sicherung wird auf dem Gerät verschlüsselt und erst dann im Internet (paste.rs) abgelegt – ohne den Code kann sie niemand lesen.",
-            color = Palette.TextMuted, fontSize = 13.sp,
-        )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton(if (busy == "save") "Wird gesichert …" else "Sicherung erstellen", selected = true, onClick = {
                 if (busy != null) return@TvButton
@@ -1525,8 +1516,6 @@ private fun BackupSection(app: AppController) {
                 }
             })
             TvButton(if (busy == "load") "Wird eingespielt …" else "Wiederherstellen", onClick = { if (busy == null) entering = true })
-            if (code != null) TvButton(if (busy == "del") "Wird gelöscht …" else "Sicherung löschen", danger = true,
-                onClick = { if (busy == null) confirmDelete = true })
         }
         status?.let { Text(it, color = if (it.startsWith("✗")) androidx.compose.ui.graphics.Color(0xFFFF6B6B) else Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         code?.let {
@@ -1536,9 +1525,21 @@ private fun BackupSection(app: AppController) {
                     Text("Dein Sicherungs-Code" + (codeWhen?.let { w -> " (vom $w)" } ?: "") + ":", color = Palette.TextSoft, fontSize = 14.sp)
                     Text(it, color = Palette.Highlight, fontSize = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
                     Text("Abfotografieren oder aufschreiben – den brauchst du zum Wiederherstellen.", color = Palette.TextMuted, fontSize = 13.sp)
+                    TvButton(if (busy == "del") "Wird gelöscht …" else "Sicherung löschen", danger = true,
+                        onClick = { if (busy == null) confirmDelete = true })
                 }
             }
         }
+        Text("So geht's:", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text("1. „Sicherung erstellen“ drücken – du bekommst einen Code (und einen QR-Code).", color = Palette.TextSoft, fontSize = 14.sp)
+        Text("2. Den Code abfotografieren oder aufschreiben.", color = Palette.TextSoft, fontSize = 14.sp)
+        Text("3. Auf dem neuen Gerät (oder nach dem Neuinstallieren): „Wiederherstellen“ drücken und genau diesen Code eingeben.", color = Palette.TextSoft, fontSize = 14.sp)
+        Text(
+            "Gesichert wird alles: Playlists mit Zugangsdaten, Favoriten, Senderliste und alle Einstellungen. " +
+                "Die Sicherung wird auf dem Gerät verschlüsselt und erst dann im Internet (paste.rs) abgelegt – ohne den Code kann sie niemand lesen.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+
         if (done) Text("Fertig – die App startet gleich neu.", color = Palette.Highlight, fontSize = 15.sp)
     }
     if (confirmDelete) {
