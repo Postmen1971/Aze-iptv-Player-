@@ -136,6 +136,13 @@ class Handler(BaseHTTPRequestHandler):
             data = [{"series_id": i, "name": "Testserie %d" % i, "cover": base + "/poster/s%d.jpg" % i,
                      "rating": "8.0", "category_id": str(i % 6 + 1)} for i in range(1, 601)]
             if cat: data = [d for d in data if d["category_id"] == cat]
+        elif action == "get_vod_info":
+            data = {"info": {"plot": "Ein Test-Film für die Anleitung: Zwei Freunde suchen einen verlorenen Schatz und erleben dabei ein großes Abenteuer.",
+                             "genre": "Abenteuer, Familie", "cast": "Anna Beispiel, Max Muster", "director": "Erika Test",
+                             "duration": "01:42:00", "releasedate": "2024-05-01", "rating": "7.1"}, "movie_data": {}}
+        elif action == "get_series_info":
+            data = {"info": {"plot": "Eine Test-Serie für die Anleitung.", "genre": "Familie", "rating": "8.0", "releaseDate": "2023-01-01"},
+                    "episodes": {"1": [{"id": "9%02d" % e, "title": "Folge %d" % e, "container_extension": "mp4", "info": {"duration": "00:45:00"}} for e in range(1, 7)]}}
         elif action == "":
             data = {"user_info": {"auth": 1, "status": "Active"}, "server_info": {"url": "10.0.2.2"}}
         else:

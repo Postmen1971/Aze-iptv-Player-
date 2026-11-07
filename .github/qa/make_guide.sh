@@ -37,11 +37,13 @@ k KEYCODE_DPAD_UP 2.5; shot fernsehen
 k KEYCODE_DPAD_LEFT 2; shot senderliste
 k KEYCODE_DPAD_LEFT 2; shot gruppen
 k KEYCODE_DPAD_LEFT 2; shot menue
-k KEYCODE_BACK; k KEYCODE_BACK; k KEYCODE_BACK 2
+# ▶ zurück: Menü → Gruppen → Sender → Liste zu (Zurück in den Gruppen würde die App beenden)
+k KEYCODE_DPAD_RIGHT; k KEYCODE_DPAD_RIGHT; k KEYCODE_DPAD_RIGHT 2
 k KEYCODE_PROG_GREEN 2; shot schnellmenue; k KEYCODE_BACK 2
 k KEYCODE_PROG_YELLOW 2; shot suche; k KEYCODE_BACK 2
 
-# ── Einstellungen: PIN und jeder Bereich
+# ── Einstellungen: PIN und jeder Bereich (frisch gestartet)
+start
 k KEYCODE_PROG_BLUE 2; shot pin
 for d in 0 0 0 0; do k KEYCODE_$d 0.5; done
 sleep 2; shot einst-start
