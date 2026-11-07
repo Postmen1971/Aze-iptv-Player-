@@ -50,8 +50,10 @@ fun QuickMenu(items: List<QuickItem>, onClose: () -> Unit) {
         withFrameNanos { }
         runCatching { first.requestFocus() }
     }
+    val touchDevice = androidx.compose.ui.platform.LocalContext.current.let { remember { !de.aze.iptv.player.FrameRate.isTv(it) } }
     LaunchedEffect(touched) {
-        delay(6_000)
+        // Tablet: länger offen (Lesen und Tippen dauert länger als mit der Fernbedienung)
+        delay(if (touchDevice) 12_000 else 6_000)
         onClose()
     }
 
