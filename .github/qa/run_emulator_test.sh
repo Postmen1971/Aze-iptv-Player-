@@ -97,6 +97,8 @@ tap() {  # tap "Name": Knopf antippen (scrollt bei Bedarf, auch seitlich); 1 = n
   done
   return 1
 }
+# Senderliste per Knopf öffnen (bis zu 3 Versuche)
+open_list() { for t in 1 2 3; do local N; N=$(count "LIST_OPEN"); bar; tap "☰ Sender"; sleep 2; [ "$(count "LIST_OPEN")" -gt "$N" ] && return 0; done; return 1; }
 # Fernsehbild ohne offenes Fenster, dann Knopfleiste zeigen
 list_open() { [ "$(qa | grep -E ": LIST_(OPEN|CLOSED)" | tail -1 | grep -c LIST_OPEN)" -eq 1 ]; }
 bar() {
@@ -477,13 +479,13 @@ if tap "QM Multi-View"; then
 else fail "Touch: Schnellmenü – „Multi-View“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; sleep 1; fi
 alive || fail "Touch: App nach Multi-View weg"
 # Sender in der Liste antippen
-bar; tap "☰ Sender"; sleep 2
+open_list || fail "Touch: Senderliste geht über „☰ Sender“ nicht auf"
 N=$(count "FIRST_FRAME"); CUR=$(qa | grep -o "FIRST_FRAME .*" | tail -1 | sed 's/FIRST_FRAME //')
-C=$(qa | grep -oE "POS C [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]{2,}" | cut -d'|' -f1 | sed 's/POS //' | grep -vxF "C $CUR" | tail -1)
+C=$(qa | tail -300 | grep -oE "POS C [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]+" | awk -F'|' '$4>=60' | cut -d'|' -f1 | sed 's/POS //' | grep -vxF "C $CUR" | tail -1)
 if [ -z "$C" ] || ! tap "$C"; then fail "Touch: Sender in der Liste nicht antippbar (${C:-keiner sichtbar})"; fi
 sleep 4; seen_log "FIRST_FRAME" "$N" || fail "Touch: Antippen eines Senders schaltet nicht um"
 # Senderliste → Wischen → Gruppen → Menü → Filme
-bar; tap "☰ Sender"; sleep 2; swipe_r; qa | grep -q "POS G " || fail "Touch: Wischen nach rechts zeigt keine Gruppen"
+open_list; NG=$(count "POS G "); swipe_r; [ "$(count "POS G ")" -gt "$NG" ] || { swipe_r; [ "$(count "POS G ")" -gt "$NG" ] || fail "Touch: Wischen nach rechts zeigt keine Gruppen"; }
 swipe_r
 if tap "M Filme"; then
   sleep 6; shot "test13-filme"
@@ -497,7 +499,7 @@ if tap "M Filme"; then
 else fail "Touch: Menü – „Filme“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; adb shell input keyevent KEYCODE_BACK; fi
 alive || fail "Touch: App nach Filme weg"
 # Suchen
-bar; tap "☰ Sender"; sleep 2; swipe_r; swipe_r
+open_list; swipe_r; swipe_r
 if tap "M Suchen"; then sleep 2; shot "test13-suche"; tap "Schließen" || { fail "Touch: Suche – „Schließen“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; }
 else fail "Touch: Menü – „Suchen“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; fi
 sleep 2
