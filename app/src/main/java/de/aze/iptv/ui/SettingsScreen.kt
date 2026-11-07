@@ -1485,38 +1485,53 @@ internal fun TvSwitch(title: String, hint: String?, on: Boolean, onToggle: () ->
 private fun BackupSection(app: AppController) {
     val context = LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    var code by remember { mutableStateOf<String?>(null) }
+    val prefs = remember { context.getSharedPreferences("aze_backup", android.content.Context.MODE_PRIVATE) }
+    // letzter Code bleibt gespeichert – geht nicht verloren, wenn man die Seite verlässt
+    var code by remember { mutableStateOf(prefs.getString("last_code", null)) }
+    var codeWhen by remember { mutableStateOf(prefs.getString("last_when", null)) }
     var busy by remember { mutableStateOf<String?>(null) }
+    var status by remember { mutableStateOf<String?>(null) }
     var entering by remember { mutableStateOf(false) }
     var done by remember { mutableStateOf(false) }
     Section("Sichern & Wiederherstellen") {
+        Text("So geht's:", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text("1. „Sicherung erstellen“ drücken – du bekommst einen Code (und einen QR-Code).", color = Palette.TextSoft, fontSize = 14.sp)
+        Text("2. Den Code abfotografieren oder aufschreiben.", color = Palette.TextSoft, fontSize = 14.sp)
+        Text("3. Auf dem neuen Gerät (oder nach dem Neuinstallieren): „Wiederherstellen“ drücken und genau diesen Code eingeben.", color = Palette.TextSoft, fontSize = 14.sp)
         Text(
-            "Sichert alles: Playlists mit Zugangsdaten, Favoriten, Senderliste, ausgeblendete Kategorien und alle Einstellungen. " +
-                "Gut vor einem Neuinstallieren oder für ein neues Gerät (z. B. für die Familie).",
-            color = Palette.TextMuted, fontSize = 13.sp,
-        )
-        Text(
-            "Die Sicherung wird auf dem Gerät mit einem Zufalls-Code verschlüsselt und erst dann im Internet (paste.rs) abgelegt. " +
-                "Ohne den Code kann niemand sie lesen – den Code also gut aufheben und nicht weitergeben.",
+            "Gesichert wird alles: Playlists mit Zugangsdaten, Favoriten, Senderliste und alle Einstellungen. " +
+                "Die Sicherung wird auf dem Gerät verschlüsselt und erst dann im Internet (paste.rs) abgelegt – ohne den Code kann sie niemand lesen.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton(if (busy == "save") "Wird gesichert …" else "Sicherung erstellen", selected = true, onClick = {
                 if (busy != null) return@TvButton
-                busy = "save"; code = null
+                busy = "save"; status = "Sicherung wird erstellt …"
                 scope.launch {
                     try {
-                        code = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.Backup.create(context) }
+                        val c = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.Backup.create(context) }
+                        val w = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY).format(java.util.Date())
+                        prefs.edit().putString("last_code", c).putString("last_when", w).apply()
+                        code = c; codeWhen = w; status = "✓ Sicherung erstellt."
+                        qaLog("BACKUP_OK")
                     } catch (e: Exception) {
-                        app.message = "Sichern hat nicht geklappt: ${e.message ?: "keine Verbindung"}"
+                        status = "✗ Sichern hat nicht geklappt: ${e.message ?: "keine Internet-Verbindung"}"
+                        qaLog("BACKUP_FAIL ${e.message}")
                     } finally { busy = null }
                 }
             })
             TvButton(if (busy == "load") "Wird eingespielt …" else "Wiederherstellen", onClick = { if (busy == null) entering = true })
         }
+        status?.let { Text(it, color = if (it.startsWith("✗")) androidx.compose.ui.graphics.Color(0xFFFF6B6B) else Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         code?.let {
-            Text("Dein Sicherungs-Code – bitte abschreiben oder abfotografieren:", color = Palette.TextSoft, fontSize = 14.sp)
-            Text(it, color = Palette.Highlight, fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                QrCode(it, 130.dp)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Dein Sicherungs-Code" + (codeWhen?.let { w -> " (vom $w)" } ?: "") + ":", color = Palette.TextSoft, fontSize = 14.sp)
+                    Text(it, color = Palette.Highlight, fontSize = 30.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                    Text("Abfotografieren oder aufschreiben – den brauchst du zum Wiederherstellen.", color = Palette.TextMuted, fontSize = 13.sp)
+                }
+            }
         }
         if (done) Text("Fertig – die App startet gleich neu.", color = Palette.Highlight, fontSize = 15.sp)
     }
@@ -1528,7 +1543,7 @@ private fun BackupSection(app: AppController) {
             keyboard = KeyboardType.Text,
             onDone = { input ->
                 entering = false
-                busy = "load"
+                busy = "load"; status = "Sicherung wird eingespielt …"
                 scope.launch {
                     try {
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.Backup.restore(context, input) }
@@ -1540,7 +1555,7 @@ private fun BackupSection(app: AppController) {
                         if (i != null) context.startActivity(i)
                         android.os.Process.killProcess(android.os.Process.myPid())
                     } catch (e: Exception) {
-                        app.message = "Wiederherstellen hat nicht geklappt: ${e.message ?: "keine Verbindung"}"
+                        status = "✗ Wiederherstellen hat nicht geklappt: ${e.message ?: "keine Verbindung"} – ist der Code richtig?"
                     } finally { busy = null }
                 }
             },

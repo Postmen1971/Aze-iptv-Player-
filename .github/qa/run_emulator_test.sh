@@ -435,6 +435,13 @@ for c in "Sender & Playlists" "Senderliste & Favoriten" "Filme & Serien" "Fußba
   last_is "SET_PANE" "SET_PANE $c" || { sleep 1.5; tap "$c"; }
   last_is "SET_PANE" "SET_PANE $c" || { fail "Touch: Bereich „$c“ öffnet sich nicht ($(qa | grep SET_PANE | tail -1 | sed 's/.*: //'))"; shot "test13-bereich"; }
 done
+# Sichern: Code muss erscheinen
+tap "Sichern"; N=$(count "BACKUP_"); tap "Sicherung erstellen" || fail "Touch: „Sicherung erstellen“ nicht antippbar"
+for w in 1 2 3 4 5 6 7 8 9 10; do [ "$(count "BACKUP_")" -gt "$N" ] && break; sleep 1.5; done
+shot "test13-sicherung"
+if [ "$(count "BACKUP_OK")" -gt 0 ] && qa | grep -E "BACKUP_" | tail -1 | grep -q BACKUP_OK; then :
+elif qa | grep -E "BACKUP_" | tail -1 | grep -q BACKUP_FAIL; then note "Sichern" "Internet (paste.rs) im Test nicht erreichbar: $(qa | grep BACKUP_FAIL | tail -1 | sed 's/.*BACKUP_FAIL//')"
+else fail "Touch: „Sicherung erstellen“ zeigt kein Ergebnis"; fi
 # Links direkt antippen (öffnet den Browser)
 tap "Hilfe"; N=$(count "OPEN_URL"); tap "🔗 Anleitung öffnen" || fail "Touch: Hilfe – Link „Anleitung öffnen“ nicht antippbar"
 sleep 3; [ "$(count "OPEN_URL")" -gt "$N" ] || fail "Touch: Hilfe – Anleitung-Link öffnet nichts"
