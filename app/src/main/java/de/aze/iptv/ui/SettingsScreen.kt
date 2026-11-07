@@ -163,11 +163,14 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 onClick = { app.updateExpertMode(!app.expertMode); onTv = false; cat = cats.indexOf("System") },
             )
         }
+        // neuer Bereich = wieder oben anfangen (sonst landet man mitten auf der Seite)
+        val paneScroll = rememberScrollState()
+        LaunchedEffect(cat, onTv) { paneScroll.scrollTo(0) }
         Column(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(paneScroll)
                 .padding(horizontal = 30.dp, vertical = 26.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
