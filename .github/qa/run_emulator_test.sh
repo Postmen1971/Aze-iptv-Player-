@@ -423,6 +423,10 @@ alive || fail "SkorText: App nach dem Schließen nicht mehr da"
 
 log "== Test 13: Tablet (Touch) – alles antippbar, überall zurück"
 T13=$(date +%H:%M:%S)
+# wie das Fire Max 11: 1920×1200 quer, 240 dpi (= 1280×800 dp). Handy-Größe kommt mit der Handy-Version eigens dran.
+adb shell settings put system accelerometer_rotation 0; adb shell settings put system user_rotation 1
+adb shell wm size 1920x1200; adb shell wm density 240; sleep 2
+log "Tablet-Größe: $(scr) (soll quer sein)"
 adb shell am start -S -n $PKG/.MainActivity >/dev/null; sleep 8
 adb shell input tap 300 300; sleep 2; shot "test13-knopfleiste"
 tap "⚙ Einstellungen" || fail "Touch: Knopf „⚙ Einstellungen“ nicht da (Knopfleiste nach Tippen aufs Bild)"
@@ -539,6 +543,7 @@ bar; tap "⋯ Menü" && { tap "QM Infoleiste" || fail "Touch: Schnellmenü – �
 note "Touch-Test" "$(qa | grep -E "SET_|SORT_OPEN|SORT_CLOSE|LIST_OPEN|MV_|FIRST_FRAME" | tail -40)"
 alive || fail "Touch: App nicht mehr da"
 hang_check "Touch" "$T13"
+adb shell wm size reset; adb shell wm density reset
 
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
