@@ -229,7 +229,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     )
                     Text(
                         "Zugangsdaten werden verschlüsselt gespeichert, Links nur gekürzt angezeigt, " +
-                            "und die App macht keine Sicherungen in die Cloud oder auf andere Geräte.",
+                            "und eine Sicherung gibt es nur, wenn du sie unter „Sichern“ selbst erstellst (verschlüsselt).",
                         color = Palette.TextMuted, fontSize = 13.sp,
                     )
                     Text("Erwachsenen-Filter", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -260,8 +260,8 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     if (app.expertMode) NetworkSection(app)
                 }
                 "Hilfe" -> {
-                    HelpVideosSection(onPlay = { helpVideo = it })
                     GuideSection()
+                    HelpVideosSection(onPlay = { helpVideo = it })
                     AboutSection(app, help = true)
                 }
                 else -> AboutSection(app)
