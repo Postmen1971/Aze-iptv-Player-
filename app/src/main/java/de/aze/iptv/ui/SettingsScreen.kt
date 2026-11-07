@@ -1493,6 +1493,7 @@ private fun BackupSection(app: AppController) {
     var status by remember { mutableStateOf<String?>(null) }
     var entering by remember { mutableStateOf(false) }
     var done by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     Section("Sichern & Wiederherstellen") {
         Text("So geht's:", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         Text("1. „Sicherung erstellen“ drücken – du bekommst einen Code (und einen QR-Code).", color = Palette.TextSoft, fontSize = 14.sp)
@@ -1511,6 +1512,9 @@ private fun BackupSection(app: AppController) {
                     try {
                         val c = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.Backup.create(context) }
                         val w = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMANY).format(java.util.Date())
+                        // alte Sicherung im Internet aufräumen – es gibt immer nur die neueste
+                        val old = code
+                        if (old != null && old != c) launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { de.aze.iptv.data.Backup.delete(old) } }
                         prefs.edit().putString("last_code", c).putString("last_when", w).apply()
                         code = c; codeWhen = w; status = "✓ Sicherung erstellt."
                         qaLog("BACKUP_OK")
@@ -1521,6 +1525,8 @@ private fun BackupSection(app: AppController) {
                 }
             })
             TvButton(if (busy == "load") "Wird eingespielt …" else "Wiederherstellen", onClick = { if (busy == null) entering = true })
+            if (code != null) TvButton(if (busy == "del") "Wird gelöscht …" else "Sicherung löschen", danger = true,
+                onClick = { if (busy == null) confirmDelete = true })
         }
         status?.let { Text(it, color = if (it.startsWith("✗")) androidx.compose.ui.graphics.Color(0xFFFF6B6B) else Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         code?.let {
@@ -1534,6 +1540,30 @@ private fun BackupSection(app: AppController) {
             }
         }
         if (done) Text("Fertig – die App startet gleich neu.", color = Palette.Highlight, fontSize = 15.sp)
+    }
+    if (confirmDelete) {
+        val c = code
+        ConfirmDialog(
+            question = "Sicherung wirklich löschen?",
+            detail = "Danach funktioniert der Code ${c ?: ""} nicht mehr – auch nicht auf anderen Geräten.",
+            yes = "Ja, löschen",
+            onYes = {
+                confirmDelete = false
+                if (c == null) return@ConfirmDialog
+                busy = "del"; status = "Sicherung wird gelöscht …"
+                scope.launch {
+                    try {
+                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.Backup.delete(c) }
+                        prefs.edit().remove("last_code").remove("last_when").apply()
+                        code = null; codeWhen = null; status = "✓ Sicherung gelöscht – der Code funktioniert nicht mehr."
+                        qaLog("BACKUP_DELETED")
+                    } catch (e: Exception) {
+                        status = "✗ Löschen hat nicht geklappt: ${e.message ?: "keine Internet-Verbindung"}"
+                    } finally { busy = null }
+                }
+            },
+            onNo = { confirmDelete = false },
+        )
     }
     if (entering) {
         InputDialog(
@@ -1682,3 +1712,24 @@ private val CATEGORY_ICON = mapOf(
     "PIN & Kinderschutz" to LineIcon.EYE_OFF,
     "System" to LineIcon.SETTINGS,
 )
+
+
+/** Sicherheitsfrage mit „Ja“ / „Abbrechen“ (Abbrechen ist vorausgewählt) */
+@Composable
+internal fun ConfirmDialog(question: String, detail: String, yes: String, onYes: () -> Unit, onNo: () -> Unit) {
+    val noFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    Dialog(onDismissRequest = onNo) {
+        Column(
+            Modifier.background(Palette.Panel, RoundedCornerShape(16.dp)).padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(question, color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(detail, color = Palette.TextSoft, fontSize = 15.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TvButton("Abbrechen", modifier = Modifier.focusRequester(noFocus), onClick = onNo)
+                TvButton(yes, danger = true, onClick = onYes)
+            }
+        }
+    }
+    LaunchedEffect(Unit) { runCatching { noFocus.requestFocus() } }
+}

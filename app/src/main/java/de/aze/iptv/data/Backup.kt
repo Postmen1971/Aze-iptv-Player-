@@ -73,6 +73,18 @@ object Backup {
         return "$id-${secret.substring(0, 5)}-${secret.substring(5)}"
     }
 
+    /** Sicherung im Internet löschen (paste.rs, blockierend). Danach ist der Code wertlos. */
+    fun delete(code: String) {
+        val id = code.trim().replace(" ", "").split('-').firstOrNull { it.isNotEmpty() } ?: error("Code fehlt")
+        require(id.all { it.isLetterOrDigit() }) { "Code stimmt nicht" }
+        val conn = URL("https://paste.rs/$id").openConnection() as HttpURLConnection
+        try {
+            conn.requestMethod = "DELETE"; conn.connectTimeout = 15_000; conn.readTimeout = 20_000
+            val rc = conn.responseCode
+            if (rc !in 200..299 && rc != 404) error("Löschen fehlgeschlagen ($rc)")
+        } finally { conn.disconnect() }
+    }
+
     /** Sicherung holen, entschlüsseln und einspielen (blockierend). Danach App neu starten. */
     fun restore(context: Context, code: String) {
         val parts = code.trim().replace(" ", "").split('-').filter { it.isNotEmpty() }

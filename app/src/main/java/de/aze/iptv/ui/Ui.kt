@@ -301,10 +301,13 @@ fun TvButton(
 fun Modifier.qaPos(name: String?): Modifier {
     if (!de.aze.iptv.BuildConfig.TEST_HOOKS || name == null) return this
     var last by remember { mutableStateOf("") }
+    val view = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.DisposableEffect(name) { onDispose { qaLog("GONE $name") } }
     return this.onGloballyPositioned { c ->
+        // Fenster-Versatz dazu (Dialoge liegen in einem eigenen Fenster)
+        val off = IntArray(2).also { view.getLocationOnScreen(it) }
         val p = c.positionInWindow(); val vis = c.boundsInWindow()
-        val line = "POS $name|${(p.x + c.size.width / 2).toInt()}|${(p.y + c.size.height / 2).toInt()}|${minOf(vis.height, vis.width).toInt()}|${vis.width.toInt()}"
+        val line = "POS $name|${(off[0] + p.x + c.size.width / 2).toInt()}|${(off[1] + p.y + c.size.height / 2).toInt()}|${minOf(vis.height, vis.width).toInt()}|${vis.width.toInt()}"
         if (line != last) { last = line; qaLog(line) }
     }
 }
