@@ -496,7 +496,7 @@ if tap "QM Multi-View"; then
   tap "MV Bild 2" || fail "Touch: Multi-View – Bild 2 nicht antippbar"
   sleep 2; G=$(qa | grep -o "POS MV [^|]*" | grep -v "MV Bild" | head -1 | sed 's/POS //')
   if [ -n "$G" ] && tap "$G"; then
-    sleep 2; C=$(qa | grep -oE "POS MV [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]+" | grep -v "MV Bild" | tail -8 | awk -F'|' '$4>=60' | head -2 | tail -1 | cut -d'|' -f1 | sed 's/POS //')
+    sleep 2; C=$(qa | grep -oE "POS MV [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]+" | grep -v "MV Bild" | tail -8 | awk -F'|' '$4>=40' | head -2 | tail -1 | cut -d'|' -f1 | sed 's/POS //')
     [ -n "$C" ] && tap "$C"
   fi
   sleep 3; seen_log "MV_PICK 2" "$N" || fail "Touch: Multi-View – für Bild 2 ließ sich kein Sender wählen"
@@ -509,7 +509,7 @@ alive || fail "Touch: App nach Multi-View weg"
 # Sender in der Liste antippen
 open_list || fail "Touch: Senderliste geht über „☰ Sender“ nicht auf"
 N=$(count "FIRST_FRAME"); CUR=$(qa | grep -o "FIRST_FRAME .*" | tail -1 | sed 's/FIRST_FRAME //')
-C=$(qa | tail -300 | grep -oE "POS C [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]+" | awk -F'|' '$4>=60' | cut -d'|' -f1 | sed 's/POS //' | grep -vxF "C $CUR" | tail -1)
+C=$(qa | tail -300 | grep -oE "POS C [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]+" | awk -F'|' '$4>=40' | cut -d'|' -f1 | sed 's/POS //' | grep -vxF "C $CUR" | tail -1)
 if [ -z "$C" ] || ! tap "$C"; then fail "Touch: Sender in der Liste nicht antippbar (${C:-keiner sichtbar})"; fi
 sleep 4; seen_log "FIRST_FRAME" "$N" || fail "Touch: Antippen eines Senders schaltet nicht um"
 # Senderliste → Wischen → Gruppen → Menü → Filme
