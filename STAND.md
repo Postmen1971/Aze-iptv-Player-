@@ -1,4 +1,4 @@
-# Aze-IPTV-Player – Projektstand (29.10.2026, Version 1.0.60)
+# Aze-IPTV-Player – Projektstand (08.11.2026, Version 1.0.235)
 
 ## Wo alles liegt
 - **GitHub-Repository:** https://github.com/Postmen1971/Aze-iptv-Player- (Branch `main`)
@@ -128,6 +128,41 @@
 - Cover: Bilderdienst schaltet sich nach 3 langsamen (>3 s) oder fehlgeschlagenen Bildern für den Programmstart ab; OkHttp 8 je Server, Timeouts 6/10 s.
 - Hänger-Protokoll: VOD_CAT (Ladezeit je Kategorie), VOD_ALL (Gesamtliste), COVER (erste 6 Cover mit Zeit/Quelle).
 - Uhr (`AzeClock`, Wochentag/Datum/Zeit) unter dem Logo im Seitenmenü und in den Einstellungen; aktualisiert sich zur vollen Minute.
+
+## 1.0.144–1.0.235 (03.–07.11.) – Zusammenfassung
+**Design**
+- Aurora als Farbfamilie (Minz, Blau, Bernstein, Violett, Koralle); Einstellungen im Aurora-Stil (Seitenleiste mit Logo/Version, Karten, echte Schalter).
+- **Neu Standard (1.0.235): Design A „Aze Nachtblau“** – Türkis/Nachtblau, Senderliste mit Fokus-Rahmen, sanfter Vergrößerung und Verlauf, Fortschrittsbalken im Verlauf, ruhigere Infoleiste.
+- Infoleiste unten ist jetzt Standard (einmalig für alle gesetzt), Anzeigedauer 1–7 s (Standard 4 s); Taste belegbar „Infoleiste ein/aus“, Rechts lang = Infoleiste.
+- Einstellungen einfacher (TiviMate-Stil): 14 Bereiche mit Symbol + Erklärzeile, Suche; neuer Bereich beginnt oben.
+
+**Senderliste**
+- ▲▼ im Rundlauf (oben ↔ unten), nie in die Gruppen-Kopfzeile; ▲/▼/◀/▶/OK holen den Fokus zurück in die Liste. ▶ schließt die Liste wieder.
+- Senderliste verwalten: Knopf „Sortieren“ (OK nimmt auf/legt ab), mitscrollen beim Verschieben, ▶ = erster Sender / ◀ = Kategorie; Absturz BringIntoViewRequester behoben (feste Fokus-Anker, Schutz nur gegen diesen Compose-Fehler).
+
+**Filme & Serien / Cover**
+- Listen als Kopie auf dem Gerät (sofort da, Auffrischen im Hintergrund).
+- Cover-Vorrat: alle Cover einmal klein (WebP 200×300) auf dem Gerät, im Hintergrund, bevorzugte Sprache zuerst (Deutsch → Türkisch), offene Kategorie zuerst; ausgeblendete Kategorien nicht. Läuft im Hintergrund-Thread (vorher Hänger/OOM), 2 gleichzeitig, 15 s Pause nach dem Umschalten.
+- TMDB-Ersatz bei fehlendem/kaputtem/langsamem Cover (Schlüssel aus Secret `TMDB_KEY`), Schalter „Cover zuerst von TMDB“; Bilderdienst (weserv) standardmäßig aus.
+- Tablet: Film-Player per Touch (Steuerleiste, Zeitleiste ziehen, doppelt tippen ±10 s, ✕).
+
+**Fußball / SkorText**
+- SkorText 3.14/3.15 eingebaut; U-19 nicht mit Profis verwechseln; Vereins-Namenstabelle (Internazionale = Inter Milan), > 25 Sender je Spiel.
+- TV-Plan mit Vorschau: kein automatisches Umschalten (OK = Vorschau, OK lang = ★ merken), am Tablet antippbar.
+- Sperrt liveonsat (HTTP 403) → Ersatzliste aus dem SkorText-Feed auf GitHub.
+- SkorText öffnete nicht/ging sofort zu → behoben (kein Vorwärmen im Hintergrund-Thread, else-Fehler), Emulator-Test 12.
+
+**Sichern & Hilfe**
+- Einstellungen sichern & wiederherstellen per Code: auf dem Gerät verschlüsselt, gzip, paste.rs (Ersatz dpaste.com). Code bleibt gespeichert + QR-Code, „Sicherung löschen“ mit Sicherheitsfrage, alte Sicherung wird beim Neu-Sichern aufgeräumt.
+- Hilfe: Anleitung mit Bildern als Webseite (Emulator-Fotos, GitHub Pages) + QR-Code ganz oben; Erklär-Videos im Release „hilfe“ (Workflow nur mit [skip ci]).
+
+**Tablet/Handy (Touch)**
+- Knopfleiste und Schnellmenü brechen auf schmalen Bildschirmen um, PIN-Feld quer kompakt, Einstellungs-Bereiche antippbar, Links antippbar, Multi-View per Tippen.
+
+**Tests / CI**
+- Emulator wie Fernseher (1920×1080); Komplett-Test mit Herzschlag-Hängerprüfung, Test-Anbieter mit 3000 Filmen/600 Serien, Umschaltzeit-Messung (ZAPTIME, Median ≤ 0,5 s), Lücke nach Stream-Ende ≤ 1 s (Neuverbindung 0,3 s).
+- Emulator-Test 13: Touch in Tablet-Größe (1920×1200, 240 dpi wie Fire Max 11) – alles antippbar, überall zurück. Test-Bilder als Release „qa-bilder“.
+- Emulator-Test per manuellem Start überspringbar.
 
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
