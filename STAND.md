@@ -1,4 +1,4 @@
-# Aze-IPTV-Player – Projektstand (08.11.2026, Version 1.0.235)
+# Aze-IPTV-Player – Projektstand (08.11.2026, Version 1.0.236)
 
 ## Wo alles liegt
 - **GitHub-Repository:** https://github.com/Postmen1971/Aze-iptv-Player- (Branch `main`)
@@ -163,6 +163,11 @@
 - Emulator wie Fernseher (1920×1080); Komplett-Test mit Herzschlag-Hängerprüfung, Test-Anbieter mit 3000 Filmen/600 Serien, Umschaltzeit-Messung (ZAPTIME, Median ≤ 0,5 s), Lücke nach Stream-Ende ≤ 1 s (Neuverbindung 0,3 s).
 - Emulator-Test 13: Touch in Tablet-Größe (1920×1200, 240 dpi wie Fire Max 11) – alles antippbar, überall zurück. Test-Bilder als Release „qa-bilder“.
 - Emulator-Test per manuellem Start überspringbar.
+
+## Stil wählbar (1.0.236)
+- Einstellungen → Aussehen → **Stil**: Aze (Standard) / Kino (Netflix-ähnlich: fast schwarz, kantig, weiße Auswahl, Rot für Laufendes, Poster wachsen) / Glas (Apple-ähnlich: weiche Flächen, runde Ecken, helle Auswahl mit Schatten, Blau für Laufendes). Keine fremden Namen in der App.
+- `AppStyle` in `ui/Ui.kt` (Ecken, Zeilen-/Poster-Vergrößerung), `Palette.style`, `Modifier.rowFocus()`; Store `appStyle`; `AppController.updateStyle()` stellt das passende Farbschema mit ein (Schemata „Kino“, „Glas“ angehängt).
+- Aziz: App darf dadurch NICHT langsamer werden → nur Zeichnen, kein Weichzeichnen (Blur), keine zusätzlichen Ladevorgänge. Poster-Reihen wie Netflix bewusst noch nicht (würden mehrere Kategorien gleichzeitig laden).
 
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
