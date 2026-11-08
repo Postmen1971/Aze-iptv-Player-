@@ -24,6 +24,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -149,7 +150,47 @@ val Schemes = listOf(
         text = Color(0xFFEEF3FF), textSoft = Color(0xFFB9C8E6), textMuted = Color(0xFF7F93BA),
         accent = Color(0xFF3AD6C0), onAccent = Color(0xFF06122A), highlight = Color(0xFF3AD6C0),
     ),
+    // Stil „Kino“ (08.11.2026): fast schwarz, weiße Auswahl, Rot für Laufendes/Fortschritt
+    ColorScheme(
+        "Kino",
+        ground = Color(0xFF0B0B0B), panel = Color(0xFF161616), panelDark = Color(0xFF0E0E0E),
+        raised = Color(0xFF242424), line = Color(0xFF303030),
+        text = Color(0xFFFFFFFF), textSoft = Color(0xFFD2D2D2), textMuted = Color(0xFF8F8F8F),
+        accent = Color(0xFFF5F5F5), onAccent = Color(0xFF0B0B0B), highlight = Color(0xFFE50914),
+    ),
+    // Stil „Glas“ (08.11.2026): weiche graue Flächen, helle Auswahl, Blau für Laufendes
+    ColorScheme(
+        "Glas",
+        ground = Color(0xFF101318), panel = Color(0xFF1D2129), panelDark = Color(0xFF15181E),
+        raised = Color(0xFF2B303A), line = Color(0xFF363C48),
+        text = Color(0xFFFFFFFF), textSoft = Color(0xFFD6DAE1), textMuted = Color(0xFF9299A5),
+        accent = Color(0xFFF4F6FA), onAccent = Color(0xFF101318), highlight = Color(0xFF0A84FF),
+    ),
 )
+
+/**
+ * Stil der Oberfläche (Einstellungen → Aussehen). Ändert nur das Zeichnen
+ * (Ecken, Fokus, Farben) – keine zusätzlichen Ladevorgänge, kein Weichzeichnen.
+ */
+enum class AppStyle(
+    val title: String,
+    val desc: String,
+    val schemeName: String,
+    /** Ecken von Listenzeilen in dp */
+    val radius: Int,
+    /** Vergrößerung einer Listenzeile beim Fokus */
+    val rowScale: Float,
+    /** Vergrößerung eines Posters beim Fokus */
+    val posterScale: Float,
+    /** Ecken der Poster in dp */
+    val posterRadius: Int,
+) {
+    AZE("Aze", "Nachtblau mit Türkis, Fokus mit farbigem Rahmen", "Aze Nachtblau", 12, 1.03f, 1.0f, 8),
+    KINO("Kino", "Fast schwarz, kantig, weiße Auswahl, Rot für Laufendes – Poster wachsen beim Fokus", "Kino", 4, 1.0f, 1.07f, 4),
+    GLAS("Glas", "Weiche Flächen, große runde Kacheln, helle Auswahl mit Schatten", "Glas", 18, 1.04f, 1.06f, 14),
+    ;
+    companion object { fun of(i: Int) = entries.getOrElse(i) { AZE } }
+}
 
 /** Index von „Aze Nachtblau“ (Standard-Design) in [Schemes] */
 val AzeIndex: Int get() = Schemes.indexOfFirst { it.name == "Aze Nachtblau" }
@@ -169,6 +210,11 @@ val TextColors: List<Pair<String, Color?>> = listOf(
 /** Farben der Oberfläche – folgen dem gewählten Farbschema. */
 object Palette {
     var scheme by mutableStateOf(Schemes[0])
+    var style by mutableStateOf(AppStyle.AZE)
+    /** Ecken für Listenzeilen und Knöpfe (folgt dem Stil) */
+    val radius get() = style.radius.dp
+    /** Ecken für große Flächen (Infoleiste, Fenster) */
+    val barRadius get() = when (style) { AppStyle.AZE -> 20.dp; AppStyle.KINO -> 6.dp; AppStyle.GLAS -> 28.dp }
 
     val Ground get() = scheme.ground
     val Panel get() = scheme.panel
@@ -204,8 +250,9 @@ object Palette {
     val Accent2 = Color(0xFF2B7CFF)
     /** Fokus in Listen: zarter Verlauf im Akzentton (Text bleibt hell) */
     val FocusTint get() = Brush.horizontalGradient(listOf(scheme.accent.copy(alpha = 0.24f), Accent2.copy(alpha = 0.14f)))
-    /** Fortschrittsbalken */
-    val ProgressBrush get() = Brush.horizontalGradient(listOf(scheme.accent, lerp(scheme.accent, Accent2, 0.7f)))
+    /** Fortschrittsbalken (Aze: Verlauf, Kino/Glas: einfarbig in der Hervorhebung) */
+    val ProgressBrush get() = if (style == AppStyle.AZE) Brush.horizontalGradient(listOf(scheme.highlight, lerp(scheme.highlight, Accent2, 0.7f)))
+        else Brush.horizontalGradient(listOf(scheme.highlight, scheme.highlight))
     /** Fokus: heller Verlauf */
     val FocusBrush get() = Brush.verticalGradient(listOf(scheme.accent, lerp(scheme.accent, scheme.highlight, 0.22f)))
 
@@ -214,6 +261,27 @@ object Palette {
     val GroupSelect get() = scheme.accent
     val GroupActive get() = scheme.raised
     val GroupSoft get() = scheme.textMuted
+}
+
+/**
+ * Hintergrund einer Listenzeile je Stil (Senderliste, Gruppen):
+ * Aze = zarter Verlauf + Akzent-Rahmen, Kino = heller Grund + weißer Rahmen, Glas = milchig hell + Schatten.
+ * Nur Zeichnen – Schatten nur am fokussierten Eintrag.
+ */
+fun Modifier.rowFocus(focused: Boolean, playing: Boolean, rowShape: androidx.compose.ui.graphics.Shape): Modifier {
+    val shape = rowShape
+    return when {
+    focused -> when (Palette.style) {
+        AppStyle.AZE -> this.background(Palette.FocusTint, shape).border(2.dp, Palette.Accent, shape)
+        AppStyle.KINO -> this.background(Color.White.copy(alpha = 0.13f), shape).border(2.dp, Color.White.copy(alpha = 0.9f), shape)
+        AppStyle.GLAS -> this
+            .graphicsLayer { shadowElevation = 10f; this.shape = rowShape; clip = false }
+            .background(Color.White.copy(alpha = 0.20f), shape)
+            .border(1.dp, Color.White.copy(alpha = 0.28f), shape)
+    }
+    playing -> this.background(Palette.Highlight.copy(alpha = if (Palette.style == AppStyle.KINO) 0.16f else 0.10f), shape)
+    else -> this
+    }
 }
 
 fun isOkKey(key: Key): Boolean =
@@ -284,7 +352,7 @@ fun TvButton(
     onClick: () -> Unit,
 ) {
     Focusable(modifier = modifier, onClick = onClick, qaName = label.trim()) { focused ->
-        val shape = RoundedCornerShape(14.dp)
+        val shape = RoundedCornerShape(Palette.radius + 2.dp)
         val fg = when {
             focused -> Palette.OnAccent
             danger -> Palette.Live

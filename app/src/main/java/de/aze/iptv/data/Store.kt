@@ -347,6 +347,11 @@ class Store(context: Context) {
         get() = prefs.getInt("scheme", 0)
         set(v) = prefs.edit().putInt("scheme", v).apply()
 
+    /** Stil der Oberfläche (Index in AppStyle: 0 Aze, 1 Kino, 2 Glas) */
+    var appStyle: Int
+        get() = prefs.getInt("appStyle", 0)
+        set(v) = prefs.edit().putInt("appStyle", v).apply()
+
     /** "MODERN" oder "ENIGMA" */
     var listStyle: String?
         get() = prefs.getString("listStyle", null)

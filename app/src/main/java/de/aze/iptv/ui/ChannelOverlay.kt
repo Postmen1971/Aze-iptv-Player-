@@ -201,7 +201,7 @@ fun ChannelOverlay(
                                     .height(38.dp)
                                     .background(
                                         if (focused) Palette.GroupSelect else if (i == groupIndex) Palette.Highlight.copy(alpha = 0.16f) else Palette.GroupBlue.copy(alpha = 0f),
-                                        RoundedCornerShape(10.dp),
+                                        RoundedCornerShape(Palette.radius),
                                     )
                                     .padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -344,26 +344,20 @@ fun ChannelOverlay(
                             ) { focused ->
                                 val prog = app.epg.now(nc.channel)
                                 // Fokus: leicht größer, Akzent-Rahmen, zarter Verlauf (nur Zeichnen – kostet kaum Leistung)
-                                val sc by androidx.compose.animation.core.animateFloatAsState(if (focused) 1.03f else 1f, androidx.compose.animation.core.tween(120), label = "fs")
-                                val shape = RoundedCornerShape(12.dp)
+                                val sc by androidx.compose.animation.core.animateFloatAsState(if (focused) Palette.style.rowScale else 1f, androidx.compose.animation.core.tween(120), label = "fs")
+                                val shape = RoundedCornerShape(Palette.radius)
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(if (prog != null) 46.dp else 38.dp)
                                         .graphicsLayer { scaleX = sc; scaleY = sc }
-                                        .then(
-                                            when {
-                                                focused -> Modifier.background(Palette.FocusTint, shape).border(2.dp, Palette.Accent, shape)
-                                                playing -> Modifier.background(Palette.Accent.copy(alpha = 0.10f), shape)
-                                                else -> Modifier
-                                            },
-                                        )
+                                        .rowFocus(focused, playing, shape)
                                         .padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Text(
                                         "${nc.number}",
-                                        color = if (focused || playing) Palette.Accent else Palette.TextMuted,
+                                        color = if (focused) Palette.Accent else if (playing) Palette.Highlight else Palette.TextMuted,
                                         fontSize = 13.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Normal,
                                         textAlign = TextAlign.End, modifier = Modifier.width(38.dp),
                                     )
@@ -391,7 +385,7 @@ fun ChannelOverlay(
                                             }
                                         }
                                     }
-                                    if (nc.favorite) Text("★", color = Palette.Accent, fontSize = 12.sp)
+                                    if (nc.favorite) Text("★", color = Palette.Highlight, fontSize = 12.sp)
                                 }
                             }
                         }

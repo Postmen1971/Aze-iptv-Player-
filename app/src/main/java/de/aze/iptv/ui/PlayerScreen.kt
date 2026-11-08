@@ -1282,15 +1282,15 @@ internal fun ZapBar(app: AppController, cur: de.aze.iptv.data.NumberedChannel, q
             .fillMaxWidth()
             // näher an den unteren Bildrand
             .padding(start = 32.dp, end = 32.dp, bottom = 10.dp)
-            .background(Palette.PanelDark.copy(alpha = 0.90f), RoundedCornerShape(20.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(20.dp))
+            .background(Palette.PanelDark.copy(alpha = 0.90f), RoundedCornerShape(Palette.barRadius))
+            .border(1.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(Palette.barRadius))
             .padding(horizontal = 22.dp, vertical = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(18.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("${cur.number}", color = Palette.Accent, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("${cur.number}", color = Palette.Highlight, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Text(cur.channel.name, color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
                 Text(
                     "● LIVE", color = Palette.Live, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold,

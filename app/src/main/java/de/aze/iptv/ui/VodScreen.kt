@@ -52,6 +52,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.Key
@@ -511,14 +512,29 @@ private fun posterRequest(context: android.content.Context, url: String?, title:
 @Composable
 private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boolean = false, onClick: () -> Unit) {
     Focusable(onClick = onClick, qaName = "V $number") { focused ->
+        // Stil: Aze = Rahmen, Kino = wächst + weißer Rahmen, Glas = wächst + Schatten (nur Zeichnen)
+        val st = Palette.style
+        val pShape = RoundedCornerShape(st.posterRadius.dp)
+        val ps by androidx.compose.animation.core.animateFloatAsState(if (focused) st.posterScale else 1f, androidx.compose.animation.core.tween(140), label = "ps")
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Box(
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(8.dp))
+                    .graphicsLayer {
+                        scaleX = ps; scaleY = ps
+                        if (focused && st == de.aze.iptv.ui.AppStyle.GLAS) { shadowElevation = 16f; shape = pShape }
+                    }
+                    .clip(pShape)
                     .background(Palette.Raised)
-                    .then(if (focused) Modifier.border(3.dp, Palette.Accent, RoundedCornerShape(8.dp)) else Modifier),
+                    .then(
+                        if (!focused) Modifier
+                        else when (st) {
+                            de.aze.iptv.ui.AppStyle.AZE -> Modifier.border(3.dp, Palette.Accent, pShape)
+                            de.aze.iptv.ui.AppStyle.KINO -> Modifier.border(2.dp, Color.White, pShape)
+                            de.aze.iptv.ui.AppStyle.GLAS -> Modifier.border(1.dp, Color.White.copy(alpha = 0.5f), pShape)
+                        },
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(item.name, color = Palette.TextMuted, fontSize = 12.sp, maxLines = 4, modifier = Modifier.padding(8.dp))

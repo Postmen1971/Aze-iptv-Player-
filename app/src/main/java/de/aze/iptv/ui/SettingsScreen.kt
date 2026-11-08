@@ -815,6 +815,14 @@ private fun YouTubeSection(app: AppController) {
 @Composable
 private fun AppearanceSection(app: AppController) {
     Section("Aussehen") {
+        // Stil: ändert Ecken, Fokus und Poster (nur Zeichnen, macht nichts langsamer) und stellt passende Farben ein
+        Text("Stil", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            AppStyle.entries.forEach { st ->
+                TvButton(st.title, selected = app.appStyle == st, onClick = { app.updateStyle(st) })
+            }
+        }
+        Text(app.appStyle.desc + ". Farben lassen sich danach frei ändern.", color = Palette.TextMuted, fontSize = 13.sp)
         // Aurora-Familie (neues Design) in eigener Reihe, darunter die bisherigen Farbschemata
         val aurora = Schemes.withIndex().filter { it.value.name.startsWith("Aurora") }
         val classic = Schemes.withIndex().filter { !it.value.name.startsWith("Aurora") }
@@ -1636,7 +1644,7 @@ private val SETTINGS_INDEX = listOf(
     Triple("Programmzeitschrift (EPG)", "epg programm sendung zeitschrift", "Programmzeitschrift"),
     Triple("Tastenbelegung", "taste fernbedienung belegen rot grün gelb blau lang", "Fernbedienung"),
     Triple("Infoleiste beim Umschalten", "infoleiste info leiste sendername anzeigen dauer sekunden", "Fernbedienung"),
-    Triple("Farben / Design", "farbe design aussehen aurora thema", "Aussehen"),
+    Triple("Farben / Design", "farbe design aussehen aurora thema stil kino glas", "Aussehen"),
     Triple("PIN ändern", "pin passwort sperre", "PIN & Kinderschutz"),
     Triple("Erwachsenen-Filter", "erwachsene kinder filter schutz", "PIN & Kinderschutz"),
     Triple("Einstellungen sichern / wiederherstellen", "sichern backup code wiederherstellen neues gerät", "Sichern"),

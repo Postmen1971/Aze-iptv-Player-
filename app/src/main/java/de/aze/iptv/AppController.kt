@@ -410,9 +410,22 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     var textColorIndex by mutableStateOf(store.textColor.coerceIn(0, de.aze.iptv.ui.TextColors.lastIndex))
         private set
 
+    /** Stil der Oberfläche (Aze / Kino / Glas) */
+    var appStyle by mutableStateOf(de.aze.iptv.ui.AppStyle.of(store.appStyle))
+        private set
+
     init {
         Palette.scheme = Schemes[schemeIndex]
+        Palette.style = appStyle
         Palette.textOverride = de.aze.iptv.ui.TextColors[textColorIndex].second
+    }
+
+    /** Stil wählen – stellt die passenden Farben mit ein (danach frei änderbar). */
+    fun updateStyle(st: de.aze.iptv.ui.AppStyle) {
+        appStyle = st
+        store.appStyle = st.ordinal
+        Palette.style = st
+        Schemes.indexOfFirst { it.name == st.schemeName }.takeIf { it >= 0 }?.let { updateScheme(it) }
     }
 
     fun updateTextColor(i: Int) {
