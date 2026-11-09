@@ -282,7 +282,8 @@ private fun CategoryItem(
     onFocus: () -> Unit,
     onClick: () -> Unit,
 ) {
-    Focusable(modifier = modifier.fillMaxWidth(), onClick = onClick, onFocus = onFocus, qaName = label) { focused ->
+    // Test-Name mit „SET “ davor – sonst verwechselt der Touch-Test z. B. „Suchen“ mit dem Seitenmenü hinter den Einstellungen
+    Focusable(modifier = modifier.fillMaxWidth(), onClick = onClick, onFocus = onFocus, qaName = "SET $label") { focused ->
         // Aurora: Fokus = gefüllte Akzent-Pille, gewählter Bereich leicht im Akzentton, Punkt vorn
         val fg = if (focused) Palette.OnAccent else if (selected) Palette.Highlight else Palette.TextSoft
         Row(

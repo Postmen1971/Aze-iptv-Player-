@@ -437,7 +437,7 @@ sleep 2; shot "test13-einstellungen"
 open_pane() {
   local c="$1" r
   for r in 1 2 3 4 5; do
-    tap "$c" || return 1
+    tap "SET $c" || return 1
     sleep 1.2
     last_is "SET_PANE" "SET_PANE $c" && return 0
     sleep 1.5   # Liste ausrollen lassen, dann frische Position lesen
@@ -465,13 +465,13 @@ else fail "Touch: „Sicherung erstellen“ zeigt kein Ergebnis"; fi
 # Links direkt antippen (öffnet den Browser) – Einstellungen frisch öffnen
 adb shell am start -S -n $PKG/.MainActivity >/dev/null; sleep 8
 bar; tap "⚙ Einstellungen"; sleep 2; for d in 0 0 0 0; do tap "PIN $d"; done; sleep 2
-tap "Hilfe"; N=$(count "OPEN_URL"); tap "🔗 Anleitung öffnen" || fail "Touch: Hilfe – Link „Anleitung öffnen“ nicht antippbar"
+open_pane "Hilfe"; N=$(count "OPEN_URL"); tap "🔗 Anleitung öffnen" || fail "Touch: Hilfe – Link „Anleitung öffnen“ nicht antippbar"
 sleep 3; [ "$(count "OPEN_URL")" -gt "$N" ] || fail "Touch: Hilfe – Anleitung-Link öffnet nichts"
 adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3
-tap "Sender & Playlists"; tap "Handy-Eingabe starten" && { sleep 2; N=$(count "OPEN_URL"); tap "🔗 Hier auf dem Gerät öffnen" || fail "Touch: Handy-Eingabe – Link nicht antippbar"
+open_pane "Sender & Playlists"; tap "Handy-Eingabe starten" && { sleep 2; N=$(count "OPEN_URL"); tap "🔗 Hier auf dem Gerät öffnen" || fail "Touch: Handy-Eingabe – Link nicht antippbar"
   sleep 3; [ "$(count "OPEN_URL")" -gt "$N" ] || fail "Touch: Handy-Eingabe – Link öffnet nichts"
   adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 3; tap "Beenden"; }
-tap "Senderliste & Favoriten"; tap "Senderliste bearbeiten öffnen" || fail "Touch: „Senderliste bearbeiten öffnen“ nicht antippbar"
+open_pane "Senderliste & Favoriten"; tap "Senderliste bearbeiten öffnen" || fail "Touch: „Senderliste bearbeiten öffnen“ nicht antippbar"
 sleep 3; shot "test13-senderliste"
 [ "$(count "SORT_OPEN")" -ge 1 ] || fail "Touch: Senderliste verwalten öffnet sich nicht"
 tap "›" || fail "Touch: „›“ (Sender der Kategorie) nicht antippbar"
