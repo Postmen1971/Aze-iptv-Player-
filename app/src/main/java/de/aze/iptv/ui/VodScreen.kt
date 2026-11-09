@@ -386,7 +386,18 @@ private fun Browse(
                     raw?.let { l -> if (adultOff) l.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.name) } else l }
                 }
                 val title = if (q != null) "Suche: „$q“" else catList.getOrNull(selected)?.name.orEmpty()
+                // Vorschau oben (wie im Entwurf): zeigt den gewählten Film – sonst den ersten der Liste
+                var heroItem by remember(list) { mutableStateOf<VodItem?>(null) }
                 Column {
+                    val shownHero = heroItem ?: list?.firstOrNull()
+                    if (shownHero != null) {
+                        VodHero(
+                            item = shownHero, series = series,
+                            resumeMs = if (series) 0L else app.resumeOf("m:$sourceId:${shownHero.id}"),
+                            category = title,
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
                     // Oben: Kategorie bzw. Suche und rechts die Anzahl
                     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -433,7 +444,10 @@ private fun Browse(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             gridItemsIndexed(list, key = { _, it -> it.id }) { idx, item ->
-                                PosterCard(item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0, series = series) { onOpen(item) }
+                                PosterCard(
+                                    item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0, series = series,
+                                    onFocus = { heroItem = item },
+                                ) { onOpen(item) }
                             }
                           }
                         }
@@ -509,9 +523,82 @@ private fun posterRequest(context: android.content.Context, url: String?, title:
         .apply { if (title != null) { setParameter("title", title, memoryCacheKey = null); setParameter("series", series, memoryCacheKey = null) } }
         .build()
 
+/**
+ * Vorschau-Bereich oben in Filme/Serien (Entwurf „Nachtblau – Filme“ / „Kino – Filme“):
+ * Titel, Jahr, Bewertung, „Weiter ab …“. Nutzt nur das Poster, das schon im Zwischenspeicher liegt
+ * (gleiche Anfrage wie die Kachel) – keine zusätzlichen Downloads, macht nichts langsamer.
+ */
 @Composable
-private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boolean = false, onClick: () -> Unit) {
-    Focusable(onClick = onClick, qaName = "V $number") { focused ->
+private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: String) {
+    val st = Palette.style
+    val shape = RoundedCornerShape(Palette.barRadius)
+    val ctx = LocalContext.current
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(150.dp)
+            .clip(shape)
+            .background(Palette.Panel),
+    ) {
+        // Poster rechts als ruhiges Hintergrundbild, nach links ausgeblendet
+        if (item.poster != null || de.aze.iptv.data.Tmdb.enabled) {
+            AsyncImage(
+                model = posterRequest(ctx, item.poster, item.name, series),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                alpha = if (st == de.aze.iptv.ui.AppStyle.KINO) 0.55f else 0.40f,
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(0.45f),
+            )
+        }
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.horizontalGradient(
+                    0f to Palette.Panel, 0.5f to Palette.Panel.copy(alpha = 0.92f), 1f to Palette.Panel.copy(alpha = 0.15f),
+                ),
+            ),
+        )
+        Column(
+            Modifier.align(Alignment.CenterStart).fillMaxWidth(0.7f).padding(horizontal = 22.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Text(
+                (if (resumeMs > 0) "WEITERSCHAUEN" else category.uppercase()),
+                color = Palette.Highlight, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                item.name, color = Palette.Text, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+            val meta = listOfNotNull(
+                item.year?.takeIf { it.isNotBlank() },
+                if (series) "Serie" else "Film",
+                item.rating?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "★ " + "%.1f".format(it) },
+            ).joinToString(" · ")
+            Text(meta, color = Palette.TextMuted, fontSize = 13.sp, maxLines = 1)
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                val pill = RoundedCornerShape(Palette.radius)
+                if (resumeMs > 0) {
+                    Text(
+                        "▶ Weiter ab ${fmtTime(resumeMs)}",
+                        color = Palette.OnAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.background(Palette.Accent, pill).padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+                Text(
+                    "OK = Details",
+                    color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                    modifier = Modifier.background(Palette.Raised, pill).padding(horizontal = 12.dp, vertical = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boolean = false, onFocus: (() -> Unit)? = null, onClick: () -> Unit) {
+    Focusable(onClick = onClick, onFocus = onFocus, qaName = "V $number") { focused ->
         // Stil: Aze = Rahmen, Kino = wächst + weißer Rahmen, Glas = wächst + Schatten (nur Zeichnen)
         val st = Palette.style
         val pShape = RoundedCornerShape(st.posterRadius.dp)
