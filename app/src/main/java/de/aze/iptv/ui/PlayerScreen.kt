@@ -1295,7 +1295,11 @@ internal fun ZapBar(app: AppController, cur: de.aze.iptv.data.NumberedChannel, q
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("${cur.number}", color = Palette.Highlight, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                Text(cur.channel.name, color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+                // lange Sendernamen kürzen – sonst schoben sie „LIVE“ und die Bildqualität aus der Leiste (Handy)
+                Text(
+                    cur.channel.name, color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                )
                 Text(
                     "● LIVE", color = Palette.Live, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier.background(Palette.Live.copy(alpha = 0.16f), RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 3.dp),

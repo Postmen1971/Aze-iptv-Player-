@@ -388,18 +388,12 @@ private fun Browse(
                 }
                 val title = if (q != null) "Suche: „$q“" else catList.getOrNull(selected)?.name.orEmpty()
                 // Vorschau oben (wie im Entwurf): zeigt den gewählten Film – sonst den ersten der Liste
-                var heroItem by remember(list) { mutableStateOf<VodItem?>(null) }
+                val heroState = remember(list) { mutableStateOf<VodItem?>(null) }
                 Column {
-                    val shownHero = heroItem ?: list?.firstOrNull()
                     // Handy (wenig Höhe oder schmal): keine Vorschau, damit die Poster Platz haben
                     val cfg = androidx.compose.ui.platform.LocalConfiguration.current
-                    if (shownHero != null && cfg.screenHeightDp >= 480 && cfg.screenWidthDp >= 600) {
-                        VodHero(
-                            item = shownHero, series = series,
-                            resumeMs = if (series) 0L else app.resumeOf("m:$sourceId:${shownHero.id}"),
-                            category = title,
-                        )
-                        Spacer(Modifier.height(12.dp))
+                    if (!list.isNullOrEmpty() && cfg.screenHeightDp >= 480 && cfg.screenWidthDp >= 600) {
+                        VodHeroSlot(app, heroState, list.first(), series, sourceId, title)
                     }
                     // Oben: Kategorie bzw. Suche und rechts die Anzahl
                     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -449,7 +443,7 @@ private fun Browse(
                             gridItemsIndexed(list, key = { _, it -> it.id }) { idx, item ->
                                 PosterCard(
                                     item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0, series = series,
-                                    onFocus = { heroItem = item },
+                                    onFocus = { heroState.value = item },
                                 ) { onOpen(item) }
                             }
                           }
@@ -534,6 +528,20 @@ private fun posterRequest(context: android.content.Context, url: String?, title:
  * Titel, Jahr, Bewertung, „Weiter ab …“. Nutzt nur das Poster, das schon im Zwischenspeicher liegt
  * (gleiche Anfrage wie die Kachel) – keine zusätzlichen Downloads, macht nichts langsamer.
  */
+/**
+ * Liest die Auswahl in einem eigenen Bereich: beim Wechsel des Posters wird NUR die Vorschau neu gezeichnet –
+ * nicht die ganze Seite mit Kategorien und Raster (das machte das Blättern unnötig schwer).
+ */
+@Composable
+private fun VodHeroSlot(
+    app: AppController, hero: androidx.compose.runtime.State<VodItem?>, first: VodItem,
+    series: Boolean, sourceId: String, category: String,
+) {
+    val item = hero.value ?: first
+    VodHero(item = item, series = series, resumeMs = if (series) 0L else app.resumeOf("m:$sourceId:${item.id}"), category = category)
+    Spacer(Modifier.height(12.dp))
+}
+
 @Composable
 private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: String) {
     val st = Palette.style

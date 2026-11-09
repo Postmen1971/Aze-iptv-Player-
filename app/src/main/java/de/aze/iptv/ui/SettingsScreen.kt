@@ -36,6 +36,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -108,6 +113,10 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     val firstFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
     var cat by remember { mutableStateOf(1) }
+    // Der Inhalt rechts folgt dem Fokus mit 0,1 s Verzögerung: beim schnellen Blättern durch die Bereiche wird
+    // nicht jeder Bereich komplett aufgebaut (auf langsamen Sticks hakte ▲▼ dadurch). Antippen/OK zeigt sofort.
+    var shownCat by remember { mutableStateOf(1) }
+    LaunchedEffect(cat) { if (shownCat != cat) { kotlinx.coroutines.delay(100); shownCat = cat } }
     // Fokus auf „Fernsehen“: rechts statt eines Bereichs das Aze-Logo und „OK = zurück zum Fernsehen“
     var onTv by remember { mutableStateOf(app.hasAnySource) }
     // Standard: das Wichtigste. „Erweitert“ blendet Technik (Netzwerk, Puffer, Player …) zusätzlich ein.
@@ -135,6 +144,10 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 .fillMaxHeight()
                 .background(Palette.PanelDark)
                 .verticalScroll(rememberScrollState())
+                // ▶ direkt nach ▼ (Inhalt noch vom vorigen Bereich): erst den richtigen Bereich zeigen
+                .onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight && shownCat != cat) { shownCat = cat; true } else false
+                }
                 .padding(start = 16.dp, end = 14.dp, top = 26.dp, bottom = 18.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -154,7 +167,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             CategoryItem("Fernsehen", selected = false, icon = LineIcon.TV, modifier = Modifier.focusRequester(firstFocus), onFocus = { if (app.hasAnySource) onTv = true }, onClick = onClose)
             cats.forEachIndexed { i, name ->
                 // gewählter Bereich nur markiert, solange nicht „Fernsehen“ den Fokus hat (sonst zwei Markierungen gleichzeitig)
-                CategoryItem(name, selected = i == cat && !onTv, icon = CATEGORY_ICON[name], onFocus = { onTv = false; cat = i }, onClick = { onTv = false; cat = i; qaLog("SET_CAT $name") })
+                CategoryItem(name, selected = i == cat && !onTv, icon = CATEGORY_ICON[name], onFocus = { onTv = false; cat = i }, onClick = { onTv = false; cat = i; shownCat = i; qaLog("SET_CAT $name") })
             }
             Spacer(Modifier.height(14.dp))
             CategoryItem(
@@ -165,7 +178,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
         }
         // neuer Bereich = wieder oben anfangen (sonst landet man mitten auf der Seite)
         val paneScroll = rememberScrollState()
-        LaunchedEffect(cat, onTv) { paneScroll.scrollTo(0) }
+        LaunchedEffect(shownCat, onTv) { paneScroll.scrollTo(0) }
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -188,12 +201,12 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 return@Column
             }
             // Seitentitel des gewählten Bereichs
-            cats.getOrNull(cat)?.let { Text(it, color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp)) }
+            cats.getOrNull(shownCat)?.let { Text(it, color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp)) }
             app.message?.let {
                 Text(it, color = Palette.TextSoft, fontSize = 13.sp)
             }
-            CATEGORY_HINT[cats.getOrNull(cat)]?.let { Text(it, color = Palette.TextMuted, fontSize = 14.sp) }
-            when (cats.getOrNull(cat)) {
+            CATEGORY_HINT[cats.getOrNull(shownCat)]?.let { Text(it, color = Palette.TextMuted, fontSize = 14.sp) }
+            when (cats.getOrNull(shownCat)) {
                 "Suchen" -> SettingsSearch(onGo = { name -> onTv = false; cat = cats.indexOf(name).coerceAtLeast(0) })
                 "Sender & Playlists" -> {
                     PhoneInputSection(app)
