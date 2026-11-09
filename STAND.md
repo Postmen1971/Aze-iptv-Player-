@@ -1,4 +1,4 @@
-# Aze-IPTV-Player – Projektstand (09.11.2026, Version 1.0.239)
+# Aze-IPTV-Player – Projektstand (09.11.2026, Version 1.0.240)
 
 ## Wo alles liegt
 - **GitHub-Repository:** https://github.com/Postmen1971/Aze-iptv-Player- (Branch `main`)
@@ -174,6 +174,12 @@
 - Kein zusätzlicher Download: dasselbe Poster wie die Kachel (Coil-Zwischenspeicher), kein Backdrop vom Anbieter. Kategorien bleiben links, Raster darunter (Netflix-Reihen würden viele Kategorien gleichzeitig laden).
 - „Weiter ab“/„Details“ sind noch Hinweise, keine Knöpfe – mögliche nächste Stufe.
 - Touch-Test: Einstellungs-Bereiche heißen im Test „SET <Name>“ (vorher Verwechslung von „Suchen“ mit dem Seitenmenü dahinter), `open_pane` mit bis zu 5 Versuchen.
+
+## Handy-Ansicht Filme (1.0.240)
+- Aziz testete auf Xiaomi 12 Pro: Abspielen-Knopf in den Film-Details war nicht zu sehen (Seite zu hoch, nicht scrollbar).
+- `DetailView`: `compact` = Höhe < 520 dp oder Breite < 600 dp → Knöpfe direkt unter Titel/Meta (FlowRow, bricht um), Film-Spalte scrollbar, Poster 110 dp, hochkant (< 600 dp breit) ohne Poster; Serien kompakt ohne Regie/Darsteller, Inhalt 3 Zeilen.
+- Browse: Kategorien-Spalte max. 32 % der Breite; Vorschau oben nur ab 480 dp Höhe und 600 dp Breite.
+- Fernseher (960×540 dp) und Tablet unverändert.
 
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
