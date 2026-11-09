@@ -550,7 +550,8 @@ private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: St
     Box(
         Modifier
             .fillMaxWidth()
-            .height(150.dp)
+            // 150 dp war zu knapp: der Hinweis „OK = Details“ wurde unten abgeschnitten (Foto aus dem Fernseher-Test)
+            .height(172.dp)
             .clip(shape)
             .background(Palette.Panel),
     ) {

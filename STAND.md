@@ -1,4 +1,4 @@
-# Aze-IPTV-Player – Projektstand (09.11.2026, Version 1.0.240)
+# Aze-IPTV-Player – Projektstand (09.11.2026, Version 1.0.243)
 
 ## Wo alles liegt
 - **GitHub-Repository:** https://github.com/Postmen1971/Aze-iptv-Player- (Branch `main`)
@@ -180,6 +180,18 @@
 - `DetailView`: `compact` = Höhe < 520 dp oder Breite < 600 dp → Knöpfe direkt unter Titel/Meta (FlowRow, bricht um), Film-Spalte scrollbar, Poster 110 dp, hochkant (< 600 dp breit) ohne Poster; Serien kompakt ohne Regie/Darsteller, Inhalt 3 Zeilen.
 - Browse: Kategorien-Spalte max. 32 % der Breite; Vorschau oben nur ab 480 dp Höhe und 600 dp Breite.
 - Fernseher (960×540 dp) und Tablet unverändert.
+
+## Geräte-Erkennung, Tempo, Stabilität (1.0.241–1.0.243)
+- `ui/Device.kt`: `DeviceKind` TV / TABLET / PHONE. Erkennung: UI-Modus Fernseher, leanback, Fire TV oder kein Touch → TV; sonst kleinste Breite ≥ 600 dp → Tablet, darunter Handy. `Device.isTouch` ersetzt alle `FrameRate.isTv`-Abfragen der Oberfläche. Einstellungen → Aussehen → **Gerät** (Automatisch / Fernseher / Tablet / Handy; Store `deviceMode`).
+- Handy: immer Querformat (`MainActivity.applyOrientation`, SENSOR_LANDSCAPE). Touch: Zeilen/Knöpfe 6 dp höher (`Device.touchPad`), Hinweise fürs Tippen (`Device.hint`).
+- **Sofortstart:** `Store.saveLast/lastChannel` merkt den letzten Sender komplett; `AppController.start()` spielt ihn sofort, die Senderliste wird danach gelesen (gleiche Adresse → kein Neustart). Startbildschirm mind. 0,6 s statt 1,2 s.
+- Cover: fester `memoryCacheKey` + `placeholderMemoryCacheKey` in `posterRequest` → geladene Cover beim Zurückblättern sofort da. `CoverStore.init` zählt Dateien im Hintergrund.
+- `qaLog`: reine Bedien-Meldungen (LIST_, SORT_, SET_ …) nur noch im Test-Build (vorher bei jedem ▲▼ Datei-Schreiben + volles Hänger-Protokoll).
+- Filme: `VodHeroSlot` liest die Auswahl in eigenem Bereich (vorher zeichnete jeder Fokuswechsel die ganze Seite neu); Vorschau 172 dp hoch (150 schnitt „OK = Details“ ab).
+- Einstellungen: Inhalt rechts folgt dem Fokus mit 0,1 s Verzögerung (`shownCat`), Antippen/OK sofort.
+- `android:largeHeap="true"` (sehr große Playlists); Infoleiste kürzt lange Sendernamen.
+- **Emulator-Test:** Tests 1–12 liefen nie in Fernseher-Größe, sondern 320×516 dp hochkant (wm size wird auf 2× der echten Emulator-Größe begrenzt). Neu: Start-Parameter `aze_test_device` (tv/tablet/phone), **Test 14 Handy** (576×1280, 235 dpi → 871×368 dp, prüft „Abspielen“ sichtbar) und **Test 15 Fernseher** (540×960, 160 dpi → 960×516 dp), beide mit Fotos. In Test 15 öffnet die blaue Taste die Einstellungen nicht (Foto zeigt nur das Bild) – noch klären.
+- Nicht geprüft: echtes Handy/SHIELD – nur Emulator.
 
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
