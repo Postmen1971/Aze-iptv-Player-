@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -311,7 +312,7 @@ private fun Browse(
             }
             Column(
                 Modifier
-                    .width(260.dp)
+                    .width(minOf(260, (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp * 0.32f).toInt()).dp)
                     .fillMaxHeight()
                     // wie die Gruppenübersicht beim Fernsehen
                     .background(if (menu) Palette.GroupBrush else Palette.PanelBrush)
@@ -390,7 +391,9 @@ private fun Browse(
                 var heroItem by remember(list) { mutableStateOf<VodItem?>(null) }
                 Column {
                     val shownHero = heroItem ?: list?.firstOrNull()
-                    if (shownHero != null) {
+                    // Handy (wenig Höhe oder schmal): keine Vorschau, damit die Poster Platz haben
+                    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+                    if (shownHero != null && cfg.screenHeightDp >= 480 && cfg.screenWidthDp >= 600) {
                         VodHero(
                             item = shownHero, series = series,
                             resumeMs = if (series) 0L else app.resumeOf("m:$sourceId:${shownHero.id}"),
@@ -664,6 +667,7 @@ private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boo
     }
 }
 
+@kotlin.OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun DetailView(
     app: AppController,
@@ -698,6 +702,10 @@ private fun DetailView(
         runCatching { playButton.requestFocus() }
     }
     val i = info
+    // Handy: wenig Höhe (quer) oder schmal (hoch) → kleineres Poster, Knöpfe gleich unter dem Titel, alles scrollbar
+    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+    val compact = cfg.screenHeightDp < 520 || cfg.screenWidthDp < 600
+    val narrow = cfg.screenWidthDp < 600
 
     Box(Modifier.fillMaxSize().background(Palette.Ground)) {
         i?.backdrop?.let {
@@ -708,12 +716,19 @@ private fun DetailView(
                 Brush.horizontalGradient(listOf(Palette.Ground, Palette.Ground.copy(alpha = 0.92f), Palette.Ground.copy(alpha = 0.55f))),
             ),
         )
-        Row(Modifier.fillMaxSize().padding(28.dp), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            Box(Modifier.width(180.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Palette.Raised)) {
-                if (item.poster != null) AsyncImage(model = CoverUrls.small(item.poster, 400, 600), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+        Row(
+            Modifier.fillMaxSize().padding(if (compact) 14.dp else 28.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (compact) 14.dp else 24.dp),
+        ) {
+            if (!narrow) {
+                Box(Modifier.width(if (compact) 110.dp else 180.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(10.dp)).background(Palette.Raised)) {
+                    if (item.poster != null) AsyncImage(model = CoverUrls.small(item.poster, 400, 600), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                }
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(item.name, color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // Film: ganze Spalte scrollbar (Knöpfe nie abgeschnitten). Serie: Folgenliste scrollt selbst.
+            val colMod = if (!series) Modifier.weight(1f).verticalScroll(rememberScrollState()) else Modifier.weight(1f)
+            Column(colMod, verticalArrangement = Arrangement.spacedBy(if (compact) 7.dp else 10.dp)) {
+                Text(item.name, color = Palette.Text, fontSize = if (compact) 20.sp else 26.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 val key = app.omdbKey
                 LaunchedEffect(item.id, key, i) {
                     if (key.isBlank() || i == null) return@LaunchedEffect
@@ -744,18 +759,14 @@ private fun DetailView(
                     i?.genre,
                 ).joinToString("  ·  ")
                 if (meta.isNotEmpty()) Text(meta, color = Palette.TextSoft, fontSize = 14.sp)
-                when {
-                    failed -> Text("Details konnten nicht geladen werden.", color = Palette.Live, fontSize = 14.sp)
-                    i == null -> Text("Lade …", color = Palette.TextMuted, fontSize = 14.sp)
-                }
-                i?.plot?.let { Text(it, color = Palette.Text, fontSize = 15.sp, maxLines = 6, overflow = TextOverflow.Ellipsis) }
-                i?.director?.let { Text("Regie: $it", color = Palette.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                i?.cast?.let { Text("Mit: $it", color = Palette.TextMuted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-
-                if (!series) {
+                val movieButtons: @Composable () -> Unit = {
                     val key = "m:$sourceId:${item.id}"
                     val resume = app.resumeOf(key)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 6.dp)) {
+                    androidx.compose.foundation.layout.FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(top = 6.dp),
+                    ) {
                         if (resume > 0) {
                             TvButton("Weiterschauen ab ${fmtTime(resume)}", modifier = Modifier.focusRequester(playButton), onClick = {
                                 onPlay(Playing(api.movieUrl(item), item.name, key, resume))
@@ -768,6 +779,18 @@ private fun DetailView(
                         }
                         TvButton("Zurück", onClick = onBack)
                     }
+                }
+                if (!series && compact) movieButtons()
+                when {
+                    failed -> Text("Details konnten nicht geladen werden.", color = Palette.Live, fontSize = 14.sp)
+                    i == null -> Text("Lade …", color = Palette.TextMuted, fontSize = 14.sp)
+                }
+                i?.plot?.let { Text(it, color = Palette.Text, fontSize = if (compact) 14.sp else 15.sp, maxLines = if (compact && series) 3 else 6, overflow = TextOverflow.Ellipsis) }
+                if (!(compact && series)) i?.director?.let { Text("Regie: $it", color = Palette.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                if (!(compact && series)) i?.cast?.let { Text("Mit: $it", color = Palette.TextMuted, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+
+                if (!series) {
+                    if (!compact) movieButtons()
                 } else {
                     val s = sd
                     if (s != null && s.seasons.isNotEmpty()) {
