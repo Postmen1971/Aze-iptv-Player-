@@ -144,7 +144,7 @@ fun MultiViewScreen(
         if (active == i || slots[i] == null) { active = i; picker = true } else active = i
     }
     val ctxMv = LocalContext.current
-    val touchDevice = remember { !de.aze.iptv.player.FrameRate.isTv(ctxMv) }
+    val touchDevice = Device.isTouch
 
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { qaLog("MV_CLOSE") } }
     BackHandler(enabled = !picker) { onExit(slots[active] ?: slots.firstOrNull { it != null }) }
@@ -321,7 +321,7 @@ private fun MvSlot(
         if (channel == null) {
             Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("+", color = if (active) Palette.Highlight else Palette.TextMuted, fontSize = 40.sp, fontWeight = FontWeight.Light)
-                Text(if (active) "OK = Sender wählen" else "Sender wählen", color = Palette.TextMuted, fontSize = 14.sp)
+                Text(if (active) Device.hint("OK = Sender wählen", "Tippen = Sender wählen") else "Sender wählen", color = Palette.TextMuted, fontSize = 14.sp)
             }
         } else if (YouTube.isYouTube(channel.channel.url)) {
             Text("YouTube geht im Multi-View nicht", color = Palette.TextMuted, fontSize = 14.sp, modifier = Modifier.align(Alignment.Center))

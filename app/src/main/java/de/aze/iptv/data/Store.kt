@@ -352,6 +352,11 @@ class Store(context: Context) {
         get() = prefs.getInt("appStyle", 0)
         set(v) = prefs.edit().putInt("appStyle", v).apply()
 
+    /** Geräteart: 0 = automatisch erkennen, 1 = Fernseher, 2 = Tablet, 3 = Handy */
+    var deviceMode: Int
+        get() = prefs.getInt("deviceMode", 0)
+        set(v) = prefs.edit().putInt("deviceMode", v).apply()
+
     /** "MODERN" oder "ENIGMA" */
     var listStyle: String?
         get() = prefs.getString("listStyle", null)
@@ -407,4 +412,28 @@ class Store(context: Context) {
     var lastChannelKey: String?
         get() = Secure.decrypt(lastPrefs.getString("lastChannel", null) ?: prefs.getString("lastChannel", null))
         set(v) = lastPrefs.edit().putString("lastChannel", v?.let { Secure.encrypt(it) }).apply()
+
+    /**
+     * Letzten Sender komplett merken (Nummer, Name, Gruppe, Adresse) – für den Sofortstart:
+     * beim nächsten Start läuft er schon, während die Senderliste noch gelesen wird.
+     */
+    fun saveLast(nc: NumberedChannel) {
+        val c = nc.channel
+        val info = listOf(nc.number.toString(), c.name, c.group, c.source, c.tvgId.orEmpty(), c.tvgName.orEmpty(), c.url).joinToString("\u0001")
+        lastPrefs.edit()
+            .putString("lastChannel", Secure.encrypt(c.key))
+            .putString("lastInfo", Secure.encrypt(info))
+            .apply()
+    }
+
+    fun lastChannel(): NumberedChannel? {
+        val p = Secure.decrypt(lastPrefs.getString("lastInfo", null))?.split('\u0001') ?: return null
+        if (p.size != 7 || p[6].isBlank()) return null
+        val n = p[0].toIntOrNull() ?: return null
+        return NumberedChannel(
+            n,
+            Channel(name = p[1], group = p[2], logo = null, url = p[6], source = p[3], tvgId = p[4].ifEmpty { null }, tvgName = p[5].ifEmpty { null }),
+            false,
+        )
+    }
 }

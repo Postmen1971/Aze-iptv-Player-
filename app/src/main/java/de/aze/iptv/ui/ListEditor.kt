@@ -133,7 +133,10 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             Text("Senderliste verwalten", color = Palette.Text, fontSize = if (narrow) 20.sp else 24.sp, fontWeight = FontWeight.Bold)
             Text(
                 if (sorting) "SORTIEREN: OK = Kategorie bzw. Sender aufnehmen · ▲▼ verschieben · OK = ablegen · ▶ zu den Sendern · fertig: „Sortieren beenden“"
-                else "OK = ein-/ausblenden · OK lang = verschieben (▲▼, OK legt ab) · Menü = umbenennen · ◀ ▶ wechselt zwischen Kategorien und Sendern",
+                else Device.hint(
+                    "OK = ein-/ausblenden · OK lang = verschieben (▲▼, OK legt ab) · Menü = umbenennen · ◀ ▶ wechselt zwischen Kategorien und Sendern",
+                    "Tippen = ein-/ausblenden · „Sortieren“ = Reihenfolge ändern · „Umbenennen“ = Namen ändern · › zeigt die Sender",
+                ),
                 color = if (sorting) Palette.Highlight else Palette.TextMuted, fontSize = 12.sp,
                 maxLines = if (narrow) 2 else 3, overflow = TextOverflow.Ellipsis,
             )

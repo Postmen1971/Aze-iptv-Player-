@@ -276,7 +276,7 @@ private fun Browse(
     }
 
     val ctxTouch = LocalContext.current
-    val touchDevice = remember(ctxTouch) { !de.aze.iptv.player.FrameRate.isTv(ctxTouch) }
+    val touchDevice = Device.isTouch
     Column(Modifier.fillMaxSize().background(Palette.ScreenBrush)) {
     // Tablet/Handy: Leiste oben zum Wechseln (auf dem Fernseher über ◀ im Seitenmenü)
     if (touchDevice) {
@@ -522,6 +522,9 @@ private fun posterRequest(context: android.content.Context, url: String?, title:
         .data(if (url == null) "tmdb:" else CoverUrls.small(url, 200, 300, force = shrinkOnServer))
         .size(200, 300)
         .crossfade(false)
+        // Fester Schlüssel: Kachel, Vorschau und Vorrat teilen sich dasselbe Bild im Arbeitsspeicher, und ein schon
+        // geladenes Cover wird beim Zurückblättern sofort gezeigt (ohne den Umweg über den Hintergrund-Thread).
+        .apply { val k = "p:" + (url ?: "tmdb:${title.orEmpty()}:$series"); memoryCacheKey(k); placeholderMemoryCacheKey(k) }
         // Titel für den TMDB-Ersatz (nicht Teil des Zwischenspeicher-Schlüssels)
         .apply { if (title != null) { setParameter("title", title, memoryCacheKey = null); setParameter("series", series, memoryCacheKey = null) } }
         .build()
@@ -590,7 +593,7 @@ private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: St
                     )
                 }
                 Text(
-                    "OK = Details",
+                    Device.hint("OK = Details", "Tippen = Details"),
                     color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium,
                     modifier = Modifier.background(Palette.Raised, pill).padding(horizontal = 12.dp, vertical = 6.dp),
                 )

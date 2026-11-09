@@ -386,7 +386,7 @@ fun PlayerScreen(
     var overlayKick by remember { mutableIntStateOf(0) }
     LaunchedEffect(overlay) { if (!overlay) overlayFocused = false }
     // Tablet/Handy: Leiste mit großen Knöpfen (Tippen ins Bild zeigt/versteckt sie)
-    val touchDevice = remember(context) { !de.aze.iptv.player.FrameRate.isTv(context) }
+    val touchDevice = Device.isTouch
     var touchBar by remember { mutableStateOf(false) }
     var touchTick by remember { mutableIntStateOf(0) }
     var teletextWeb by remember { mutableStateOf<android.webkit.WebView?>(null) }
@@ -1252,7 +1252,11 @@ fun PlayerScreen(
 
 
 /** Kurze Zeilen fürs Protokoll (logcat, Kennung AzeQA) – der automatische Emulator-Test liest sie mit. */
+private val qaUiNoise = arrayOf("LIST_", "ROOT_KEY", "SORT_", "SET_", "ARROW", "INFO_BAR", "MV_TAP", "MV_PICK", "VOD_CAT ", "OPEN_URL")
 internal fun qaLog(msg: String) {
+    // Reine Bedien-Meldungen (jeder Tastendruck in der Senderliste …) braucht nur der automatische Test:
+    // im normalen Build weglassen – spart bei jedem ▲▼ Arbeit und hält das Hänger-Protokoll frei für echte Hänger.
+    if (!de.aze.iptv.BuildConfig.TEST_HOOKS && qaUiNoise.any { msg.startsWith(it) }) return
     android.util.Log.i("AzeQA", msg)
     // auch ins Hänger-Protokoll auf dem Gerät (ohne die sekündlichen Messzeilen)
     if (!msg.startsWith("TICK") && !msg.startsWith("MV_TICK") && !msg.startsWith("BEAT")) de.aze.iptv.data.HangLog.add(msg)

@@ -55,6 +55,13 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) de.aze.iptv.data.CacheCleaner.onStart(applicationContext)
 
         app = AppController(applicationContext, lifecycleScope)
+        // Geräteart erkennen (Fernseher / Tablet / Handy) – oder wie in den Einstellungen festgelegt.
+        // Test-Build: Geräteart per Start-Parameter; ohne Parameter bleibt das Drehen wie bisher (Emulator-Test).
+        val qaDevice = if (BuildConfig.TEST_HOOKS) intent?.getStringExtra("aze_test_device") else null
+        de.aze.iptv.ui.Device.init(applicationContext, when (qaDevice) { "tv" -> 1; "tablet" -> 2; "phone" -> 3; else -> app.deviceMode })
+        orientationOn = !BuildConfig.TEST_HOOKS || qaDevice != null
+        applyOrientation()
+        de.aze.iptv.ui.qaLog("DEVICE ${de.aze.iptv.ui.Device.kind} (erkannt ${de.aze.iptv.ui.Device.detected}) ${resources.configuration.screenWidthDp}×${resources.configuration.screenHeightDp} dp")
         app.start()
         // Nur im Test-Build (Emulator-Test bei GitHub): Test-Playlist per Start-Parameter. Im normalen Build gibt es das nicht.
         if (BuildConfig.TEST_HOOKS) {
@@ -183,13 +190,18 @@ class MainActivity : ComponentActivity() {
                 var screen by remember { mutableStateOf(if (!app.hasAnySource || app.testListEditor) Screen.SETTINGS else if (app.testOpenVod) Screen.VOD else Screen.PLAYER) }
                 var vodSeries by remember { mutableStateOf(false) }
                 val openSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS }
-                // Startbildschirm mit Logo, solange die Senderliste beim Start noch lädt (mind. 1,2 s, höchstens 25 s)
+                // Geräteart in den Einstellungen geändert → Drehen sofort anpassen (Handy: immer quer)
+                androidx.compose.runtime.LaunchedEffect(de.aze.iptv.ui.Device.kind) { applyOrientation() }
+                // Startbildschirm mit Logo, solange die Senderliste beim Start noch lädt (mind. 0,6 s, höchstens 25 s)
                 var splash by remember { mutableStateOf(app.hasAnySource) }
                 androidx.compose.runtime.LaunchedEffect(Unit) {
                     if (!splash) return@LaunchedEffect
                     val start = System.currentTimeMillis()
-                    kotlinx.coroutines.delay(1_200)
+                    // kurz das Logo zeigen – liegt die Senderliste schon als Kopie vor, geht es sofort weiter
+                    kotlinx.coroutines.delay(600)
                     while (System.currentTimeMillis() - start < 25_000 && (app.loading || app.lineup.all.isEmpty()) && app.hasAnySource) {
+                        // Sofortstart: der letzte Sender läuft schon → Bild zeigen, die Liste kommt gleich nach
+                        if (app.instantStart && app.current != null) break
                         kotlinx.coroutines.delay(150)
                         if (!app.loading && app.lineup.all.isNotEmpty()) break
                         // keine Kopie und Laden fehlgeschlagen: nicht ewig warten
@@ -284,6 +296,20 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
+    }
+
+    private var orientationOn = true
+
+    /** Handy: immer Querformat (Fernsehbild, Senderliste und Filme passen nur quer). Tablet und Fernseher: wie das Gerät es vorgibt. */
+    private fun applyOrientation() {
+        if (!orientationOn) return
+        val want = when {
+            de.aze.iptv.ui.Device.isPhone -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            // nur im Emulator-Test: Fernseher-Ansicht quer (ein echter Fernseher ist immer quer und wird nicht angefasst)
+            BuildConfig.TEST_HOOKS && de.aze.iptv.ui.Device.isTv -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            else -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+        if (requestedOrientation != want) runCatching { requestedOrientation = want }
     }
 
     private fun hideSystemBars() {

@@ -198,7 +198,7 @@ fun ChannelOverlay(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(38.dp)
+                                    .height(38.dp + Device.touchPad)
                                     .background(
                                         if (focused) Palette.GroupSelect else if (i == groupIndex) Palette.Highlight.copy(alpha = 0.16f) else Palette.GroupBlue.copy(alpha = 0f),
                                         RoundedCornerShape(Palette.radius),
@@ -270,7 +270,7 @@ fun ChannelOverlay(
 
             if (group.channels.isEmpty()) {
                 Text(
-                    "Noch keine Favoriten. In einer Gruppe OK lang drücken.",
+                    Device.hint("Noch keine Favoriten. In einer Gruppe OK lang drücken.", "Noch keine Favoriten. In einer Gruppe lange auf einen Sender tippen."),
                     color = Palette.TextMuted, fontSize = 13.sp, modifier = Modifier.padding(8.dp),
                 )
                 LaunchedEffect(Unit) {
@@ -349,7 +349,7 @@ fun ChannelOverlay(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(if (prog != null) 46.dp else 38.dp)
+                                        .height((if (prog != null) 46.dp else 38.dp) + Device.touchPad)
                                         .graphicsLayer { scaleX = sc; scaleY = sc }
                                         .rowFocus(focused, playing, shape)
                                         .padding(horizontal = 8.dp),
@@ -502,7 +502,7 @@ internal fun SideMenu(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(42.dp)
+                        .height(42.dp + Device.touchPad)
                         .then(if (focused) Modifier.background(Palette.Accent, RoundedCornerShape(12.dp)) else Modifier)
                         .padding(horizontal = 12.dp),
                 ) {

@@ -553,6 +553,84 @@ bar; tap "⋯ Menü" && { tap "QM Infoleiste" || fail "Touch: Schnellmenü – �
 note "Touch-Test" "$(qa | grep -E "SET_|SORT_OPEN|SORT_CLOSE|LIST_OPEN|MV_|FIRST_FRAME" | tail -40)"
 alive || fail "Touch: App nicht mehr da"
 hang_check "Touch" "$T13"
+
+# sichtbar? (letzte gemeldete Position des Knopfs, mindestens 20 px zu sehen)
+pos_visible() {
+  local l v; l=$(qa | grep -F -e "POS $1|" -e "GONE $1" | sed 's/.*AzeQA[^:]*: //' | tail -1)
+  case "$l" in "POS $1|"*) v=$(echo "$l" | cut -d'|' -f4); [ "${v:-0}" -ge 20 ] ;; *) return 1 ;; esac
+}
+is_landscape() { local WH; WH=$(scr); [ "${WH%x*}" -gt "${WH#*x}" ]; }
+
+log "== Test 14: Handy (quer, ca. 870×390 dp wie ein Xiaomi 12 Pro) – Geräte-Erkennung, Abspielen-Knopf sichtbar, Fotos"
+T14=$(date +%H:%M:%S)
+adb shell wm size 576x1280; adb shell wm density 235; sleep 2
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_device phone --es aze_test_xtream "http://10.0.2.2:8090" --ez aze_test_vod true >/dev/null
+sleep 10
+log "Handy: Bildschirm $(scr) · $(qa | grep -o "DEVICE .*" | tail -1)"
+qa | grep -o "DEVICE .*" | tail -1 | grep -q "^DEVICE PHONE" || fail "Handy: Geräteart ist nicht „Handy“"
+is_landscape || fail "Handy: Bildschirm ist nicht quer ($(scr))"
+WH=$(scr); SW=${WH%x*}; SH=${WH#*x}
+wait_for "VOD_CAT" 1 40 >/dev/null; sleep 6; shot "test14-handy-filme"
+if tap "V 1"; then
+  sleep 4; shot "test14-handy-film"
+  pos_visible "Abspielen" || pos_visible "Von vorn" || fail "Handy: „Abspielen“ ist in den Film-Details nicht zu sehen"
+  pos_visible "Zurück" || fail "Handy: „Zurück“ ist in den Film-Details nicht zu sehen"
+  tap "Zurück" || adb shell input keyevent KEYCODE_BACK; sleep 2
+else fail "Handy: Film-Cover nicht antippbar"; fi
+tap "Serien" && { sleep 4; shot "test14-handy-serien"; }
+tap "📺 Live-TV" || { adb shell input keyevent KEYCODE_BACK; sleep 1; adb shell input keyevent KEYCODE_BACK; }
+sleep 4
+adb shell input keyevent KEYCODE_CHANNEL_UP; sleep 1.5; shot "test14-handy-infoleiste"; sleep 5
+bar; sleep 1; shot "test14-handy-knopfleiste"
+pos_visible "☰ Sender" || fail "Handy: Knopf „☰ Sender“ nicht zu sehen"
+pos_visible "✕ Beenden" || pos_visible "⚙ Einstellungen" || fail "Handy: Knopfleiste passt nicht auf den Bildschirm"
+if open_list; then sleep 1; shot "test14-handy-senderliste"; swipe_r; shot "test14-handy-gruppen"; swipe_r; shot "test14-handy-menue"
+  adb shell input keyevent KEYCODE_BACK; sleep 1; else fail "Handy: Senderliste geht nicht auf"; fi
+bar; tap "⋯ Menü" && { sleep 2; shot "test14-handy-schnellmenue"; adb shell input keyevent KEYCODE_BACK; sleep 1; }
+bar
+if tap "⚙ Einstellungen"; then
+  sleep 2; for d in 0 0 0 0; do tap "PIN $d" || break; done
+  sleep 2; shot "test14-handy-einstellungen"
+  open_pane "Aussehen" && { sleep 1; shot "test14-handy-aussehen"; }
+  open_pane "Sender & Playlists" && { sleep 1; shot "test14-handy-playlists"; }
+  adb shell input keyevent KEYCODE_BACK; sleep 2; adb shell input keyevent KEYCODE_BACK; sleep 2
+else fail "Handy: „⚙ Einstellungen“ nicht antippbar"; fi
+alive || fail "Handy: App nicht mehr da"
+hang_check "Handy" "$T14"
+
+log "== Test 15: Fernseher (960×540 dp, Fernbedienung, keine Touch-Knöpfe) – Fotos der wichtigsten Seiten"
+T15=$(date +%H:%M:%S)
+adb shell wm size 540x960; adb shell wm density 160; sleep 2
+n=$(count "FIRST_FRAME")
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv >/dev/null
+sleep 3; wait_for "FIRST_FRAME" $((n+1)) 40 >/dev/null; sleep 4
+log "Fernseher: Bildschirm $(scr) · $(qa | grep -o "DEVICE .*" | tail -1)"
+qa | grep -o "DEVICE .*" | tail -1 | grep -q "^DEVICE TV" || fail "Fernseher: Geräteart ist nicht „Fernseher“"
+is_landscape || fail "Fernseher: Bildschirm ist nicht quer ($(scr))"
+shot "test15-tv-bild"
+adb shell input keyevent --longpress KEYCODE_DPAD_RIGHT; sleep 2; shot "test15-tv-infoleiste"; sleep 6
+o=$(count "LIST_OPEN")
+adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 2; shot "test15-tv-senderliste"
+[ "$(count "LIST_OPEN")" -gt "$o" ] || fail "Fernseher: ◀ öffnet die Senderliste nicht"
+adb shell input keyevent KEYCODE_DPAD_DOWN; adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1
+adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 2; shot "test15-tv-gruppen"
+adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 2; shot "test15-tv-menue"
+adb shell input keyevent KEYCODE_BACK; sleep 1; adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1; adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 2
+adb shell input keyevent KEYCODE_PROG_GREEN; sleep 2; shot "test15-tv-schnellmenue"; adb shell input keyevent KEYCODE_BACK; sleep 2
+adb shell input keyevent KEYCODE_PROG_BLUE; sleep 3
+for d in 0 0 0 0; do adb shell input keyevent KEYCODE_$d; done   # Standard-PIN 0000
+sleep 3; shot "test15-tv-einstellungen"
+for i in $(seq 1 9); do adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.6; done
+sleep 1; shot "test15-tv-aussehen"
+for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 2; done
+c=$(count "VOD_CAT")
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv --es aze_test_xtream "http://10.0.2.2:8090" --ez aze_test_vod true >/dev/null
+wait_for "VOD_CAT" $((c+1)) 40 >/dev/null; sleep 8; shot "test15-tv-filme"
+adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1; adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 2; shot "test15-tv-filme-raster"
+adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 4; shot "test15-tv-film"
+adb shell input keyevent KEYCODE_BACK; sleep 2
+alive || fail "Fernseher: App nicht mehr da"
+hang_check "Fernseher" "$T15"
 adb shell wm size reset; adb shell wm density reset
 
 log "== Absturz-Prüfung"

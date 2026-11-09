@@ -182,8 +182,8 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 ) {
                     AzeLogo(120.dp)
                     Text("Aze-IPTV", color = Palette.Text, fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                    Text("OK = zurück zum Fernsehen", color = Palette.TextSoft, fontSize = 18.sp)
-                    Text("▼ wählt einen Bereich der Einstellungen", color = Palette.TextMuted, fontSize = 15.sp)
+                    Text(Device.hint("OK = zurück zum Fernsehen", "„Fernsehen“ antippen = zurück zum Bild"), color = Palette.TextSoft, fontSize = 18.sp)
+                    Text(Device.hint("▼ wählt einen Bereich der Einstellungen", "Links einen Bereich antippen"), color = Palette.TextMuted, fontSize = 15.sp)
                 }
                 return@Column
             }
@@ -824,6 +824,19 @@ private fun AppearanceSection(app: AppController) {
             }
         }
         Text(app.appStyle.desc + ". Farben lassen sich danach frei ändern.", color = Palette.TextMuted, fontSize = 13.sp)
+        // Geräteart: wird selbst erkannt, lässt sich aber festlegen (z. B. TV-Box, die sich als Tablet meldet)
+        Text("Gerät", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            TvButton("Automatisch", selected = app.deviceMode == 0, onClick = { app.updateDeviceMode(0) })
+            DeviceKind.entries.forEachIndexed { i, k ->
+                TvButton(k.title, selected = app.deviceMode == i + 1, onClick = { app.updateDeviceMode(i + 1) })
+            }
+        }
+        Text(
+            "Erkannt: ${Device.detected.title}. Fernseher = Bedienung mit der Fernbedienung · Tablet und Handy = Knöpfe zum Antippen, " +
+                "größere Tippflächen · Handy läuft immer im Querformat.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
         // Aurora-Familie (neues Design) in eigener Reihe, darunter die bisherigen Farbschemata
         val aurora = Schemes.withIndex().filter { it.value.name.startsWith("Aurora") }
         val classic = Schemes.withIndex().filter { !it.value.name.startsWith("Aurora") }

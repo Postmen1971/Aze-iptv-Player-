@@ -265,6 +265,9 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         private set
     var loading by mutableStateOf(false)
         private set
+    /** Der letzte Sender wurde beim Start sofort gestartet (Senderliste kam erst danach) */
+    var instantStart by mutableStateOf(false)
+        private set
     var message by mutableStateOf<String?>(null)
     var refreshHours by mutableStateOf(store.refreshHours)
         private set
@@ -418,6 +421,16 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         Palette.scheme = Schemes[schemeIndex]
         Palette.style = appStyle
         Palette.textOverride = de.aze.iptv.ui.TextColors[textColorIndex].second
+    }
+
+    /** Geräteart: 0 = automatisch, 1 = Fernseher, 2 = Tablet, 3 = Handy (siehe ui/Device.kt) */
+    var deviceMode by mutableStateOf(store.deviceMode)
+        private set
+
+    fun updateDeviceMode(mode: Int) {
+        deviceMode = mode
+        store.deviceMode = mode
+        de.aze.iptv.ui.Device.apply(mode)
     }
 
     /** Stil wählen – stellt die passenden Farben mit ein (danach frei änderbar). */
@@ -638,6 +651,15 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     fun start() {
         scope.launch {
             loading = true
+            // Sofortstart: den zuletzt geschauten Sender gleich abspielen – die Senderliste (bei großen Anbietern
+            // zehntausende Einträge) wird währenddessen gelesen. Danach übernimmt der Eintrag aus der Liste
+            // (gleiche Adresse → die Wiedergabe läuft ohne Unterbrechung weiter).
+            if (current == null) runCatching { store.lastChannel() }.getOrNull()?.let { last ->
+                val c = last.channel
+                val known = activeSources.any { it.id == c.source }
+                val blocked = adultFilter && (de.aze.iptv.data.AdultFilter.isAdult(c.group) || de.aze.iptv.data.AdultFilter.isAdult(c.name))
+                if (known && !blocked) { current = last; instantStart = true }
+            }
             try {
                 channels = repo.loadCached(activeSources)
                 rebuild(restoreKey = store.lastChannelKey).join()
@@ -950,7 +972,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         val before = current?.channel?.key
         if (before != null && before != channel.channel.key) previousKey = before
         current = channel
-        store.lastChannelKey = channel.channel.key
+        store.saveLast(channel)
     }
 
     /** Springt zwischen aktuellem und vorherigem Sender hin und her. */

@@ -20,7 +20,8 @@ object CoverStore {
     fun init(context: Context) {
         val d = File(context.filesDir, "cover").apply { mkdirs() }
         dir = d
-        count = d.list()?.size ?: 0
+        // Zählen im Hintergrund: bei zehntausenden Covern dauerte das im Haupt-Thread spürbar (langsamer App-Start)
+        Thread({ runCatching { count = d.list()?.size ?: 0 } }, "cover-count").apply { isDaemon = true; priority = Thread.MIN_PRIORITY }.start()
     }
 
     private fun sha1(s: String): String =

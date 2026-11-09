@@ -360,7 +360,7 @@ fun TvButton(
         }
         Box(
             modifier = Modifier
-                .heightIn(min = 38.dp)
+                .heightIn(min = 38.dp + Device.touchPad)
                 .then(
                     when {
                         focused -> Modifier.background(Palette.FocusBrush, shape)
@@ -402,7 +402,7 @@ fun Modifier.qaPos(name: String?): Modifier {
 @Composable
 fun LinkOpenButton(url: String, label: String = "🔗 Im Browser öffnen") {
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    val touch = remember { !de.aze.iptv.player.FrameRate.isTv(ctx) }
+    val touch = Device.isTouch
     if (!touch || url.isBlank()) return
     TvButton(label, onClick = {
         qaLog("OPEN_URL $url")

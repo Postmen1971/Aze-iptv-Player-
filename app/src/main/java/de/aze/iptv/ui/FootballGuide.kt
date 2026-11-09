@@ -515,7 +515,7 @@ private fun ListingZap(
     var sel by remember { mutableIntStateOf(0) }
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val ctxTouch = androidx.compose.ui.platform.LocalContext.current
-    val touchDevice = remember(ctxTouch) { !de.aze.iptv.player.FrameRate.isTv(ctxTouch) }
+    val touchDevice = Device.isTouch
     // Fokus bleibt immer in den beiden Spalten (vorher rutschte er unten ins Leere → ◀ ging nicht mehr)
     val leftReqs = remember(listed.size) { List(listed.size) { FocusRequester() } }
     var leftFocus by remember { mutableIntStateOf(0) }
