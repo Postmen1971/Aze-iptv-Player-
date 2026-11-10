@@ -1019,6 +1019,12 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
             }
         }
         Text(
+            "Gilt für alle Sender. Im Schnellmenü (OK lang) unter „Bild“ geänderte Formate gelten nur für den jeweiligen Sender." +
+                if (app.channelAspects.isNotEmpty()) " Eigene Formate: ${app.channelAspects.size} Sender." else "",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        if (app.channelAspects.isNotEmpty()) TvButton("Eigene Formate der Sender zurücksetzen", onClick = { app.clearChannelAspects() })
+        Text(
             "Schnell im Bild ändern: OK lang drücken oder Menütaste (Touch: lange tippen). " +
                 "Dort gibt es Bild, Ton, Fußball-Videotext, Player und Puffer.",
             color = Palette.TextMuted, fontSize = 13.sp,

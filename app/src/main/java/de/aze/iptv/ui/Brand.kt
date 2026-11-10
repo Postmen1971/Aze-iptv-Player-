@@ -74,7 +74,7 @@ fun AzeWordmark(fontSize: TextUnit = 22.sp, color: Color = Palette.Text) {
 }
 
 /** Dünne Linien-Symbole (24er-Raster, Strichstärke 1,6). */
-enum class LineIcon { SEARCH, TV, MOVIE, SERIES, FOOTBALL, PLAYLIST, SETTINGS, EXIT, EYE_OFF }
+enum class LineIcon { SEARCH, TV, MOVIE, SERIES, FOOTBALL, SKORTEXT, PLAYLIST, SETTINGS, EXIT, EYE_OFF }
 
 @Composable
 fun LineIconView(kind: LineIcon, color: Color, size: Dp = 20.dp, modifier: Modifier = Modifier) {
@@ -124,6 +124,13 @@ private fun DrawScope.drawLineIcon(kind: LineIcon, color: Color) {
             poly(12f, 7.5f, 16f, 10.4f, 14.5f, 15f, 9.5f, 15f, 8f, 10.4f, closed = true)
             line(12f, 3.5f, 12f, 7.5f); line(16f, 10.4f, 20f, 9f); line(14.5f, 15f, 17f, 18.5f)
             line(9.5f, 15f, 7f, 18.5f); line(8f, 10.4f, 4f, 9f)
+        }
+        LineIcon.SKORTEXT -> {
+            // Videotext-Tafel: Bildschirm mit Textzeilen, oben ein Ergebnis-Kästchen
+            rrect(3f, 4f, 21f, 18f, 2f)
+            line(6.5f, 8f, 11f, 8f); rrect(13.5f, 6.5f, 17.5f, 9.5f, 0.6f)
+            line(6.5f, 11.5f, 17.5f, 11.5f); line(6.5f, 14.5f, 14f, 14.5f)
+            line(9f, 21f, 15f, 21f)
         }
         LineIcon.PLAYLIST -> {
             line(4f, 6f, 15f, 6f); line(4f, 11f, 15f, 11f); line(4f, 16f, 11f, 16f)

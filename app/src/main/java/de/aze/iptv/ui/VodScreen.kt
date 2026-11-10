@@ -111,7 +111,7 @@ private class Playing(val url: String, val title: String, val resumeKey: String,
 @Composable
 fun VodScreen(
     app: AppController, startWithSeries: Boolean, onExit: () -> Unit, onOpenSettings: () -> Unit = onExit,
-    onFootball: (() -> Unit)? = null, onQuit: (() -> Unit)? = null,
+    onFootball: (() -> Unit)? = null, onQuit: (() -> Unit)? = null, onSkorText: (() -> Unit)? = null,
 ) {
     val vodSources = app.vodSources
     var series by remember { mutableStateOf(startWithSeries) }
@@ -166,6 +166,7 @@ fun VodScreen(
         onExit = onExit,
         onOpenSettings = onOpenSettings,
         onFootball = onFootball,
+        onSkorText = onSkorText,
         onQuit = onQuit,
     )
 }
@@ -184,6 +185,7 @@ private fun Browse(
     onExit: () -> Unit,
     onOpenSettings: () -> Unit,
     onFootball: (() -> Unit)? = null,
+    onSkorText: (() -> Unit)? = null,
     onQuit: (() -> Unit)? = null,
 ) {
     var cats by remember(api, series) { mutableStateOf<List<VodCategory>?>(null) }
@@ -307,6 +309,7 @@ private fun Browse(
                     onRight = { menu = false },
                     // dasselbe Menü wie beim Fernsehen – auch „Fußball heute“ und „App beenden“
                     onFootball = onFootball,
+                    onSkorText = onSkorText,
                     onQuit = onQuit,
                 )
             }
@@ -393,7 +396,7 @@ private fun Browse(
                     // Handy (wenig Höhe oder schmal): keine Vorschau, damit die Poster Platz haben
                     val cfg = androidx.compose.ui.platform.LocalConfiguration.current
                     if (!list.isNullOrEmpty() && cfg.screenHeightDp >= 480 && cfg.screenWidthDp >= 600) {
-                        VodHeroSlot(app, heroState, list.first(), series, sourceId, title)
+                        VodHeroSlot(app, api, heroState, list.first(), series, sourceId, title)
                     }
                     // Oben: Kategorie bzw. Suche und rechts die Anzahl
                     Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -534,16 +537,35 @@ private fun posterRequest(context: android.content.Context, url: String?, title:
  */
 @Composable
 private fun VodHeroSlot(
-    app: AppController, hero: androidx.compose.runtime.State<VodItem?>, first: VodItem,
+    app: AppController, api: VodProvider, hero: androidx.compose.runtime.State<VodItem?>, first: VodItem,
     series: Boolean, sourceId: String, category: String,
 ) {
     val item = hero.value ?: first
-    VodHero(item = item, series = series, resumeMs = if (series) 0L else app.resumeOf("m:$sourceId:${item.id}"), category = category)
+    // Inhaltsangabe: erst laden, wenn die Auswahl 0,6 s auf einem Film ruht (schnelles Blättern löst keine Anfragen aus),
+    // danach im Speicher gemerkt – beim Zurückblättern und in den Details sofort da.
+    val cacheKey = (if (series) "s:" else "m:") + sourceId + ":" + item.id
+    var details by remember(cacheKey) { mutableStateOf(HeroInfo.get(cacheKey)) }
+    LaunchedEffect(cacheKey) {
+        if (details != null) return@LaunchedEffect
+        kotlinx.coroutines.delay(600)
+        val d = runCatching { if (series) api.seriesDetails(item.id).info else api.movieDetails(item.id) }.getOrNull()
+        if (d != null) { HeroInfo.put(cacheKey, d); details = d }
+    }
+    VodHero(item = item, series = series, resumeMs = if (series) 0L else app.resumeOf("m:$sourceId:${item.id}"), category = category, details = details)
     Spacer(Modifier.height(12.dp))
 }
 
+/** Kleiner Speicher für Inhaltsangaben der Vorschau (höchstens 300 Einträge, älteste fliegen raus). */
+internal object HeroInfo {
+    private val map = object : LinkedHashMap<String, VodDetails>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, VodDetails>?) = size > 300
+    }
+    @Synchronized fun get(k: String): VodDetails? = map[k]
+    @Synchronized fun put(k: String, v: VodDetails) { map[k] = v }
+}
+
 @Composable
-private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: String) {
+private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: String, details: VodDetails? = null) {
     val st = Palette.style
     val shape = RoundedCornerShape(Palette.barRadius)
     val ctx = LocalContext.current
@@ -551,7 +573,7 @@ private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: St
         Modifier
             .fillMaxWidth()
             // 150 dp war zu knapp: der Hinweis „OK = Details“ wurde unten abgeschnitten (Foto aus dem Fernseher-Test)
-            .height(172.dp)
+            .height(186.dp)
             .clip(shape)
             .background(Palette.Panel),
     ) {
@@ -586,27 +608,28 @@ private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: St
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             val meta = listOfNotNull(
-                item.year?.takeIf { it.isNotBlank() },
-                if (series) "Serie" else "Film",
+                (details?.year ?: item.year)?.takeIf { it.isNotBlank() },
+                details?.genre?.takeIf { it.isNotBlank() } ?: if (series) "Serie" else "Film",
+                details?.duration?.takeIf { it.isNotBlank() && !series },
                 item.rating?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "★ " + "%.1f".format(it) },
             ).joinToString(" · ")
-            Text(meta, color = Palette.TextMuted, fontSize = 13.sp, maxLines = 1)
-            Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                val pill = RoundedCornerShape(Palette.radius)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (resumeMs > 0) {
                     Text(
                         "▶ Weiter ab ${fmtTime(resumeMs)}",
-                        color = Palette.OnAccent, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                        modifier = Modifier.background(Palette.Accent, pill).padding(horizontal = 12.dp, vertical = 6.dp),
+                        color = Palette.OnAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.background(Palette.Accent, RoundedCornerShape(Palette.radius)).padding(horizontal = 10.dp, vertical = 3.dp),
                     )
                 }
-                Text(
-                    Device.hint("OK = Details", "Tippen = Details"),
-                    color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                    modifier = Modifier.background(Palette.Raised, pill).padding(horizontal = 12.dp, vertical = 6.dp),
-                )
+                Text(meta, color = Palette.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            // kurze Inhaltsangabe – worum es geht (kommt vom Anbieter, sobald die Auswahl kurz ruht)
+            val plot = details?.plot?.trim()?.takeIf { it.isNotEmpty() }
+            Text(
+                plot ?: Device.hint("OK = Details", "Tippen = Details"),
+                color = if (plot != null) Palette.TextSoft else Palette.TextMuted,
+                fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -691,7 +714,7 @@ private fun DetailView(
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
-    var info by remember(item.id) { mutableStateOf<VodDetails?>(null) }
+    var info by remember(item.id) { mutableStateOf<VodDetails?>(if (series) null else HeroInfo.get("m:$sourceId:${item.id}")) }
     var sd by remember(item.id) { mutableStateOf<SeriesDetails?>(null) }
     var season by remember(item.id) { mutableIntStateOf(-1) }
     var failed by remember(item.id) { mutableStateOf(false) }

@@ -228,6 +228,7 @@ class MainActivity : ComponentActivity() {
                         Screen.VOD -> VodScreen(
                             app, startWithSeries = vodSeries, onExit = { screen = Screen.PLAYER }, onOpenSettings = openSettings,
                             onFootball = { app.pendingFootball = true; screen = Screen.PLAYER },
+                            onSkorText = { app.pendingSkor = true; screen = Screen.PLAYER },
                             onQuit = { finish() },
                         )
                         Screen.PIN -> CoverLayer {

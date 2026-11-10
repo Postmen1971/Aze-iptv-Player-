@@ -394,6 +394,7 @@ fun PlayerScreen(
     var skorLoading by remember { mutableStateOf(false) }
     // aus „Fußball heute“ im Menü der Filme: hier öffnen
     LaunchedEffect(app.pendingFootball) { if (app.pendingFootball) { app.pendingFootball = false; football = true } }
+    LaunchedEffect(app.pendingSkor) { if (app.pendingSkor) { app.pendingSkor = false; teletext = true; skorLoading = teletextWeb == null } }
     LaunchedEffect(Unit) { if (app.testSkorText) { app.testSkorText = false; delay(3_000); teletext = true; skorLoading = true } }
     // Versteckter Videotext rechnet nicht weiter im Hintergrund – bleibt aber 10 Minuten bereit (zweites Öffnen sofort)
     LaunchedEffect(teletext) {
@@ -901,7 +902,8 @@ fun PlayerScreen(
         // Hochformat (Tablet/Handy in der Hand): immer seitengerecht einpassen, nie strecken oder abschneiden
         val portrait = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
             android.content.res.Configuration.ORIENTATION_PORTRAIT
-        val aspect = app.aspectMode.let { if (portrait && (it == AspectMode.STRETCH || it == AspectMode.ZOOM)) AspectMode.FIT else it }
+        // Bildformat dieses Senders (im Schnellmenü gewählt) – sonst das allgemeine aus den Einstellungen
+        val aspect = app.aspectFor(app.current?.channel?.key).let { if (portrait && (it == AspectMode.STRETCH || it == AspectMode.ZOOM)) AspectMode.FIT else it }
         val preview = football && footballPreview
         val previewModifier = Modifier.align(Alignment.TopEnd).padding(top = 24.dp, end = 24.dp).width(360.dp).aspectRatio(16f / 9f)
         val videoModifier = if (preview) previewModifier else if (aspect.ratio != null) {
@@ -1050,6 +1052,7 @@ fun PlayerScreen(
                 onVod = { overlay = false; onOpenVod(it) },
                 onExitApp = { activity?.finish() },
                 onFootball = { overlay = false; football = true },
+                onSkorText = { overlay = false; teletext = true; skorLoading = teletextWeb == null },
                 startInGroups = overlayGroups,
                 focusKick = overlayKick,
                 onFocusInside = { overlayFocused = it },
@@ -1170,9 +1173,12 @@ fun PlayerScreen(
                     quickMenu = false
                     football = true
                 },
-                QuickItem("Bild", aspect.label) {
+                // gilt nur für diesen Sender – beim Umschalten auf einen anderen Sender gilt dort dessen Format
+                QuickItem("Bild", aspect.label + if (app.current?.channel?.key?.let { app.channelAspects.containsKey(it) } == true) " · nur hier" else "") {
                     val all = AspectMode.entries
-                    app.updateAspect(all[(all.indexOf(aspect) + 1) % all.size])
+                    val key = app.current?.channel?.key
+                    val next = all[(all.indexOf(aspect) + 1) % all.size]
+                    if (key != null) app.updateChannelAspect(key, next) else app.updateAspect(next)
                 },
                 QuickItem("Ton", if (useVlc) vlcHandle.audioLabel() else TrackHelper.currentLabel(player, C.TRACK_TYPE_AUDIO, "Standard")) {
                     if (useVlc) vlcHandle.nextAudio()

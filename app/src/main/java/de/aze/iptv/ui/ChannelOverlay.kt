@@ -70,6 +70,7 @@ fun ChannelOverlay(
     onVod: (series: Boolean) -> Unit = {},
     onExitApp: () -> Unit = onClose,
     onFootball: (() -> Unit)? = null,
+    onSkorText: (() -> Unit)? = null,
     startInGroups: Boolean = false,
     // Zähler vom Player: ▲/▼ kam an, aber die Liste hatte keinen Fokus → Fokus in die Liste holen
     focusKick: Int = 0,
@@ -154,6 +155,7 @@ fun ChannelOverlay(
                 },
                 onRight = { showMenu = false },
                 onFootball = onFootball,
+                onSkorText = onSkorText,
                 onQuit = onExitApp,
             )
         }
@@ -449,6 +451,7 @@ internal fun SideMenu(
     onRight: () -> Unit,
     onFootball: (() -> Unit)? = null,
     onQuit: (() -> Unit)? = null,
+    onSkorText: (() -> Unit)? = null,
 ) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -462,6 +465,7 @@ internal fun SideMenu(
         add(Triple("Serien", LineIcon.SERIES, { onVod(true) }))
         add(Triple("Suchen", LineIcon.SEARCH, onSearch))
         if (onFootball != null) add(Triple("Fußball heute", LineIcon.FOOTBALL, onFootball))
+        if (onSkorText != null) add(Triple("SkorText", LineIcon.SKORTEXT, onSkorText))
         if (multi) add(Triple("Playlist: $playlistLabel", LineIcon.PLAYLIST, onPlaylist))
     }
     Column(

@@ -268,6 +268,12 @@ class Store(context: Context) {
         set(v) = prefs.edit().putInt("audioDelay", v).apply()
 
     /** Zusätzlicher Ton-Versatz je Sender (Sender-Schlüssel → ms) */
+    /** Bildformat je Sender (Sender-Schlüssel → AspectMode-Name), verschlüsselt wie die Sender-Versätze */
+    fun channelAspects(): Map<String, String> = jsonMap(Secure.decrypt(prefs.getString("chAspects", "")) ?: "") { o, k -> o.getString(k) }
+    fun saveChannelAspects(m: Map<String, String>) {
+        prefs.edit().putString("chAspects", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
+    }
+
     fun audioDelays(): Map<String, Int> = jsonMap(Secure.decrypt(prefs.getString("audioDelays", "")) ?: "") { o, k -> o.getInt(k) }
 
     fun saveAudioDelays(m: Map<String, Int>) {

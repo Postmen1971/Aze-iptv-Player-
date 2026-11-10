@@ -632,6 +632,23 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         store.aspectMode = mode.name
     }
 
+    /** Bildformat je Sender – gilt nur für diesen Sender (Schnellmenü „Bild“). Ohne Eintrag gilt das allgemeine Format. */
+    var channelAspects by mutableStateOf(runCatching { store.channelAspects() }.getOrDefault(emptyMap()))
+        private set
+
+    fun aspectFor(key: String?): AspectMode = key?.let { channelAspects[it] }?.let { AspectMode.of(it) } ?: aspectMode
+
+    fun updateChannelAspect(key: String, mode: AspectMode) {
+        // gleich dem allgemeinen Format → Eintrag entfernen (Liste bleibt klein)
+        channelAspects = if (mode == aspectMode) channelAspects - key else channelAspects + (key to mode.name)
+        store.saveChannelAspects(channelAspects)
+    }
+
+    fun clearChannelAspects() {
+        channelAspects = emptyMap()
+        store.saveChannelAspects(channelAspects)
+    }
+
     fun updateAudioLanguage(lang: String?) {
         audioLanguage = lang
         store.audioLanguage = lang
@@ -962,6 +979,8 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     var testOpenVod = false
     /** „Fußball heute“ aus dem Menü der Filme gewählt → im Fernsehen öffnen */
     var pendingFootball by mutableStateOf(false)
+    /** SkorText öffnen, sobald das Live-Bild wieder da ist (Seitenmenü in Filme/Serien) */
+    var pendingSkor by mutableStateOf(false)
     /** Test-Zugang: SkorText gleich öffnen (nur im QA-Build) */
     var testSkorText = false
 
