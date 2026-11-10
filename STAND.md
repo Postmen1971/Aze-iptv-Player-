@@ -1,4 +1,4 @@
-# Aze-IPTV-Player – Projektstand (09.11.2026, Version 1.0.243)
+# Aze-IPTV-Player – Projektstand (10.11.2026, Version 1.0.245)
 
 ## Wo alles liegt
 - **GitHub-Repository:** https://github.com/Postmen1971/Aze-iptv-Player- (Branch `main`)
@@ -192,6 +192,13 @@
 - `android:largeHeap="true"` (sehr große Playlists); Infoleiste kürzt lange Sendernamen.
 - **Emulator-Test:** Tests 1–12 liefen nie in Fernseher-Größe, sondern 320×516 dp hochkant (wm size wird auf 2× der echten Emulator-Größe begrenzt). Neu: Start-Parameter `aze_test_device` (tv/tablet/phone), **Test 14 Handy** (576×1280, 235 dpi → 871×368 dp, prüft „Abspielen“ sichtbar) und **Test 15 Fernseher** (540×960, 160 dpi → 960×516 dp), beide mit Fotos. In Test 15 öffnet die blaue Taste die Einstellungen nicht (Foto zeigt nur das Bild) – noch klären.
 - Nicht geprüft: echtes Handy/SHIELD – nur Emulator.
+
+## Bildformat je Sender, Film-Inhalt, SkorText im Menü (1.0.245)
+- Schnellmenü „Bild“ gilt nur für den laufenden Sender: `AppController.channelAspects` / `aspectFor(key)` / `updateChannelAspect`, Store `chAspects` (verschlüsselt). Ohne Eintrag gilt das allgemeine Format (Einstellungen → Bild & Ton, dort auch „Eigene Formate der Sender zurücksetzen“). Anzeige „· nur hier“.
+- Automatische Erkennung schwarzer Balken (2,35:1 im 16:9-Bild) NICHT eingebaut: bräuchte Bildauswertung (PixelCopy), geht mit Tunneling nicht, kostet Leistung – Aziz angeboten als eigener Schalter (Standard aus).
+- Film-Vorschau: Genre, Laufzeit und 2 Zeilen Inhaltsangabe. Lädt erst nach 0,6 s Ruhe auf einem Film (`VodHeroSlot`), Speicher `HeroInfo` (300 Einträge), Film-Details nutzen ihn sofort. Höhe 186 dp.
+- Seitenmenü: Eintrag „SkorText“ unter „Fußball heute“, Symbol `LineIcon.SKORTEXT` (Bildschirm mit Textzeilen + Ergebnis-Kästchen). Aus Filme/Serien über `AppController.pendingSkor`.
+- Emulator-Test: angeschnittene Einträge (Mitte außerhalb des Bildschirms) werden erst hingewischt; Knopfleisten-Prüfung am Handy liest die letzte POS-Zeile (Leiste blendet sich selbst aus).
 
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
