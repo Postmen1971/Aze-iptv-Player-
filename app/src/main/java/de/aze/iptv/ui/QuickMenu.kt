@@ -58,7 +58,8 @@ fun QuickMenu(items: List<QuickItem>, onClose: () -> Unit) {
     }
 
     // schmale Bildschirme (Tablet/Handy): in mehrere Zeilen umbrechen, damit alles sichtbar ist (vorher außerhalb rechts)
-    val perRow = ((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 24) / 112).coerceAtLeast(3)
+    // Touch: Kacheln sind bis 160 dp breit → so viele je Zeile, wie ganz passen (Handy: rechts ragte eine halbe Kachel raus)
+    val perRow = ((androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 24) / (if (touchDevice) 166 else 112)).coerceAtLeast(3)
     Box(
         modifier = Modifier.fillMaxSize()
             // jede Berührung hält das Menü offen

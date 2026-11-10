@@ -588,7 +588,10 @@ bar; sleep 1; shot "test14-handy-knopfleiste"
 pos_visible "☰ Sender" || fail "Handy: Knopf „☰ Sender“ nicht zu sehen"
 pos_visible "✕ Beenden" || pos_visible "⚙ Einstellungen" || fail "Handy: Knopfleiste passt nicht auf den Bildschirm"
 if open_list; then sleep 1; shot "test14-handy-senderliste"; swipe_r; shot "test14-handy-gruppen"; swipe_r; shot "test14-handy-menue"
-  adb shell input keyevent KEYCODE_BACK; sleep 1; else fail "Handy: Senderliste geht nicht auf"; fi
+  tap "M Einstellungen" || fail "Handy: „Einstellungen“ im Seitenmenü nicht erreichbar"
+  sleep 2; for d in 0 0 0 0; do tap "PIN $d" || break; done; sleep 2
+  adb shell input keyevent KEYCODE_BACK; sleep 2
+  else fail "Handy: Senderliste geht nicht auf"; fi
 bar; tap "⋯ Menü" && { sleep 2; shot "test14-handy-schnellmenue"; adb shell input keyevent KEYCODE_BACK; sleep 1; }
 bar
 if tap "⚙ Einstellungen"; then

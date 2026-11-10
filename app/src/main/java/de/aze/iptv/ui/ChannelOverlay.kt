@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -468,12 +470,15 @@ internal fun SideMenu(
         if (onSkorText != null) add(Triple("SkorText", LineIcon.SKORTEXT, onSkorText))
         if (multi) add(Triple("Playlist: $playlistLabel", LineIcon.PLAYLIST, onPlaylist))
     }
+    // Handy quer (wenig Höhe): Menü scrollt und ist etwas enger – sonst waren „Einstellungen“ und „App beenden“ nicht erreichbar
+    val short = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480
     Column(
         modifier = Modifier
             .fillMaxHeight()
             .width(236.dp)
             .background(Palette.Ground.copy(alpha = 0.96f))
-            .padding(start = 18.dp, end = 14.dp, top = 26.dp, bottom = 18.dp)
+            .then(if (short) Modifier.verticalScroll(rememberScrollState()) else Modifier)
+            .padding(start = 18.dp, end = 14.dp, top = if (short) 14.dp else 26.dp, bottom = if (short) 10.dp else 18.dp)
             .onPreviewKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) { onRight(); true } else false
             },
@@ -483,7 +488,7 @@ internal fun SideMenu(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.padding(start = 10.dp, bottom = 26.dp),
+            modifier = Modifier.padding(start = 10.dp, bottom = if (short) 10.dp else 26.dp),
         ) {
             AzeLogo(28.dp)
             // unter dem Schriftzug: Uhrzeit mit Datum
@@ -520,7 +525,7 @@ internal fun SideMenu(
             }
         }
         entries.forEachIndexed { i, (label, icon, action) -> entry(label, icon, action, isFirst = i == 0) }
-        Spacer(Modifier.weight(1f))
+        if (short) Spacer(Modifier.height(10.dp)) else Spacer(Modifier.weight(1f))
         entry("Einstellungen", LineIcon.SETTINGS, onSettings)
         // „App beenden“ ganz unten
         if (onQuit != null) entry("App beenden", LineIcon.EXIT, onQuit, danger = true)
