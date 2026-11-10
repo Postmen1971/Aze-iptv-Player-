@@ -79,6 +79,8 @@ tap() {  # tap "Name": Knopf antippen (scrollt bei Bedarf, auch seitlich); 1 = n
     local l; l=$(qa | grep -F -e "POS $1|" -e "GONE $1" | sed 's/.*AzeQA[^:]*: //' | tail -1)
     case "$l" in
       "POS $1|"*) local x y v w; IFS='|' read -r _ x y v w <<<"$l"
+        # Mitte außerhalb des Bildschirms (Eintrag nur angeschnitten, z. B. ganz oben y=-10) → erst hinwischen
+        if [ "$y" -lt 5 ] || [ "$y" -gt $((H-5)) ] || [ "$x" -lt 5 ] || [ "$x" -gt $((W-5)) ]; then v=0; fi
         if [ "$v" -ge 10 ] && [ "$try" -eq 1 ]; then adb shell input tap "$x" "$y"; sleep 1.5; return 0; fi
         if [ "$v" -ge 10 ]; then
           # nach dem Wischen erst tippen, wenn nichts mehr scrollt (sonst trifft man den Nachbarn)
@@ -556,7 +558,8 @@ hang_check "Touch" "$T13"
 
 # sichtbar? (letzte gemeldete Position des Knopfs, mindestens 20 px zu sehen)
 pos_visible() {
-  local l v; l=$(qa | grep -F -e "POS $1|" -e "GONE $1" | sed 's/.*AzeQA[^:]*: //' | tail -1)
+  # letzte gemeldete Position (die Knopfleiste blendet sich nach ein paar Sekunden von selbst aus – das ist kein Fehler)
+  local l v; l=$(qa | grep -F -e "POS $1|" | sed 's/.*AzeQA[^:]*: //' | tail -1)
   case "$l" in "POS $1|"*) v=$(echo "$l" | cut -d'|' -f4); [ "${v:-0}" -ge 20 ] ;; *) return 1 ;; esac
 }
 is_landscape() { local WH; WH=$(scr); [ "${WH%x*}" -gt "${WH#*x}" ]; }
