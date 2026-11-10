@@ -330,8 +330,10 @@ fun PlayerScreen(
             lastBuffered = buffered
             // Läuft schon (erstes Bild war da) und puffert 5 s ohne neue Daten → neu. Beim Start weiterhin 8 s Geduld.
             val starvedLimit = if (firstFrameSeen) 5 else 8
-            if ((jump >= 2 || frozen >= 6 || starved >= starvedLimit) && now >= nextAllowed) {
-                qaLog("WATCHDOG ${if (jump >= 2) "jump" else if (frozen >= 6) "frozen" else "starved"} ${app.current?.channel?.name} | $snap")
+            // Stehendes Bild bei laufendem Player: 6 s (bewährt) oder 4 s (Schalter unter Einstellungen → System)
+            val frozenLimit = if (app.freezeFast) 4 else 6
+            if ((jump >= 2 || frozen >= frozenLimit || starved >= starvedLimit) && now >= nextAllowed) {
+                qaLog("WATCHDOG ${if (jump >= 2) "jump" else if (frozen >= frozenLimit) "frozen" else "starved"} ${app.current?.channel?.name} | $snap")
                 // Leicht neu verbinden (gleiche Adresse, letztes Bild bleibt). Nur Portal-Links (laufen ab) holen eine neue Adresse.
                 val light = starved < starvedLimit || (key != null && !StalkerClient.isStalker(key))
                 frozen = 0
@@ -598,7 +600,7 @@ fun PlayerScreen(
         if (startedKey != ch.key) {
             retries = 0
             val nowZap = android.os.SystemClock.elapsedRealtime()
-            if (nowZap - lastZapAt[0] > 700) settleMs = 60L
+            if (app.zapFast && nowZap - lastZapAt[0] > 700) settleMs = 60L
             lastZapAt[0] = nowZap
             zapStartedAt[0] = nowZap
         }

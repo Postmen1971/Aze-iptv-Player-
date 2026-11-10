@@ -272,6 +272,22 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 "Sichern" -> BackupSection(app)
                 "System" -> {
                     UpdateSection()
+                    Section("Tempo ausprobieren") {
+                        Text(
+                            "Zum Vergleichen: einschalten, eine Weile fernsehen, bei Problemen wieder ausschalten. Wirkt sofort beim nächsten Umschalten.",
+                            color = Palette.TextMuted, fontSize = 13.sp,
+                        )
+                        TvSwitch(
+                            "Schnelles Umschalten",
+                            "Ein = einzelner Senderwechsel startet sofort (neu) · Aus = wie bisher mit kurzer Wartezeit. Aus, falls Sender nach dem Umschalten öfter erst spät kommen.",
+                            app.zapFast,
+                        ) { app.updateZapFast(!app.zapFast) }
+                        TvSwitch(
+                            "Stehendes Bild schneller beheben",
+                            "Ein = Neuverbinden schon nach 4 s Standbild · Aus = nach 6 s (bewährt). Aus, falls das Bild dadurch öfter kurz neu startet.",
+                            app.freezeFast,
+                        ) { app.updateFreezeFast(!app.freezeFast) }
+                    }
                     AutostartSection(app)
                     if (app.expertMode) NetworkSection(app)
                 }

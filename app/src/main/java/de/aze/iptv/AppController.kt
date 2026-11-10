@@ -521,6 +521,15 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     var showDiag by mutableStateOf(store.showDiag)
         private set
 
+    /** Zum Ausprobieren (Einstellungen → System): schnelles Umschalten / schnellerer Wächter bei stehendem Bild */
+    var zapFast by mutableStateOf(store.zapFast)
+        private set
+    var freezeFast by mutableStateOf(store.freezeFast)
+        private set
+
+    fun updateZapFast(on: Boolean) { zapFast = on; store.zapFast = on }
+    fun updateFreezeFast(on: Boolean) { freezeFast = on; store.freezeFast = on }
+
     /** Bis wann der Bildschirm noch mit dem Umschalten beschäftigt ist (Wiedergabe so lange zurückhalten). */
     @Volatile var displaySettleUntil = 0L
 

@@ -211,6 +211,16 @@ class Store(context: Context) {
         get() = prefs.getBoolean("multiViewOn", true)
         set(v) = prefs.edit().putBoolean("multiViewOn", v).apply()
 
+    /** Schnelles Umschalten (einzelner Wechsel startet nach 60 ms statt 220 ms) – abschaltbar zum Vergleichen */
+    var zapFast: Boolean
+        get() = prefs.getBoolean("zapFast", true)
+        set(v) = prefs.edit().putBoolean("zapFast", v).apply()
+
+    /** Wächter greift bei stehendem Bild schon nach 4 s statt 6 s ein – zum Ausprobieren, Standard aus */
+    var freezeFast: Boolean
+        get() = prefs.getBoolean("freezeFast", false)
+        set(v) = prefs.edit().putBoolean("freezeFast", v).apply()
+
     var showDiag: Boolean
         get() = prefs.getBoolean("showDiag", false)
         set(v) = prefs.edit().putBoolean("showDiag", v).apply()
