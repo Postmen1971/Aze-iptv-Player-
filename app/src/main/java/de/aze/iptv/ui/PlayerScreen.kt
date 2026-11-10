@@ -180,6 +180,8 @@ fun PlayerScreen(
     // Sender neu starten. (Umschalten mitten in der Wiedergabe lässt auf SHIELD/Fire TV das Bild einfrieren.)
     val displayWatch = rememberDisplayWatch()
     var restartTick by remember { mutableIntStateOf(0) }
+    // Wächter verlangt einen kompletten Neustart des Senders (Fehler-Wartezeiten zurücksetzen)
+    val fullRestart = remember { booleanArrayOf(false) }
     var switching by remember { mutableStateOf(false) }
     val probe = remember(player) {
         FpsProbe { fps ->
@@ -361,7 +363,7 @@ fun PlayerScreen(
                     player.prepare()
                 } else {
                     // wie von Hand umgeschaltet: Wartezeiten nach Fehlern zurücksetzen, Sender frisch starten
-                    retries = 0
+                    fullRestart[0] = true
                     restartTick++
                 }
             }
@@ -610,6 +612,7 @@ fun PlayerScreen(
         // Einzelnes Umschalten startet fast sofort; nur wer schnell hintereinander drückt (oder ein Neustart
         // desselben Senders), wartet die volle Zeit – so lädt beim Durchzappen weiter nur der letzte Sender.
         var settleMs = 220L
+        if (fullRestart[0]) { fullRestart[0] = false; retries = 0 }
         if (startedKey != ch.key) {
             retries = 0
             val nowZap = android.os.SystemClock.elapsedRealtime()
