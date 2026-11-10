@@ -134,6 +134,8 @@ fun PlayerScreen(
     val live = remember { de.aze.iptv.player.LiveSource(context, http) }
     /** Zeitpunkt des letzten Senderwechsels (0 = keiner offen) – für die Messung der Umschaltzeit */
     val zapStartedAt = remember { longArrayOf(0L) }
+    // Zeitpunkt des letzten Senderwechsels (für die kurze Wartezeit beim einzelnen Umschalten)
+    val lastZapAt = remember { longArrayOf(0L) }
     /** Beim Neuverbinden das letzte Bild stehen lassen statt Schwarz (beim Senderwechsel aus) */
     val playerViewRef = remember { arrayOfNulls<PlayerView>(1) }
     // muss VOR player.stop() gesetzt sein – darum direkt an der Bildfläche, nicht über den Compose-Zustand
@@ -590,9 +592,15 @@ fun PlayerScreen(
             return@LaunchedEffect
         }
         retryJob?.cancel()
+        // Einzelnes Umschalten startet fast sofort; nur wer schnell hintereinander drückt (oder ein Neustart
+        // desselben Senders), wartet die volle Zeit – so lädt beim Durchzappen weiter nur der letzte Sender.
+        var settleMs = 220L
         if (startedKey != ch.key) {
             retries = 0
-            zapStartedAt[0] = android.os.SystemClock.elapsedRealtime()
+            val nowZap = android.os.SystemClock.elapsedRealtime()
+            if (nowZap - lastZapAt[0] > 700) settleMs = 60L
+            lastZapAt[0] = nowZap
+            zapStartedAt[0] = nowZap
         }
         // neuer Sender: altes Bild nicht stehen lassen; gleicher Sender (Neustart): letztes Bild halten
         keepFrame(startedKey == ch.key)
@@ -628,7 +636,7 @@ fun PlayerScreen(
         if (useVlc) player.clearMediaItems()
         // Kurz warten: wer mehrfach schnell ▲/▼ drückt, lädt nur den Sender, bei dem er stehen bleibt.
         // (Ein neuer Tastendruck bricht diese Wartezeit ab.)
-        delay(220)
+        delay(settleMs)
         // Bildschirm schaltet gerade die Frequenz um: erst danach starten
         while (switching || System.currentTimeMillis() < app.displaySettleUntil) delay(200)
         val url = try {
