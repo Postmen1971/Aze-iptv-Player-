@@ -252,6 +252,7 @@ fun PlayerScreen(
         // Bildlücke: Sekunden, in denen Bild laufen sollte, aber keins kam (fürs Hänger-Protokoll)
         var gap = 0
         var gapInfo = ""
+        var gapLast = ""
         var gapKey: String? = null
         while (true) {
             delay(1_000)
@@ -290,11 +291,16 @@ fun PlayerScreen(
                 if (player.audioFormat != null) "ja" else "–",
             )
             val key = app.current?.channel?.key
-            if (key != gapKey) { gap = 0; gapKey = key }
+            if (key != gapKey) {
+                // Bild stand und der Zuschauer hat selbst weggeschaltet: genau diese Hänger fehlten bisher im Protokoll
+                if (gap >= 3) qaLog("LUECKE ${gap}s WEGGESCHALTET (Wächter-Eingriffe $watchdogRestarts) | Beginn: $gapInfo | zuletzt: $gapLast")
+                gap = 0; gapKey = key
+            }
             if (!switching && firstFrameSeen && player.playWhenReady && !pictureMoving &&
                 player.playbackState != Player.STATE_IDLE
             ) {
                 if (gap == 0) gapInfo = snap
+                gapLast = snap
                 gap++
             } else {
                 if (gap >= 1 && pictureMoving) qaLog("LUECKE ${gap}s ${app.current?.channel?.name} | Beginn: $gapInfo")
@@ -335,7 +341,9 @@ fun PlayerScreen(
             if ((jump >= 2 || frozen >= frozenLimit || starved >= starvedLimit) && now >= nextAllowed) {
                 qaLog("WATCHDOG ${if (jump >= 2) "jump" else if (frozen >= frozenLimit) "frozen" else "starved"} ${app.current?.channel?.name} | $snap")
                 // Leicht neu verbinden (gleiche Adresse, letztes Bild bleibt). Nur Portal-Links (laufen ab) holen eine neue Adresse.
-                val light = starved < starvedLimit || (key != null && !StalkerClient.isStalker(key))
+                // Erster Eingriff: leicht neu verbinden. Hat das nicht geholfen (zweiter Eingriff ohne gesundes Bild dazwischen):
+                // kompletter Neustart des Senders – dasselbe, was sonst nur Hoch-/Runterschalten von Hand gebracht hat.
+                val light = watchdogRestarts == 0 && (starved < starvedLimit || (key != null && !StalkerClient.isStalker(key)))
                 frozen = 0
                 starved = 0
                 jump = 0
@@ -343,6 +351,7 @@ fun PlayerScreen(
                 val pause = longArrayOf(5_000, 15_000, 30_000, 60_000)
                 nextAllowed = now + pause[minOf(watchdogRestarts, pause.size - 1)]
                 watchdogRestarts++
+                if (!light) qaLog("WATCHDOG voll (Eingriff $watchdogRestarts) ${app.current?.channel?.name}")
                 if (light) {
                     // Verbindung ist da, nur das Bild hängt: direkt neu synchronisieren – ohne Senderwechsel-Ablauf,
                     // ohne Namenseinblendung, letztes Bild bleibt stehen
@@ -350,7 +359,11 @@ fun PlayerScreen(
                     player.stop()
                     preparedAt = System.currentTimeMillis()
                     player.prepare()
-                } else restartTick++
+                } else {
+                    // wie von Hand umgeschaltet: Wartezeiten nach Fehlern zurücksetzen, Sender frisch starten
+                    retries = 0
+                    restartTick++
+                }
             }
         }
     }
