@@ -1,4 +1,4 @@
-# Aze-IPTV-Player – Projektstand (10.11.2026, Version 1.0.246)
+# Aze-IPTV-Player – Projektstand (10.11.2026, Version 1.0.247)
 
 ## Wo alles liegt
 - **GitHub-Repository:** https://github.com/Postmen1971/Aze-iptv-Player- (Branch `main`)
@@ -198,6 +198,7 @@
 - Automatische Erkennung schwarzer Balken (2,35:1 im 16:9-Bild) NICHT eingebaut: bräuchte Bildauswertung (PixelCopy), geht mit Tunneling nicht, kostet Leistung – Aziz angeboten als eigener Schalter (Standard aus).
 - Film-Vorschau: Genre, Laufzeit und 2 Zeilen Inhaltsangabe. Lädt erst nach 0,6 s Ruhe auf einem Film (`VodHeroSlot`), Speicher `HeroInfo` (300 Einträge), Film-Details nutzen ihn sofort. Höhe 186 dp.
 - 1.0.246: Vorschau-Angaben oben ausgerichtet (Aziz: „mehr nach oben“), Inhaltsangabe bis 4 Zeilen, Textbreite 72 %.
+- 1.0.247 Handy: Seitenmenü scrollt bei < 480 dp Höhe (vorher Einstellungen/App beenden unerreichbar), Schnellmenü bei Touch 166 dp je Kachel → alle Kacheln sichtbar (Handy 5 je Zeile). Film-Vorschau auf dem Handy bewusst aus (Aziz einverstanden: übersichtlich + gut bedienbar wichtig).
 - Seitenmenü: Eintrag „SkorText“ unter „Fußball heute“, Symbol `LineIcon.SKORTEXT` (Bildschirm mit Textzeilen + Ergebnis-Kästchen). Aus Filme/Serien über `AppController.pendingSkor`.
 - Emulator-Test: angeschnittene Einträge (Mitte außerhalb des Bildschirms) werden erst hingewischt; Knopfleisten-Prüfung am Handy liest die letzte POS-Zeile (Leiste blendet sich selbst aus).
 
