@@ -595,8 +595,8 @@ private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: St
             ),
         )
         Column(
-            Modifier.align(Alignment.CenterStart).fillMaxWidth(0.7f).padding(horizontal = 22.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            Modifier.align(Alignment.TopStart).fillMaxWidth(0.72f).padding(start = 22.dp, end = 22.dp, top = 10.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
                 (if (resumeMs > 0) "WEITERSCHAUEN" else category.uppercase()),
@@ -628,7 +628,7 @@ private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: St
             Text(
                 plot ?: Device.hint("OK = Details", "Tippen = Details"),
                 color = if (plot != null) Palette.TextSoft else Palette.TextMuted,
-                fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                fontSize = 13.sp, lineHeight = 18.sp, maxLines = 4, overflow = TextOverflow.Ellipsis,
             )
         }
     }
