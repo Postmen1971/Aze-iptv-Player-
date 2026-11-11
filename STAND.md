@@ -1,4 +1,4 @@
-# Aze-IPTV-Player – Projektstand (10.11.2026, Version 1.0.247)
+# Aze-IPTV-Player – Projektstand (11.11.2026, Version 1.0.251)
 
 ## Wo alles liegt
 - **GitHub-Repository:** https://github.com/Postmen1971/Aze-iptv-Player- (Branch `main`)
@@ -201,6 +201,13 @@
 - 1.0.247 Handy: Seitenmenü scrollt bei < 480 dp Höhe (vorher Einstellungen/App beenden unerreichbar), Schnellmenü bei Touch 166 dp je Kachel → alle Kacheln sichtbar (Handy 5 je Zeile). Film-Vorschau auf dem Handy bewusst aus (Aziz einverstanden: übersichtlich + gut bedienbar wichtig).
 - Seitenmenü: Eintrag „SkorText“ unter „Fußball heute“, Symbol `LineIcon.SKORTEXT` (Bildschirm mit Textzeilen + Ergebnis-Kästchen). Aus Filme/Serien über `AppController.pendingSkor`.
 - Emulator-Test: angeschnittene Einträge (Mitte außerhalb des Bildschirms) werden erst hingewischt; Knopfleisten-Prüfung am Handy liest die letzte POS-Zeile (Leiste blendet sich selbst aus).
+
+## Umschalten schneller + Wächter-Stufe 2 (1.0.248–1.0.251)
+- Aziz fragte nach Rust-Neubau → abgelehnt/erklärt (Bild macht der Video-Chip; Zeit steckt in Verbindung, Puffer, Wartezeiten).
+- 1.0.248: einzelner Senderwechsel wartet 60 ms statt 220 ms (`settleMs`, `lastZapAt`; schnelles Durchzappen < 0,7 s Abstand und Neustarts weiter 220 ms). Emulator: Median 0,33 s → 0,15 s. Aziz: „läuft superschnell“. Risiko: Anbieter mit 1 Verbindung lehnen evtl. öfter ab (403 → Wiederholung 0,4 s).
+- 1.0.249: Einstellungen → System → „Tempo ausprobieren“: Schalter „Schnelles Umschalten“ (Store `zapFast`, Standard ein) und „Stehendes Bild schneller beheben“ (`freezeFast`, Standard aus: frozen 4 s statt 6 s).
+- 1.0.251: Aziz: Bild bleibt manchmal stehen und läuft erst nach Hoch/Runter-Schalten. Wächter: 1. Eingriff leicht (stop+prepare), 2. Eingriff ohne gesundes Bild dazwischen = kompletter Neustart (`restartTick`, `fullRestart` setzt `retries` zurück) – vorher immer nur leicht mit Pausen 5/15/30/60 s. Neu im Hänger-Protokoll: „LUECKE n s WEGGESCHALTET“ (Hänger, bei denen der Zuschauer selbst umschaltet, fehlten bisher). Ursache nur vermutet – bei erneutem Hänger Protokoll-Link von Aziz holen. Nicht abgedeckt: endloses Puffern bei tröpfelnden Daten.
+- Emulator-Lauf 251 lief beim ersten Mal in die 40-min-Grenze (hing in Test 11 bei den Einstellungen), Wiederholung bestand in 30 min → vermutlich Emulator-Zufall, beobachten.
 
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
