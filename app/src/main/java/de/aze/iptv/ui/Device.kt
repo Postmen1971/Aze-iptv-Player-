@@ -28,6 +28,13 @@ object Device {
     var kind by mutableStateOf(DeviceKind.TV)
         private set
 
+    /**
+     * Drehen vorübergehend freigeben (Handy): während Android den Installer zeigt. Die Abfragen dahinter
+     * (Play Protect, Fingerabdruck) sind fürs Hochformat gebaut – im erzwungenen Querformat war der
+     * Fingerabdruck-Bereich nicht zu sehen und das Update ließ sich nicht bestätigen.
+     */
+    var freeRotation by mutableStateOf(false)
+
     val isTv: Boolean get() = kind == DeviceKind.TV
     val isTouch: Boolean get() = kind != DeviceKind.TV
     val isPhone: Boolean get() = kind == DeviceKind.PHONE

@@ -1135,6 +1135,8 @@ private fun UpdateSection() {
     suspend fun openInstaller(file: java.io.File) {
         repeat(2) { attempt ->
             status = if (attempt == 0) "Installation wird geöffnet …" else "Installer erneut öffnen …"
+            // Handy: Querformat-Zwang lösen, solange der Installer offen ist (Fingerabdruck-Abfrage im Hochformat)
+            Device.freeRotation = true
             val ok = runCatching { Updater.install(context, file) }.getOrElse {
                 status = "Installer konnte nicht geöffnet werden: ${it.message}"
                 return

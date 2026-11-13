@@ -191,7 +191,18 @@ class MainActivity : ComponentActivity() {
                 var vodSeries by remember { mutableStateOf(false) }
                 val openSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS }
                 // Geräteart in den Einstellungen geändert → Drehen sofort anpassen (Handy: immer quer)
-                androidx.compose.runtime.LaunchedEffect(de.aze.iptv.ui.Device.kind) { applyOrientation() }
+                androidx.compose.runtime.LaunchedEffect(de.aze.iptv.ui.Device.kind, de.aze.iptv.ui.Device.freeRotation) { applyOrientation() }
+                // Installer wieder zu (abgebrochen oder fertig) und die App ist 5 s am Stück vorn: zurück ins Querformat.
+                // Nicht sofort – zwischen Installer und Fingerabdruck-Abfrage ist die App kurz vorn.
+                androidx.compose.runtime.LaunchedEffect(de.aze.iptv.ui.Device.freeRotation) {
+                    if (!de.aze.iptv.ui.Device.freeRotation) return@LaunchedEffect
+                    var front = 0
+                    while (front < 5) {
+                        kotlinx.coroutines.delay(1_000)
+                        front = if (hasWindowFocus() && lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) front + 1 else 0
+                    }
+                    de.aze.iptv.ui.Device.freeRotation = false
+                }
                 // Startbildschirm mit Logo, solange die Senderliste beim Start noch lädt (mind. 0,6 s, höchstens 25 s)
                 var splash by remember { mutableStateOf(app.hasAnySource) }
                 androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -305,6 +316,8 @@ class MainActivity : ComponentActivity() {
     private fun applyOrientation() {
         if (!orientationOn) return
         val want = when {
+            // Installer offen: Drehen frei, damit Androids Abfragen (Fingerabdruck) im Hochformat passen
+            de.aze.iptv.ui.Device.freeRotation -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             de.aze.iptv.ui.Device.isPhone -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             // nur im Emulator-Test: Fernseher-Ansicht quer (ein echter Fernseher ist immer quer und wird nicht angefasst)
             BuildConfig.TEST_HOOKS && de.aze.iptv.ui.Device.isTv -> android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
