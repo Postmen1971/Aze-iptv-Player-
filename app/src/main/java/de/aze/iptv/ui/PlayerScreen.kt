@@ -542,12 +542,13 @@ fun PlayerScreen(
                 qaLog("ERROR ${error.errorCodeName} ${app.current?.channel?.name}")
                 noPicture = true
                 retryJob?.cancel()
-                // Automatisch: Format-/Decoder-Fehler oder wiederholte Abbrüche → diesen Sender mit VLC abspielen.
+                // Automatisch: Format-/Decoder-Fehler (erst beim ZWEITEN ohne Bild dazwischen – ein einzelner ist oft nur
+                // ein kaputtes Stück im Stream) oder wiederholte Abbrüche → diesen Sender mit VLC abspielen.
                 val key = app.current?.channel?.key
                 val group = error.errorCode / 1000
                 val http = generateSequence<Throwable>(error) { it.cause }
                     .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()
-                if (app.playerEngine == PlayerEngine.AUTO && key != null && (group == 3 || group == 4 || (retries >= 2 && http == null && group != 2))) {
+                if (app.playerEngine == PlayerEngine.AUTO && key != null && (((group == 3 || group == 4) && retries >= 1) || (retries >= 2 && http == null && group != 2))) {
                     player.stop()
                     app.markVlc(key)
                     return
