@@ -62,6 +62,8 @@ class LiveSource(context: Context, http: HttpDataSource.Factory, fastHttp: HttpD
     fun attach(player: ExoPlayer, onRejoin: () -> Unit = {}, onSwitch: () -> Unit = {}): () -> Unit {
         val handler = android.os.Handler(player.applicationLooper)
         var shortRuns = 0
+        /** zählt hoch, sobald eine wartende Folge-Verbindung nicht mehr gilt (neue Ladung fertig, Neustart, Senderwechsel) */
+        var generation = 0
         val analytics = object : AnalyticsListener {
             override fun onLoadCompleted(t: AnalyticsListener.EventTime, info: LoadEventInfo, data: MediaLoadData) {
                 if (data.dataType != C.DATA_TYPE_MEDIA) return
@@ -69,14 +71,31 @@ class LiveSource(context: Context, http: HttpDataSource.Factory, fastHttp: HttpD
                 // nur für das letzte Stück der Liste (sonst würde jede Verbindung mehrfach nachgelegt)
                 if (t.windowIndex != player.mediaItemCount - 1 || !isProgressive(cur)) return
                 handler.removeCallbacksAndMessages(null)
+                generation++
                 // Bremse: Antwortet der Anbieter nur ganz kurz (fast leere Antwort, sofort wieder zu), nicht im
                 // Dauerfeuer neu verbinden – das wirkt wie ein Angriff und endet in Sperren. Wartezeit wächst
                 // 0,3 → 0,6 → 1,2 … höchstens 8 s; nach der ersten normalen Verbindung wieder sofort.
                 val short = info.loadDurationMs < 3_000 && info.bytesLoaded < 512 * 1024
                 if (!short) {
                     shortRuns = 0
-                    player.addMediaSource(create(cur))
-                    onRejoin()
+                    // Manche Anbieter schicken ein Stück (z. B. 30 s) im Schnelldurchlauf und schließen dann. Wer sich sofort
+                    // neu verbindet, bekommt fast dasselbe Stück noch einmal – die Szene läuft doppelt. Deshalb erst neu
+                    // verbinden, wenn der Vorrat fast aufgebraucht ist: dann ist der Anbieter entsprechend weiter.
+                    // Normale Sender (Echtzeit, Vorrat klein) verbinden wie bisher sofort.
+                    val gen = ++generation
+                    var told = false
+                    fun appendWhenDue() {
+                        if (gen != generation || player.currentMediaItem?.localConfiguration?.uri != cur.localConfiguration?.uri) return
+                        val remaining = player.totalBufferedDuration
+                        if (remaining > REJOIN_LEAD_MS + 500 && player.playbackState != androidx.media3.common.Player.STATE_ENDED) {
+                            if (!told) { told = true; de.aze.iptv.data.HangLog.add("REJOIN_WARTET Vorrat ${remaining / 1000} s – verbindet kurz vor dem Ende neu") }
+                            handler.postDelayed({ appendWhenDue() }, minOf(remaining - REJOIN_LEAD_MS, 2_000L))
+                            return
+                        }
+                        player.addMediaSource(create(cur))
+                        onRejoin()
+                    }
+                    appendWhenDue()
                     return
                 }
                 val wait = minOf(300L shl minOf(shortRuns, 5), 8_000L)
@@ -92,7 +111,14 @@ class LiveSource(context: Context, http: HttpDataSource.Factory, fastHttp: HttpD
             }
         }
         val listener = object : androidx.media3.common.Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                // Neustart (stop/prepare): die alte Verbindung wird neu geladen – eine wartende Folge-Verbindung
+                // würde sonst parallel dazu aufgehen (Anbieter mit nur einer Verbindung lehnen das ab)
+                if (playbackState == androidx.media3.common.Player.STATE_IDLE) { generation++; handler.removeCallbacksAndMessages(null) }
+            }
+
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                if (reason == androidx.media3.common.Player.MEDIA_ITEM_TRANSITION_REASON_PLAYLIST_CHANGED) { generation++; handler.removeCallbacksAndMessages(null) }
                 if (reason != androidx.media3.common.Player.MEDIA_ITEM_TRANSITION_REASON_AUTO) return
                 // abgespielte alte Verbindungen aus der Liste nehmen
                 val idx = player.currentMediaItemIndex
@@ -110,6 +136,9 @@ class LiveSource(context: Context, http: HttpDataSource.Factory, fastHttp: HttpD
     }
 
     companion object {
+        /** So kurz vor dem Ende des Vorrats wird die Folge-Verbindung geöffnet (Zeit für Verbinden + erstes Bild). */
+        const val REJOIN_LEAD_MS = 3_000L
+
         /**
          * Schnelle Wiederholung statt Media3-Standard (6 Versuche mit 1–5 s Pause ≈ 15 s): Viele Anbieter geben die
          * alte Verbindung erst nach kurzer Zeit frei und lehnen solange ab (403/429/509). Alle 0,4 s neu versuchen,

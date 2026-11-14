@@ -181,8 +181,9 @@ channel 4
 wait_for "FIRST_FRAME Test 4" 1 60
 sleep 2
 tb=$(ticks | wc -l)  # Lücken erst ab laufendem Bild zählen (nicht die Umschaltzeit)
-# Server trennt nach 15 s: neue Verbindung muss SOFORT angehängt werden und nahtlos übernehmen
-wait_for "REJOIN Test 4" 1 40
+# Server liefert 3× schnell und trennt nach 15 s: die neue Verbindung kommt erst kurz vor Ende des Vorrats (~3 s vorher,
+# sonst liefe dieselbe Szene doppelt) und muss dann nahtlos übernehmen
+wait_for "REJOIN Test 4" 1 75
 # Übergang kommt erst, wenn der alte Vorrat (bei 3× Lieferung ~30 s) abgespielt ist
 wait_for "TRANSITION Test 4" 1 60 && shot "test4-uebergang"
 picture_back "Test 4" 10
@@ -290,7 +291,7 @@ adb shell am start -W -n $PKG/.MainActivity --ez aze_test_multiview true
 wait_for "MV_FIRST_FRAME 0" 1 90
 wait_for "MV_FIRST_FRAME 1" 1 60
 # Bild 2 = „Test 4 Abbruch“: Server beendet den Stream nach 15 s → Bild muss sich OHNE Wächter selbst erholen
-wait_for "MV_REJOIN 1" 1 40
+wait_for "MV_REJOIN 1" 1 75
 wait_for "MV_TRANSITION 1 Test 4" 1 60
 sleep 5
 [ "$(count "MV_ENDED 1")" -eq 0 ] || fail "Multi-View: Stream-Ende nicht nahtlos (Notlösung mit Neustart gebraucht)"
