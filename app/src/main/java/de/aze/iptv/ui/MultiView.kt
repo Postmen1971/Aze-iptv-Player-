@@ -352,6 +352,8 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
     var status by remember { mutableStateOf<String?>("Lädt …") }
     val activeNow by androidx.compose.runtime.rememberUpdatedState(active)
     val chNow by androidx.compose.runtime.rememberUpdatedState(channel)
+    /** Portal-Sender: hochzählen = Link neu holen und Sender neu starten */
+    var reload by remember { mutableIntStateOf(0) }
     val http = remember {
         DefaultHttpDataSource.Factory()
             .setUserAgent(Http.USER_AGENT)
@@ -414,7 +416,8 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
                 scope.launch {
                     delay(minOf(3_000L * (retries + 1), 15_000L))
                     retries++
-                    player.prepare()
+                    // Portal-Sender: der Link gilt oft nur kurz – beim Neuversuch einen frischen holen
+                    if (de.aze.iptv.data.StalkerClient.isStalker(chNow.channel.url)) reload++ else player.prepare()
                 }
             }
         }
@@ -525,7 +528,7 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
     }
 
     var firstStart by remember { mutableStateOf(true) }
-    LaunchedEffect(channel.channel.key) {
+    LaunchedEffect(channel.channel.key, reload) {
         // Senderwechsel in diesem Bild: gleicher Player, nur neue Quelle
         status = "Lädt …"
         viewRef[0]?.setKeepContentOnPlayerReset(false)
