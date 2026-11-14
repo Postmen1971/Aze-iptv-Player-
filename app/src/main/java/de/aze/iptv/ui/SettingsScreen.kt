@@ -79,6 +79,16 @@ private val intervals = listOf(0 to "Nur manuell", 24 to "24 Std.", 48 to "48 St
 @Composable
 fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     var editingList by remember { mutableStateOf(app.testListEditor.also { app.testListEditor = false }) }
+    // Gewählter Bereich – steht VOR den Unterseiten (Senderliste bearbeiten, PIN, Hilfe-Video), damit man nach
+    // der Rückkehr wieder im selben Bereich landet statt ganz oben
+    var cat by remember { mutableStateOf(1) }
+    // Der Inhalt rechts folgt dem Fokus mit 0,1 s Verzögerung: beim schnellen Blättern durch die Bereiche wird
+    // nicht jeder Bereich komplett aufgebaut (auf langsamen Sticks hakte ▲▼ dadurch). Antippen/OK zeigt sofort.
+    var shownCat by remember { mutableStateOf(1) }
+    // Fokus auf „Fernsehen“: rechts statt eines Bereichs das Aze-Logo und „OK = zurück zum Fernsehen“
+    var onTv by remember { mutableStateOf(app.hasAnySource) }
+    /** true, sobald die Übersicht einmal zu sehen war – danach ist jedes Erscheinen eine Rückkehr aus einer Unterseite */
+    val visited = remember { booleanArrayOf(false) }
     if (editingList) {
         ListEditor(app, onClose = { editingList = false })
         return
@@ -111,14 +121,8 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
 
     BackHandler(onBack = onClose)
     val firstFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
-    var cat by remember { mutableStateOf(1) }
-    // Der Inhalt rechts folgt dem Fokus mit 0,1 s Verzögerung: beim schnellen Blättern durch die Bereiche wird
-    // nicht jeder Bereich komplett aufgebaut (auf langsamen Sticks hakte ▲▼ dadurch). Antippen/OK zeigt sofort.
-    var shownCat by remember { mutableStateOf(1) }
+    val catFocus = remember { FocusRequester() }
     LaunchedEffect(cat) { if (shownCat != cat) { kotlinx.coroutines.delay(100); shownCat = cat } }
-    // Fokus auf „Fernsehen“: rechts statt eines Bereichs das Aze-Logo und „OK = zurück zum Fernsehen“
-    var onTv by remember { mutableStateOf(app.hasAnySource) }
     // Standard: das Wichtigste. „Erweitert“ blendet Technik (Netzwerk, Puffer, Player …) zusätzlich ein.
     // Jeder Bereich hat genau ein Thema – so ist eindeutig, wo was steht.
     // Wenige Bereiche mit Alltags-Namen – jeder mit einer kurzen Zeile, was drin ist (für Laien leicht zu finden)
@@ -133,6 +137,16 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     helpVideo?.let { v ->
         HelpVideoPlayer(app, v.url, v.title, onExit = { helpVideo = null })
         return
+    }
+    // Erstes Öffnen: Fokus auf „Fernsehen“. Rückkehr aus einer Unterseite: Fokus auf den Bereich, in dem man war.
+    LaunchedEffect(Unit) {
+        val back = visited[0] && !onTv
+        visited[0] = true
+        if (back) {
+            androidx.compose.runtime.withFrameNanos { }
+            if (runCatching { catFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+        }
+        runCatching { firstFocus.requestFocus() }
     }
 
     // Kompakt: links die Bereiche, rechts nur der gewählte Bereich.
@@ -167,7 +181,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             CategoryItem("Fernsehen", selected = false, icon = LineIcon.TV, modifier = Modifier.focusRequester(firstFocus), onFocus = { if (app.hasAnySource) onTv = true }, onClick = onClose)
             cats.forEachIndexed { i, name ->
                 // gewählter Bereich nur markiert, solange nicht „Fernsehen“ den Fokus hat (sonst zwei Markierungen gleichzeitig)
-                CategoryItem(name, selected = i == cat && !onTv, icon = CATEGORY_ICON[name], onFocus = { onTv = false; cat = i }, onClick = { onTv = false; cat = i; shownCat = i; qaLog("SET_CAT $name") })
+                CategoryItem(name, selected = i == cat && !onTv, icon = CATEGORY_ICON[name], modifier = if (i == cat) Modifier.focusRequester(catFocus) else Modifier, onFocus = { onTv = false; cat = i }, onClick = { onTv = false; cat = i; shownCat = i; qaLog("SET_CAT $name") })
             }
             Spacer(Modifier.height(14.dp))
             CategoryItem(
