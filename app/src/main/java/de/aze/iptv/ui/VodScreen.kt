@@ -119,6 +119,8 @@ fun VodScreen(
     var sourceIdx by remember { mutableIntStateOf(if (app.testOpenVod) vodSources.indexOfFirst { it.name == "Test-VOD" }.coerceAtLeast(0) else 0) }
     var detail by remember { mutableStateOf<VodItem?>(null) }
     var playing by remember { mutableStateOf<Playing?>(null) }
+    // Stelle im Katalog merken: nach Details oder Film zurück wieder in derselben Kategorie beim selben Eintrag landen
+    val browseMem = remember { BrowseMemory() }
 
     if (vodSources.isEmpty()) {
         BackHandler(onBack = onExit)
@@ -157,6 +159,7 @@ fun VodScreen(
     }
 
     Browse(
+        mem = browseMem,
         app = app, api = api, series = series, sourceId = src.id,
         sourceLabel = src.name,
         multi = vodSources.size > 1,
@@ -171,8 +174,19 @@ fun VodScreen(
     )
 }
 
+/** Wo man im Katalog zuletzt war (kein Compose-Zustand: wird nur beim Wiederaufbau der Übersicht gelesen). */
+private class BrowseMemory {
+    var api: Any? = null
+    var series = false
+    var selected = 0
+    var query: String? = null
+    var openIdx = -1
+    var openAt = ""
+}
+
 @Composable
 private fun Browse(
+    mem: BrowseMemory,
     app: AppController,
     api: VodProvider,
     series: Boolean,
@@ -188,16 +202,22 @@ private fun Browse(
     onSkorText: (() -> Unit)? = null,
     onQuit: (() -> Unit)? = null,
 ) {
+    val keep = mem.api === api && mem.series == series
+    if (!keep) { mem.api = api; mem.series = series; mem.selected = 0; mem.query = null; mem.openIdx = -1 }
     var cats by remember(api, series) { mutableStateOf<List<VodCategory>?>(null) }
-    var selected by remember(api, series) { mutableIntStateOf(0) }
+    var selected by remember(api, series) { mutableIntStateOf(mem.selected) }
     var items by remember(api, series) { mutableStateOf<List<VodItem>?>(null) }
     var error by remember(api, series) { mutableStateOf<String?>(null) }
     var counts by remember(api, series) { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var menu by remember { mutableStateOf(false) }
     var askSearch by remember { mutableStateOf(false) }
-    var query by remember(api, series) { mutableStateOf<String?>(null) }
+    var query by remember(api, series) { mutableStateOf<String?>(mem.query) }
     var results by remember(api, series) { mutableStateOf<List<VodItem>?>(null) }
+    mem.selected = selected
+    mem.query = query
     val catFocus = remember { FocusRequester() }
+    val openFocus = remember { FocusRequester() }
+    val catListState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (mem.selected - 3).coerceAtLeast(0))
     val kind = if (series) "Serien" else "Filme"
 
     BackHandler {
@@ -264,8 +284,9 @@ private fun Browse(
             .onFailure { error = "Inhalte konnten nicht geladen werden."; qaLog("VOD_CAT_ERROR ${c.name} ${it.javaClass.simpleName}") }
             .getOrDefault(emptyList())
     }
-    LaunchedEffect(query) {
+    LaunchedEffect(query, catList) {
         val q = query ?: return@LaunchedEffect
+        if (cats == null) return@LaunchedEffect // Kategorien noch nicht da (Rückkehr in eine Suche)
         results = null
         // Suche ohne ausgeblendete Kategorien
         val shown = catList.map { it.id }.toSet()
@@ -342,7 +363,7 @@ private fun Browse(
                     Text("Keine $kind in dieser Playlist.", color = Palette.TextMuted, fontSize = 13.sp)
                     api.sourceInfo().takeIf { it.isNotBlank() }?.let { Text("Quelle: $it", color = Palette.TextMuted, fontSize = 11.sp) }
                 }
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                LazyColumn(state = catListState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     itemsIndexed(catList) { i, c ->
                         Focusable(
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(catFocus) else Modifier),
@@ -415,7 +436,17 @@ private fun Browse(
                         list == null -> Text(if (q != null) "Suche …" else "Lade …", color = Palette.TextMuted, fontSize = 15.sp)
                         list.isEmpty() -> Text(if (q != null) "Nichts gefunden." else "Keine Einträge in dieser Kategorie.", color = Palette.TextMuted, fontSize = 15.sp)
                         else -> {
-                          val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+                          // Rückkehr aus Details/Film: wieder zum geöffneten Eintrag (nur in derselben Kategorie/Suche)
+                          val restore = remember(list) { if (mem.openIdx in list.indices && mem.openAt == "$selected|$q") mem.openIdx else -1 }
+                          val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(initialFirstVisibleItemIndex = restore.coerceAtLeast(0))
+                          LaunchedEffect(list) {
+                              if (restore < 0) return@LaunchedEffect
+                              mem.openIdx = -1
+                              repeat(12) {
+                                  withFrameNanos { }
+                                  if (runCatching { openFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+                              }
+                          }
                           // Poster der nächsten Reihen schon vorladen, damit beim schnellen Blättern Bilder da sind
                           val ctx = LocalContext.current
                           val vodFast = app.vodFast
@@ -451,7 +482,8 @@ private fun Browse(
                                 PosterCard(
                                     item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0, series = series,
                                     onFocus = { heroState.value = item },
-                                ) { onOpen(item) }
+                                    modifier = if (idx == restore) Modifier.focusRequester(openFocus) else Modifier,
+                                ) { mem.openIdx = idx; mem.openAt = "$selected|$q"; onOpen(item) }
                             }
                           }
                         }
@@ -639,8 +671,8 @@ private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: St
 }
 
 @Composable
-private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boolean = false, onFocus: (() -> Unit)? = null, onClick: () -> Unit) {
-    Focusable(onClick = onClick, onFocus = onFocus, qaName = "V $number") { focused ->
+private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boolean = false, onFocus: (() -> Unit)? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Focusable(modifier = modifier, onClick = onClick, onFocus = onFocus, qaName = "V $number") { focused ->
         // Stil: Aze = Rahmen, Kino = wächst + weißer Rahmen, Glas = wächst + Schatten (nur Zeichnen)
         val st = Palette.style
         val pShape = RoundedCornerShape(st.posterRadius.dp)
