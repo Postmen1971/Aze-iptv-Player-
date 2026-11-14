@@ -263,6 +263,8 @@ fun PlayerScreen(
         // Player „läuft“ (Ton da), aber seit dem Start kam nie ein erstes Bild – bisher sah das kein Wächter
         var noFirst = 0
         var noFirstTries = 0
+        var suppressed = 0
+        var suppressedNext = 0L
         // Bildlücke: Sekunden, in denen Bild laufen sollte, aber keins kam (fürs Hänger-Protokoll)
         var gap = 0
         var gapInfo = ""
@@ -278,6 +280,20 @@ fun PlayerScreen(
             if (!switching && player.playbackState != Player.STATE_IDLE && !player.playWhenReady) {
                 player.playWhenReady = true
             }
+            // Fernseher/Box: Eine andere App (Sprachassistent, Hinweiston) hat den Ton kurz übernommen und gibt ihn nie
+            // zurück – der Sender stünde sonst für immer. Nach 20 s den Ton neu anfordern (höchstens alle 60 s).
+            // Nicht am Handy/Tablet: dort ist das meist ein Telefonat, das nicht übertönt werden darf.
+            if (!switching && Device.isTv && player.playWhenReady && player.playbackState == Player.STATE_READY &&
+                player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS
+            ) {
+                if (++suppressed >= 20 && now >= suppressedNext) {
+                    suppressed = 0
+                    suppressedNext = now + 60_000
+                    qaLog("TON_ZURUECK nach 20 s ohne Ton-Freigabe")
+                    player.playWhenReady = false
+                    player.playWhenReady = true
+                }
+            } else suppressed = 0
             // Bei Tunneling meldet das Gerät keine einzelnen Bilder – dann gilt die laufende Zeit
             val pictureMoving = if (app.tunneling) lastPos >= 0 && pos != lastPos else lastFrames >= 0 && f != lastFrames
             val hasVideo = player.videoFormat != null
