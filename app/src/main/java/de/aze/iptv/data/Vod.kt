@@ -217,12 +217,9 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
         val o = obj("get_series_info", "&series_id=${enc(id)}")
         val info = details(o.optJSONObject("info") ?: JSONObject())
         val seasons = sortedMapOf<Int, List<Episode>>()
-        val eps = o.optJSONObject("episodes")
-        eps?.keys()?.forEach { key ->
-            val list = eps.optJSONArray(key) ?: return@forEach
-            val s = key.toIntOrNull() ?: 0
-            seasons[s] = (0 until list.length()).map { i ->
-                val e = list.getJSONObject(i)
+        fun addSeason(s: Int, list: org.json.JSONArray) {
+            seasons[s] = (0 until list.length()).mapNotNull { i ->
+                val e = list.optJSONObject(i) ?: return@mapNotNull null
                 val ei = e.optJSONObject("info") ?: JSONObject()
                 Episode(
                     id = e.optString("id"),
@@ -235,6 +232,15 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
                     duration = ei.str("duration"),
                 )
             }.sortedBy { it.number }
+        }
+        val eps = o.optJSONObject("episodes")
+        eps?.keys()?.forEach { key -> eps.optJSONArray(key)?.let { addSeason(key.toIntOrNull() ?: 0, it) } }
+        // manche Anbieter liefern die Staffeln als Liste von Listen statt als Objekt
+        if (eps == null) o.optJSONArray("episodes")?.let { arr ->
+            for (si in 0 until arr.length()) {
+                val list = arr.optJSONArray(si) ?: continue
+                addSeason(list.optJSONObject(0)?.optInt("season", si + 1) ?: (si + 1), list)
+            }
         }
         SeriesDetails(info, seasons)
     }

@@ -312,6 +312,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         val groupKeys = snapshot.map { it.key }.toSet()
         val channelKeys = snapshot.flatMap { g -> g.channels.map { it.key } }.toSet()
         val originals = snapshot.associate { it.key to it.originalName }
+        val snapOrder = snapshot.associate { g -> g.key to g.channels.map { it.key } }
         var names = layout.groupNames
         edits.forEach { e ->
             val t = e.name.trim()
@@ -322,7 +323,11 @@ class AppController(context: Context, outerScope: CoroutineScope) {
                 groupOrder = edits.map { it.key },
                 hiddenGroups = (layout.hiddenGroups - groupKeys) + edits.filter { it.hidden }.map { it.key },
                 groupNames = names,
-                channelOrder = layout.channelOrder + edits.associate { e -> e.key to e.channels.map { it.first } },
+                // nur Gruppen ablegen, deren Reihenfolge wirklich geändert wurde (sonst wuchsen die Einstellungen bei
+                // großen Listen um mehrere MB und wurden bei jeder Änderung komplett neu geschrieben)
+                channelOrder = layout.channelOrder + edits
+                    .filter { e -> e.channels.map { it.first } != snapOrder[e.key] }
+                    .associate { e -> e.key to e.channels.map { it.first } },
                 hiddenChannels = (layout.hiddenChannels - channelKeys) +
                     edits.flatMap { e -> e.channels.filter { it.second }.map { it.first } },
             )

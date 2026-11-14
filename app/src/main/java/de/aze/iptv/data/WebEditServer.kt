@@ -113,9 +113,10 @@ class WebEditServer(
         val requestLine = readLine(input) ?: return
         var length = 0
         var sentCode: String? = null
+        var headers = 0
         while (true) {
             val h = readLine(input) ?: break
-            if (h.isEmpty()) break
+            if (h.isEmpty() || ++headers > 64) break
             val lower = h.lowercase()
             if (lower.startsWith("content-length:")) length = h.substringAfter(':').trim().toIntOrNull() ?: 0
             if (lower.startsWith("x-code:")) sentCode = h.substringAfter(':').trim()

@@ -63,8 +63,8 @@ class PhoneInputServer(
     private fun acceptLoop(s: ServerSocket) {
         while (running) {
             val client = runCatching { s.accept() }.getOrNull() ?: break
-            runCatching { handle(client) }
-            runCatching { client.close() }
+            // je Anfrage ein eigener Thread: eine offene Verbindung ohne Daten hielt sonst alle anderen bis 10 s auf
+            Thread({ runCatching { handle(client) }; runCatching { client.close() } }, "phone-input-req").apply { isDaemon = true }.start()
         }
     }
 
@@ -72,7 +72,7 @@ class PhoneInputServer(
         addr.isSiteLocalAddress || addr.isLoopbackAddress || addr.isLinkLocalAddress
 
     private fun handle(socket: Socket) {
-        socket.soTimeout = 10_000
+        socket.soTimeout = 5_000
         val out = socket.getOutputStream()
         if (!isLocal(socket.inetAddress)) {
             respond(out, 403, page("Kein Zugriff", "Nur aus dem eigenen Heimnetz möglich."))
@@ -81,9 +81,10 @@ class PhoneInputServer(
         val input = BufferedInputStream(socket.getInputStream())
         val requestLine = readLine(input) ?: return
         var length = 0
+        var headers = 0
         while (true) {
             val h = readLine(input) ?: break
-            if (h.isEmpty()) break
+            if (h.isEmpty() || ++headers > 64) break
             if (h.lowercase().startsWith("content-length:")) length = h.substringAfter(':').trim().toIntOrNull() ?: 0
         }
         val parts = requestLine.split(" ")
@@ -167,7 +168,8 @@ class PhoneInputServer(
         body.split("&").mapNotNull { pair ->
             val i = pair.indexOf('=')
             if (i <= 0) null
-            else URLDecoder.decode(pair.substring(0, i), "UTF-8") to URLDecoder.decode(pair.substring(i + 1), "UTF-8")
+            // kaputtes %-Zeichen: dieses Feld auslassen statt die ganze Anfrage ohne Antwort abzubrechen
+            else runCatching { URLDecoder.decode(pair.substring(0, i), "UTF-8") to URLDecoder.decode(pair.substring(i + 1), "UTF-8") }.getOrNull()
         }.toMap()
 
     private fun respond(out: OutputStream, status: Int, html: String) {

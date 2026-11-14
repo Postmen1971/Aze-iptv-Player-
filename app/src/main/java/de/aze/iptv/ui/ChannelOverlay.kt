@@ -395,7 +395,18 @@ fun ChannelOverlay(
                         }
                     }
                     LaunchedEffect(focusKick) {
-                        if (focusKick > 0) { withFrameNanos { }; runCatching { first.requestFocus() }; qaLog("LIST_KICK $focusKick"); return@LaunchedEffect }
+                        if (focusKick > 0) {
+                            // Fokus zurückholen: auf den zuletzt markierten Sender (nicht auf Zeile 1 – die ist weiter
+                            // unten in der Liste gar nicht sichtbar, dann blieben ▲▼ wirkungslos)
+                            val target = focusedIdx.coerceIn(0, lastIdx.coerceAtLeast(0))
+                            wrapTo = target
+                            if (listState.layoutInfo.visibleItemsInfo.none { it.index == target }) listState.scrollToItem((target - 5).coerceAtLeast(0))
+                            withFrameNanos { }
+                            withFrameNanos { }
+                            runCatching { wrapReq.requestFocus() }
+                            qaLog("LIST_KICK $focusKick")
+                            return@LaunchedEffect
+                        }
                     }
                     LaunchedEffect(Unit) {
                         withFrameNanos { }
