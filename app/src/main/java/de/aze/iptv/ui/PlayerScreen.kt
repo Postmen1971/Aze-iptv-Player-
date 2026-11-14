@@ -191,6 +191,8 @@ fun PlayerScreen(
     var restartTick by remember { mutableIntStateOf(0) }
     // Wächter verlangt einen kompletten Neustart des Senders (Fehler-Wartezeiten zurücksetzen)
     val fullRestart = remember { booleanArrayOf(false) }
+    /** Stream-Enden kurz hintereinander: [Anzahl, Zeitpunkt des letzten] – für die wachsende Pause vor dem Neuverbinden */
+    val endedRuns = remember { longArrayOf(0L, 0L) }
     var switching by remember { mutableStateOf(false) }
     val probe = remember(player) {
         FpsProbe { fps ->
@@ -522,8 +524,13 @@ fun PlayerScreen(
                     qaLog("ENDED ${app.current?.channel?.name}")
                     retryJob?.cancel()
                     // Anbieter hat den Stream beendet: nach 0,3 s neu verbinden (stop + prepare, wie im Multi-View)
+                    // Endet er gleich wieder (mehrmals in 30 s), wächst die Pause: 0,3 → 0,6 → 1,2 … höchstens 5 s
+                    val nowE = android.os.SystemClock.elapsedRealtime()
+                    if (nowE - endedRuns[1] > 30_000) endedRuns[0] = 0
+                    val pause = minOf(300L shl minOf(endedRuns[0].toInt(), 5), 5_000L)
+                    endedRuns[0]++; endedRuns[1] = nowE
                     retryJob = scope.launch {
-                        delay(300)
+                        delay(pause)
                         keepFrame(true)
                         player.stop()
                         player.prepare()

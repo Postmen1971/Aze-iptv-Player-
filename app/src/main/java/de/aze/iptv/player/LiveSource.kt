@@ -60,14 +60,35 @@ class LiveSource(context: Context, http: HttpDataSource.Factory, fastHttp: HttpD
      * [onSwitch] den Moment des Übergangs (zum Protokollieren). Rückgabe: zum Abmelden aufrufen.
      */
     fun attach(player: ExoPlayer, onRejoin: () -> Unit = {}, onSwitch: () -> Unit = {}): () -> Unit {
+        val handler = android.os.Handler(player.applicationLooper)
+        var shortRuns = 0
         val analytics = object : AnalyticsListener {
             override fun onLoadCompleted(t: AnalyticsListener.EventTime, info: LoadEventInfo, data: MediaLoadData) {
                 if (data.dataType != C.DATA_TYPE_MEDIA) return
                 val cur = player.currentMediaItem ?: return
                 // nur für das letzte Stück der Liste (sonst würde jede Verbindung mehrfach nachgelegt)
                 if (t.windowIndex != player.mediaItemCount - 1 || !isProgressive(cur)) return
-                player.addMediaSource(create(cur))
-                onRejoin()
+                handler.removeCallbacksAndMessages(null)
+                // Bremse: Antwortet der Anbieter nur ganz kurz (fast leere Antwort, sofort wieder zu), nicht im
+                // Dauerfeuer neu verbinden – das wirkt wie ein Angriff und endet in Sperren. Wartezeit wächst
+                // 0,3 → 0,6 → 1,2 … höchstens 8 s; nach der ersten normalen Verbindung wieder sofort.
+                val short = info.loadDurationMs < 3_000 && info.bytesLoaded < 512 * 1024
+                if (!short) {
+                    shortRuns = 0
+                    player.addMediaSource(create(cur))
+                    onRejoin()
+                    return
+                }
+                val wait = minOf(300L shl minOf(shortRuns, 5), 8_000L)
+                shortRuns++
+                val count = player.mediaItemCount
+                handler.postDelayed({
+                    // nur wenn inzwischen nichts anderes passiert ist (Senderwechsel, Neustart)
+                    if (player.mediaItemCount == count && player.currentMediaItem?.localConfiguration?.uri == cur.localConfiguration?.uri) {
+                        player.addMediaSource(create(cur))
+                        onRejoin()
+                    }
+                }, wait)
             }
         }
         val listener = object : androidx.media3.common.Player.Listener {
@@ -82,6 +103,7 @@ class LiveSource(context: Context, http: HttpDataSource.Factory, fastHttp: HttpD
         player.addAnalyticsListener(analytics)
         player.addListener(listener)
         return {
+            handler.removeCallbacksAndMessages(null)
             player.removeAnalyticsListener(analytics)
             player.removeListener(listener)
         }
