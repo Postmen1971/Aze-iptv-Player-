@@ -14,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId = "de.aze.iptv"
-        minSdk = 21
+        minSdk = 23 // Media3 ab 1.9 verlangt Android 6
         targetSdk = 35
         versionCode = buildNumber
         versionName = "1.0.$buildNumber"
@@ -104,7 +104,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
-    val media3 = "1.5.1"
+    val media3 = "1.9.4"
     implementation("androidx.media3:media3-exoplayer:$media3")
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-exoplayer-dash:$media3")

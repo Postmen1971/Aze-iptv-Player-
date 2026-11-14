@@ -548,7 +548,11 @@ fun PlayerScreen(
                 val group = error.errorCode / 1000
                 val http = generateSequence<Throwable>(error) { it.cause }
                     .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()
-                if (app.playerEngine == PlayerEngine.AUTO && key != null && (((group == 3 || group == 4) && retries >= 1) || (retries >= 2 && http == null && group != 2))) {
+                // Media3 meldet seit 1.9 selbst „Player steckt fest“ – das ist ein Hänger, kein Format-Problem: normal neu
+                // verbinden, aber nicht als Grund für den Ersatz-Player zählen
+                val stuck = generateSequence<Throwable>(error) { it.cause }.any { it is androidx.media3.common.util.StuckPlayerException }
+                if (stuck) qaLog("STUCK ${app.current?.channel?.name}")
+                if (!stuck && app.playerEngine == PlayerEngine.AUTO && key != null && (((group == 3 || group == 4) && retries >= 1) || (retries >= 2 && http == null && group != 2))) {
                     player.stop()
                     app.markVlc(key)
                     return
