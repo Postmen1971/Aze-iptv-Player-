@@ -91,8 +91,9 @@ class LiveSource(context: Context, http: HttpDataSource.Factory, fastHttp: HttpD
                     var told = false
                     fun appendWhenDue() {
                         if (gen != generation || player.currentMediaItem?.localConfiguration?.uri != cur.localConfiguration?.uri) return
-                        val remaining = player.totalBufferedDuration
-                        if (remaining > REJOIN_LEAD_MS + 500 && player.playbackState != androidx.media3.common.Player.STATE_ENDED) {
+                        // vorsichtig gerechnet (kleinerer der beiden Werte); gewartet wird nur, solange das Bild läuft
+                        val remaining = minOf(player.totalBufferedDuration, (player.bufferedPosition - player.currentPosition).coerceAtLeast(0))
+                        if (remaining > REJOIN_LEAD_MS + 500 && player.isPlaying) {
                             if (!told) { told = true; de.aze.iptv.data.HangLog.add("REJOIN_WARTET Vorrat ${remaining / 1000} s – verbindet kurz vor dem Ende neu") }
                             handler.postDelayed({ appendWhenDue() }, minOf(remaining - REJOIN_LEAD_MS, 2_000L))
                             return
