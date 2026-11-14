@@ -656,13 +656,22 @@ fun PlayerScreen(
         // (Ein neuer Tastendruck bricht diese Wartezeit ab.)
         delay(settleMs)
         // Bildschirm schaltet gerade die Frequenz um: erst danach starten
-        while (switching || System.currentTimeMillis() < app.displaySettleUntil) delay(200)
+        if (switching || System.currentTimeMillis() < app.displaySettleUntil) {
+            // sonst sah es aus, als wären alle Sender schwarz
+            ytError = "Bildschirm wird umgestellt – der Sender startet gleich …"
+            while (switching || System.currentTimeMillis() < app.displaySettleUntil) delay(200)
+            ytError = null
+        }
         val url = try {
             app.resolveStreamUrl(ch.url)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            ytError = "Portal: Sender nicht verfügbar"
+            // Portal antwortet nicht (z. B. Netz direkt nach dem Einschalten noch nicht da): nicht schwarz stehen bleiben,
+            // sondern von selbst neu versuchen – wie bei einem Abspielfehler (2 / 4 / 8 / 15 s)
+            ytError = "Portal: Sender nicht verfügbar – neuer Versuch …"
+            val wait = minOf(2_000L shl minOf(retries, 3), 15_000L)
+            retryJob = scope.launch { delay(wait); retries++; relinkTick++ }
             return@LaunchedEffect
         }
         if (inBackground) return@LaunchedEffect
@@ -968,7 +977,7 @@ fun PlayerScreen(
                         aspect = aspect,
                         handle = vlcHandle,
                         audioDelayMs = syncMs,
-                        onFirstFrame = { noPicture = false },
+                        onFirstFrame = { noPicture = false; retries = 0 },
                         modifier = if (preview) previewModifier else Modifier.fillMaxSize(),
                         onError = {
                             noPicture = true

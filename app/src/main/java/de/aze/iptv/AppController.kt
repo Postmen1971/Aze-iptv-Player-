@@ -926,7 +926,9 @@ class AppController(context: Context, outerScope: CoroutineScope) {
             }
             lineup = lu
             editGroups = eg
-            current = restoreKey?.let { lu.byKey[it] } ?: current?.let { lu.byKey[it.channel.key] } ?: lu.all.firstOrNull()
+            // Zuerst der Sender, der JETZT läuft: wer während des Neuaufbaus (große Listen brauchen spürbar) umschaltet,
+            // wurde sonst auf den alten Sender zurückgeworfen.
+            current = current?.let { lu.byKey[it.channel.key] } ?: restoreKey?.let { lu.byKey[it] } ?: lu.all.firstOrNull()
         }.also { rebuildJob = it }
     }
 

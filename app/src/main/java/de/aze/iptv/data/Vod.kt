@@ -258,8 +258,11 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
 
     override fun sourceInfo() = "Anbieter-Schnittstelle (Server + Login)"
 
-    override fun movieUrl(item: VodItem) = "$base/movie/${src.user.trim()}/${src.pass}/${item.id}.${item.ext}"
-    override fun episodeUrl(e: Episode) = "$base/series/${src.user.trim()}/${src.pass}/${e.id}.${e.ext}"
+    // Benutzer/Passwort im Pfad kodiert (Sonderzeichen wie # ? % / machten die Adresse sonst kaputt)
+    private val pathUser get() = android.net.Uri.encode(src.user.trim())
+    private val pathPass get() = android.net.Uri.encode(src.pass)
+    override fun movieUrl(item: VodItem) = "$base/movie/$pathUser/$pathPass/${item.id}.${item.ext}"
+    override fun episodeUrl(e: Episode) = "$base/series/$pathUser/$pathPass/${e.id}.${e.ext}"
 }
 
 

@@ -124,8 +124,9 @@ class Repository(context: Context) {
         val streams = readLiveStreams("$api&action=get_live_streams")
         if (streams.isEmpty()) return false
         // Pfad-Teile wie beim Anbieter: /live/benutzer/passwort/id.ts
-        val pathUser = src.user.trim()
-        val pathPass = src.pass
+        // im Pfad kodiert: ein Passwort mit # ? % / oder Leerzeichen machte sonst jede Sender-Adresse kaputt
+        val pathUser = android.net.Uri.encode(src.user.trim())
+        val pathPass = android.net.Uri.encode(src.pass)
 
         // Nach Kategorie-Reihenfolge des Anbieters sortieren, innerhalb nach "num".
         val byCat = LinkedHashMap<String, MutableList<LiveStream>>()
