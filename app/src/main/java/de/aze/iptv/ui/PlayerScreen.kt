@@ -251,6 +251,9 @@ fun PlayerScreen(
         var jump = 0
         var healthy = 0
         var nextAllowed = 0L
+        // Player „läuft“ (Ton da), aber seit dem Start kam nie ein erstes Bild – bisher sah das kein Wächter
+        var noFirst = 0
+        var noFirstTries = 0
         // Bildlücke: Sekunden, in denen Bild laufen sollte, aber keins kam (fürs Hänger-Protokoll)
         var gap = 0
         var gapInfo = ""
@@ -280,6 +283,7 @@ fun PlayerScreen(
                 lastFrames >= 0 && f == lastFrames && lastPos >= 0 && pos != lastPos && buffered - pos > 1_000
             ) jump + 1 else 0
             starved = if (!switching && buffering && buffered == lastBuffered && (firstFrameSeen || sinceStart >= 10_000)) starved + 1 else 0
+            noFirst = if (!switching && !app.tunneling && ready && hasVideo && !firstFrameSeen) noFirst + 1 else 0
             if (firstFrameSeen && pictureMoving && !buffering) healthy++ else if (!pictureMoving) healthy = 0
             if (healthy >= 60) { healthy = 0; watchdogRestarts = 0; nextAllowed = 0 }
             val stateName = when (player.playbackState) {
@@ -297,6 +301,9 @@ fun PlayerScreen(
                 // Bild stand und der Zuschauer hat selbst weggeschaltet: genau diese Hänger fehlten bisher im Protokoll
                 if (gap >= 3) qaLog("LUECKE ${gap}s WEGGESCHALTET (Wächter-Eingriffe $watchdogRestarts) | Beginn: $gapInfo | zuletzt: $gapLast")
                 gap = 0; gapKey = key
+                // Neuer Sender: Sperrzeit und Zähler gehören zum alten – sonst griff der Wächter nach dem Umschalten
+                // bis zu 60 s lang nicht ein
+                nextAllowed = 0; frozen = 0; starved = 0; jump = 0; noFirst = 0; noFirstTries = 0
             }
             if (!switching && firstFrameSeen && player.playWhenReady && !pictureMoving &&
                 player.playbackState != Player.STATE_IDLE
@@ -340,12 +347,17 @@ fun PlayerScreen(
             val starvedLimit = if (firstFrameSeen) 5 else 8
             // Stehendes Bild bei laufendem Player: 6 s (bewährt) oder 4 s (Schalter unter Einstellungen → System)
             val frozenLimit = if (app.freezeFast) 4 else 6
-            if ((jump >= 2 || frozen >= frozenLimit || starved >= starvedLimit) && now >= nextAllowed) {
-                qaLog("WATCHDOG ${if (jump >= 2) "jump" else if (frozen >= frozenLimit) "frozen" else "starved"} ${app.current?.channel?.name} | $snap")
+            // 10 s „läuft“ ohne je ein Bild: Sender komplett neu starten – höchstens 2× je Sender (kann das Gerät das
+            // Bildformat gar nicht, soll wenigstens der Ton ungestört weiterlaufen)
+            val blind = noFirst >= 10 && noFirstTries < 2
+            if ((jump >= 2 || frozen >= frozenLimit || starved >= starvedLimit || blind) && now >= nextAllowed) {
+                qaLog("WATCHDOG ${if (jump >= 2) "jump" else if (frozen >= frozenLimit) "frozen" else if (blind) "keinbild" else "starved"} ${app.current?.channel?.name} | $snap")
+                if (blind) noFirstTries++
+                noFirst = 0
                 // Leicht neu verbinden (gleiche Adresse, letztes Bild bleibt). Nur Portal-Links (laufen ab) holen eine neue Adresse.
                 // Erster Eingriff: leicht neu verbinden. Hat das nicht geholfen (zweiter Eingriff ohne gesundes Bild dazwischen):
                 // kompletter Neustart des Senders – dasselbe, was sonst nur Hoch-/Runterschalten von Hand gebracht hat.
-                val light = watchdogRestarts == 0 && (starved < starvedLimit || (key != null && !StalkerClient.isStalker(key)))
+                val light = !blind && watchdogRestarts == 0 && (starved < starvedLimit || (key != null && !StalkerClient.isStalker(key)))
                 frozen = 0
                 starved = 0
                 jump = 0
