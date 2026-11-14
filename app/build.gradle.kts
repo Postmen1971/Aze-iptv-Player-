@@ -10,7 +10,7 @@ val keystoreFile = System.getenv("KEYSTORE_FILE")
 
 android {
     namespace = "de.aze.iptv"
-    compileSdk = 35
+    compileSdk = 36 // Media3 1.11 verlangt 36
 
     defaultConfig {
         applicationId = "de.aze.iptv"
