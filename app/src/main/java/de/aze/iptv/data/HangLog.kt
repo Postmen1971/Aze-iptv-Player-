@@ -40,6 +40,12 @@ object HangLog {
         }
     }
 
+    /** Sofort schreiben (nur für den Absturz-Eintrag: der Hintergrund-Eintrag ginge mit dem Prozess verloren). */
+    fun addNow(msg: String) {
+        val f = file ?: return
+        runCatching { f.appendText("${fmt.format(Date())}  ${msg.take(400)}\n") }
+    }
+
     fun read(): String = runCatching { file?.takeIf { it.exists() }?.readText() ?: "" }.getOrDefault("")
 
     fun count(): Int = read().lineSequence().count { it.isNotBlank() }

@@ -51,6 +51,33 @@ class MainActivity : ComponentActivity() {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         if (previous !is CrashLogger) Thread.setDefaultUncaughtExceptionHandler(CrashLogger(crashFile, previous))
 
+        // Warum wurde die App beim letzten Mal beendet? Android weiß das auch dann, wenn die App selbst nichts mehr
+        // schreiben konnte (Absturz in einem Geräte-Baustein/Decoder, Speicher voll, „reagiert nicht“) → ins Protokoll.
+        if (savedInstanceState == null && android.os.Build.VERSION.SDK_INT >= 30) runCatching {
+            de.aze.iptv.data.HangLog.init(applicationContext)
+            val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+            val info = am.getHistoricalProcessExitReasons(packageName, 0, 1).firstOrNull()
+            val prefs = getSharedPreferences("app_ende", MODE_PRIVATE)
+            if (info != null && info.timestamp != prefs.getLong("t", 0L)) {
+                prefs.edit().putLong("t", info.timestamp).apply()
+                val reason = when (info.reason) {
+                    android.app.ApplicationExitInfo.REASON_CRASH -> "Absturz in der App"
+                    android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "Absturz in einem Geräte-Baustein (Decoder/VLC)"
+                    android.app.ApplicationExitInfo.REASON_ANR -> "App reagierte nicht"
+                    android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "Gerät hatte zu wenig Speicher"
+                    android.app.ApplicationExitInfo.REASON_SIGNALED -> "vom System beendet (Signal ${info.status})"
+                    android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "vom Nutzer beendet"
+                    android.app.ApplicationExitInfo.REASON_USER_STOPPED -> "vom Nutzer gestoppt"
+                    android.app.ApplicationExitInfo.REASON_EXIT_SELF -> "selbst beendet"
+                    else -> "Grund ${info.reason}"
+                }
+                val at = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.GERMANY).format(java.util.Date(info.timestamp))
+                de.aze.iptv.data.HangLog.add(
+                    "APP_ENDE um $at: $reason · ${info.description.orEmpty().take(140)} · Speicher ${info.rss / 1024} MB · Wichtigkeit ${info.importance}",
+                )
+            }
+        }
+
         // Zwischenspeicher automatisch aufräumen (wie „Cache leeren“, aber ohne Logos/Playlists zu verlieren)
         if (savedInstanceState == null) de.aze.iptv.data.CacheCleaner.onStart(applicationContext)
 
@@ -366,7 +393,7 @@ private class CrashLogger(private val file: java.io.File, private val next: Thre
         // auch ins Hänger-Protokoll (Einstellungen → Hilfe & Fehlersuche → Anzeigen)
         runCatching {
             val root = generateSequence(e) { it.cause }.last()
-            de.aze.iptv.data.HangLog.add("ABSTURZ ${root.javaClass.simpleName}: ${root.message.orEmpty().take(120)} @ " +
+            de.aze.iptv.data.HangLog.addNow("ABSTURZ ${root.javaClass.simpleName}: ${root.message.orEmpty().take(120)} @ " +
                 (root.stackTrace.firstOrNull { it.className.startsWith("de.aze") }?.let { "${it.fileName}:${it.lineNumber}" } ?: "?") +
                 " · Speicher frei ${Runtime.getRuntime().let { r -> (r.maxMemory() - (r.totalMemory() - r.freeMemory())) / 1048576 }} MB")
         }
