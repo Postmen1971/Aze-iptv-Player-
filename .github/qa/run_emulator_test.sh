@@ -162,7 +162,7 @@ o=$(count "LIST_OPEN"); sleep 2
 log "== Test 2: Server schickt keine Daten mehr (tote Verbindung)"
 channel 2
 wait_for "FIRST_FRAME Test 2" 1 60
-# tote Verbindung: entweder der Wächter greift oder (nach 10 s Lesezeit) wird nahtlos neu verbunden
+# tote Verbindung: entweder der Wächter greift oder (nach 4 s Lesezeit, langsame Server 10 s) wird nahtlos neu verbunden
 wait_re "WATCHDOG starved Test 2|TRANSITION Test 2" 50
 picture_back "Test 2" 30 && shot "test2-wieder-da"
 

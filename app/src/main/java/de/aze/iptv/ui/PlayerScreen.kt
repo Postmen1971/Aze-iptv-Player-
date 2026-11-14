@@ -131,7 +131,16 @@ fun PlayerScreen(
             .setReadTimeoutMs(10_000)
     }
     // Nahtloses Neuverbinden, wenn der Anbieter den Stream beendet (siehe LiveSource)
-    val live = remember { de.aze.iptv.player.LiveSource(context, http) }
+    // Gleiche Verbindung mit 4 s Lesezeit: tote Leitung (offen, aber stumm) wird nach 4 s statt 10 s erkannt und
+    // nahtlos neu verbunden. Langsame Server fallen von selbst auf die geduldige Verbindung zurück (LiveSource).
+    val httpFast = remember {
+        DefaultHttpDataSource.Factory()
+            .setUserAgent(Http.USER_AGENT)
+            .setAllowCrossProtocolRedirects(true)
+            .setConnectTimeoutMs(15_000)
+            .setReadTimeoutMs(4_000)
+    }
+    val live = remember { de.aze.iptv.player.LiveSource(context, http, httpFast) }
     /** Zeitpunkt des letzten Senderwechsels (0 = keiner offen) – für die Messung der Umschaltzeit */
     val zapStartedAt = remember { longArrayOf(0L) }
     // Zeitpunkt des letzten Senderwechsels (für die kurze Wartezeit beim einzelnen Umschalten)
