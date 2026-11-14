@@ -175,7 +175,16 @@ fun ChannelOverlay(
                 SectionLabel("Gruppen", modifier = Modifier.padding(start = 10.dp, top = 14.dp, bottom = 10.dp))
                 val gState = rememberLazyListState(initialFirstVisibleItemIndex = (groupIndex - 5).coerceAtLeast(0))
                 val gFirst = remember { FocusRequester() }
-                LaunchedEffect(focusKick) { if (focusKick > 0) { withFrameNanos { }; runCatching { gFirst.requestFocus() } } }
+                LaunchedEffect(focusKick) {
+                    if (focusKick > 0) {
+                        // gewählte Gruppe erst ins Bild holen – außerhalb des Bildes lässt sie sich nicht markieren
+                        if (gState.layoutInfo.visibleItemsInfo.none { it.index == groupIndex }) gState.scrollToItem((groupIndex - 5).coerceAtLeast(0))
+                        withFrameNanos { }
+                        withFrameNanos { }
+                        runCatching { gFirst.requestFocus() }
+                        qaLog("GROUP_KICK $focusKick")
+                    }
+                }
                 LazyColumn(
                     state = gState,
                     verticalArrangement = Arrangement.spacedBy(1.dp),

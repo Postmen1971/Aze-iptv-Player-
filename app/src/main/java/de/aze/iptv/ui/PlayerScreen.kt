@@ -443,6 +443,19 @@ fun PlayerScreen(
     var overlayFocused by remember { mutableStateOf(false) }
     var overlayKick by remember { mutableIntStateOf(0) }
     LaunchedEffect(overlay) { if (!overlay) overlayFocused = false }
+    // Fernbedienung: Die Liste ist offen, aber NICHTS ist markiert (Markierung verloren, z. B. weil sich die Liste
+    // im Hintergrund neu aufgebaut hat). Dann kommen gar keine Tasten mehr an – nur „Zurück“, und das beendet in den
+    // Gruppen die App. Deshalb die Markierung nach kurzer Zeit von selbst zurückholen, nicht erst auf Tastendruck.
+    val overlayAlone = active && overlay && !overlayFocused && !multiView && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0
+    LaunchedEffect(overlayAlone) {
+        if (!overlayAlone || !Device.isTv) return@LaunchedEffect
+        delay(600)
+        repeat(5) {
+            overlayKick++
+            de.aze.iptv.data.HangLog.add("FOKUS_ZURUECK Liste offen ohne Markierung (Versuch ${it + 1})")
+            delay(1_200)
+        }
+    }
     // Tablet/Handy: Leiste mit großen Knöpfen (Tippen ins Bild zeigt/versteckt sie)
     val touchDevice = Device.isTouch
     var touchBar by remember { mutableStateOf(false) }
