@@ -186,7 +186,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             Spacer(Modifier.height(14.dp))
             CategoryItem(
                 if (app.expertMode) "Erweitert: an" else "Erweitert: aus",
-                selected = app.expertMode, onFocus = {},
+                selected = app.expertMode, icon = LineIcon.SLIDERS, onFocus = {},
                 onClick = { app.updateExpertMode(!app.expertMode); onTv = false; cat = cats.indexOf("System") },
             )
         }
@@ -1792,6 +1792,13 @@ private val CATEGORY_ICON = mapOf(
     "Fußball" to LineIcon.FOOTBALL,
     "PIN & Kinderschutz" to LineIcon.EYE_OFF,
     "System" to LineIcon.SETTINGS,
+    "Bild & Ton" to LineIcon.PICTURE,
+    "Programmzeitschrift" to LineIcon.GUIDE,
+    "Fernbedienung" to LineIcon.REMOTE,
+    "Aussehen" to LineIcon.LOOK,
+    "Sichern" to LineIcon.SAVE,
+    "Hilfe" to LineIcon.HELP,
+    "Über" to LineIcon.INFO,
 )
 
 

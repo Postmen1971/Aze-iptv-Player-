@@ -278,6 +278,7 @@ fun PlayerScreen(
             val f = probe.frames
             val pos = player.currentPosition
             val buffered = player.bufferedPosition
+            live.bufferedMs = player.totalBufferedDuration // für „Sendepause aussitzen“ in der Verbindung
             // Pausiert, obwohl Live-TV laufen soll (z. B. nach HDMI-Umschaltung)? Sofort weiter.
             if (!switching && player.playbackState != Player.STATE_IDLE && !player.playWhenReady) {
                 player.playWhenReady = true

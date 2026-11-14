@@ -74,7 +74,7 @@ fun AzeWordmark(fontSize: TextUnit = 22.sp, color: Color = Palette.Text) {
 }
 
 /** Dünne Linien-Symbole (24er-Raster, Strichstärke 1,6). */
-enum class LineIcon { SEARCH, TV, MOVIE, SERIES, FOOTBALL, SKORTEXT, PLAYLIST, SETTINGS, EXIT, EYE_OFF }
+enum class LineIcon { SEARCH, TV, MOVIE, SERIES, FOOTBALL, SKORTEXT, PLAYLIST, SETTINGS, EXIT, EYE_OFF, PICTURE, GUIDE, REMOTE, LOOK, SAVE, HELP, INFO, SLIDERS }
 
 @Composable
 fun LineIconView(kind: LineIcon, color: Color, size: Dp = 20.dp, modifier: Modifier = Modifier) {
@@ -150,6 +150,53 @@ private fun DrawScope.drawLineIcon(kind: LineIcon, color: Color) {
             poly(2.5f, 12f, 6f, 7.5f, 12f, 6f, 18f, 7.5f, 21.5f, 12f, 18f, 16.5f, 12f, 18f, 6f, 16.5f, closed = true)
             drawCircle(color, radius = 2.8f * s, center = o(12f, 12f), style = stroke)
             line(4f, 4f, 20f, 20f)
+        }
+        LineIcon.PICTURE -> {
+            // Bild & Ton: Bildschirm mit Schallwellen
+            rrect(2.5f, 5f, 15.5f, 16f, 1.8f)
+            line(6f, 19.5f, 12f, 19.5f)
+            poly(18.5f, 8f, 20f, 10.5f, 18.5f, 13f)
+            poly(20.8f, 6f, 22.8f, 10.5f, 20.8f, 15f)
+        }
+        LineIcon.GUIDE -> {
+            // Programmzeitschrift: Kalenderblatt mit Zeilen
+            rrect(3.5f, 5f, 20.5f, 20.5f, 2f)
+            line(3.5f, 9.5f, 20.5f, 9.5f)
+            line(8f, 3f, 8f, 6.5f); line(16f, 3f, 16f, 6.5f)
+            line(7f, 13.5f, 17f, 13.5f); line(7f, 17f, 13.5f, 17f)
+        }
+        LineIcon.REMOTE -> {
+            rrect(7.5f, 2.5f, 16.5f, 21.5f, 2.5f)
+            drawCircle(color, radius = 2.2f * s, center = o(12f, 7.5f), style = stroke)
+            drawCircle(color, radius = 1.1f * s, center = o(10.2f, 13f)); drawCircle(color, radius = 1.1f * s, center = o(13.8f, 13f))
+            drawCircle(color, radius = 1.1f * s, center = o(10.2f, 16.5f)); drawCircle(color, radius = 1.1f * s, center = o(13.8f, 16.5f))
+        }
+        LineIcon.LOOK -> {
+            // Aussehen: Farbpalette
+            drawCircle(color, radius = 8.8f * s, center = o(12f, 12f), style = stroke)
+            drawCircle(color, radius = 1.1f * s, center = o(8f, 9f)); drawCircle(color, radius = 1.1f * s, center = o(12f, 7f)); drawCircle(color, radius = 1.1f * s, center = o(16f, 9f))
+            drawCircle(color, radius = 2f * s, center = o(14.5f, 15.5f), style = stroke)
+        }
+        LineIcon.SAVE -> {
+            // Sichern: Wolke mit Pfeil nach oben
+            poly(7f, 18f, 5f, 18f, 3f, 15.5f, 4f, 12.5f, 7f, 11.5f, 8.5f, 8f, 12.5f, 6.5f, 16f, 8.5f, 17f, 11.5f, 20f, 12.5f, 21f, 15.5f, 19f, 18f, 17f, 18f)
+            line(12f, 20.5f, 12f, 13f)
+            poly(9.5f, 15.5f, 12f, 13f, 14.5f, 15.5f)
+        }
+        LineIcon.HELP -> {
+            drawCircle(color, radius = 8.8f * s, center = o(12f, 12f), style = stroke)
+            poly(9.3f, 9.6f, 10f, 7.8f, 12f, 7f, 14f, 7.8f, 14.7f, 9.6f, 12f, 12.2f, 12f, 13.8f)
+            drawCircle(color, radius = 1.1f * s, center = o(12f, 16.8f))
+        }
+        LineIcon.INFO -> {
+            drawCircle(color, radius = 8.8f * s, center = o(12f, 12f), style = stroke)
+            line(12f, 11f, 12f, 16.8f)
+            drawCircle(color, radius = 1.1f * s, center = o(12f, 7.5f))
+        }
+        LineIcon.SLIDERS -> {
+            // Erweitert: Schieberegler
+            line(4f, 7f, 20f, 7f); line(4f, 12f, 20f, 12f); line(4f, 17f, 20f, 17f)
+            drawCircle(color, radius = 1.9f * s, center = o(9f, 7f)); drawCircle(color, radius = 1.9f * s, center = o(15f, 12f)); drawCircle(color, radius = 1.9f * s, center = o(8f, 17f))
         }
     }
 }
