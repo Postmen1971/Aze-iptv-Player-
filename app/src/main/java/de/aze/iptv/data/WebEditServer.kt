@@ -54,7 +54,7 @@ class WebEditServer(
 
     private var server: ServerSocket? = null
     private val main = Handler(Looper.getMainLooper())
-    private var wrongCodes = 0
+    private val wrongCodes = java.util.concurrent.atomic.AtomicInteger(0)
     @Volatile private var running = false
 
     /** Stand der Liste, den das Handy zuletzt bekommen hat (Nummern beziehen sich darauf). */
@@ -129,6 +129,8 @@ class WebEditServer(
             val c = Regex("[?&]c=(\\d{4})").find(path)?.groupValues?.get(1)
             if (c != code) {
                 respond(out, 403, "text/plain; charset=utf-8", "Code fehlt: /liveonsat?c=CODE")
+                // auch hier Fehlversuche zählen – sonst ließe sich der Code über diese Adresse durchprobieren
+                if (c != null && wrongCodes.incrementAndGet() >= 10) stop()
                 return
             }
             touch()
@@ -144,9 +146,9 @@ class WebEditServer(
             return
         }
         if (sentCode != code) {
-            wrongCodes++
+            val wrong = wrongCodes.incrementAndGet()
             respond(out, 403, "application/json", """{"error":"Falscher Code"}""")
-            if (wrongCodes >= 10) stop()
+            if (wrong >= 10) stop()
             return
         }
         touch()

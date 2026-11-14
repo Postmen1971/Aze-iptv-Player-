@@ -258,6 +258,8 @@ private fun Browse(
         delay(250) // erst laden, wenn man kurz auf einer Kategorie stehen bleibt
         val t0 = System.currentTimeMillis()
         items = runCatching { if (series) api.series(c.id) else api.movies(c.id) }
+            // abgebrochen (Kategorie gewechselt): nicht als Fehler werten und die neue Liste nicht überschreiben
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             .onSuccess { error = null; qaLog("VOD_CAT ${c.name} ${it.size} in ${System.currentTimeMillis() - t0} ms") }
             .onFailure { error = "Inhalte konnten nicht geladen werden."; qaLog("VOD_CAT_ERROR ${c.name} ${it.javaClass.simpleName}") }
             .getOrDefault(emptyList())
@@ -267,7 +269,9 @@ private fun Browse(
         results = null
         // Suche ohne ausgeblendete Kategorien
         val shown = catList.map { it.id }.toSet()
-        results = runCatching { api.all(series) }.getOrDefault(emptyList())
+        results = runCatching { api.all(series) }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+            .getOrDefault(emptyList())
             .filter { it.name.contains(q, ignoreCase = true) && (it.cat == null || it.cat in shown) }
     }
     LaunchedEffect(menu) {
@@ -443,7 +447,7 @@ private fun Browse(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            gridItemsIndexed(list, key = { _, it -> it.id }) { idx, item ->
+                            gridItemsIndexed(list, key = { i, it -> "$i|${it.id}" }) { idx, item ->
                                 PosterCard(
                                     item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0, series = series,
                                     onFocus = { heroState.value = item },
@@ -841,7 +845,8 @@ private fun DetailView(
                         }
                         val eps = s.seasons[season].orEmpty()
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
-                            items(eps, key = { it.id }) { e ->
+                            items(eps.size, key = { i -> "$i|${eps[i].id}" }) { i ->
+                                val e = eps[i]
                                 EpisodeRow(app, e, sourceId) { start ->
                                     onPlay(Playing(api.episodeUrl(e), "${item.name} – S${e.season} E${e.number}", "e:$sourceId:${e.id}", start))
                                 }

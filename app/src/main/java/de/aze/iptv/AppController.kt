@@ -493,7 +493,8 @@ class AppController(context: Context, outerScope: CoroutineScope) {
 
     /** Stelle merken – nicht ganz am Anfang und nicht kurz vor Schluss (dann gilt es als gesehen). */
     fun saveResume(key: String, posMs: Long, durMs: Long) {
-        if (posMs < 60_000 || (durMs > 0 && posMs > durMs - 180_000)) resume.remove(key) else resume[key] = posMs
+        resume.remove(key) // neu einsortieren: zuletzt Gesehenes steht hinten und bleibt beim Kürzen erhalten
+        if (!(posMs < 60_000 || (durMs > 0 && posMs > durMs - 180_000))) resume[key] = posMs
         store.saveResumePositions(resume)
         resumeVersion++
     }

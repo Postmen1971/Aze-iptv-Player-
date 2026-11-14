@@ -52,7 +52,11 @@ object LiveOnSat {
             pages++
             bytes += html.length
             if (pages == 1 || u.contains("start_dd")) debugFile?.let { f -> runCatching { f.writeText(html) } }
-            parse(html).forEach { f -> all.putIfAbsent(Football.norm(f.home) + "|" + Football.norm(f.away), f) }
+            // (kein putIfAbsent: das gibt es erst ab Android 7)
+            parse(html).forEach { f ->
+                val k = Football.norm(f.home) + "|" + Football.norm(f.away)
+                if (!all.containsKey(k)) all[k] = f
+            }
         }
         if (all.isEmpty()) {
             // liveonsat sperrt manche Anschlüsse (HTTP 403) → Ersatz: Liste, die SkorText alle 30 min auf GitHub ablegt

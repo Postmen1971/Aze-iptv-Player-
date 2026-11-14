@@ -605,9 +605,13 @@ private fun EpgSection(app: AppController) {
         }
     }
     Section("EPG-Status") {
-        val withEpg = remember(app.epg, app.lineup) { app.lineup.all.count { app.epg.idFor(it.channel) != null } }
+        // im Hintergrund zählen – bei sehr großen Listen stand sonst die Bedienung
+        val withEpg by androidx.compose.runtime.produceState(-1, app.epg, app.lineup) {
+            val epg = app.epg; val all = app.lineup.all
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { all.count { epg.idFor(it.channel) != null } }
+        }
         Text(
-            if (app.epg.channelCount > 0) "$withEpg von ${app.lineup.all.size} Sendern haben Programm · eigene Zuordnungen: ${app.epgMap.size}"
+            if (app.epg.channelCount > 0) "${if (withEpg < 0) "…" else withEpg.toString()} von ${app.lineup.all.size} Sendern haben Programm · eigene Zuordnungen: ${app.epgMap.size}"
             else "Noch keine Programmdaten geladen",
             color = Palette.TextSoft, fontSize = 13.sp,
         )

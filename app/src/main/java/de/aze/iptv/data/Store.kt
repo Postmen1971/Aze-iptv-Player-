@@ -148,7 +148,7 @@ class Store(context: Context) {
     /** Weiterschauen: gemerkte Stelle je Film/Folge (Millisekunden). */
     fun resumePositions(): MutableMap<String, Long> {
         val o = runCatching { JSONObject(prefs.getString("resume", "{}")) }.getOrDefault(JSONObject())
-        val m = HashMap<String, Long>()
+        val m = LinkedHashMap<String, Long>() // Reihenfolge = alt → neu (für „höchstens 300 behalten“)
         o.keys().forEach { k -> m[k] = o.optLong(k) }
         return m
     }
