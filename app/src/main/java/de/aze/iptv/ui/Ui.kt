@@ -166,6 +166,15 @@ val Schemes = listOf(
         text = Color(0xFFFFFFFF), textSoft = Color(0xFFD6DAE1), textMuted = Color(0xFF9299A5),
         accent = Color(0xFFF4F6FA), onAccent = Color(0xFF101318), highlight = Color(0xFF0A84FF),
     ),
+    // Stil „Klar“ (15.11.2026, Entwurf „nach Store-Richtlinien“): tiefes Nachtblau, ruhige Flächen, weiße Auswahl
+    // mit Schatten, Hellblau nur für Laufendes. Farben mit geprüftem Kontrast (Text mind. 4,5:1 auf dem Grund).
+    ColorScheme(
+        "Klar",
+        ground = Color(0xFF0A0E1A), panel = Color(0xFF161D2E), panelDark = Color(0xFF111726),
+        raised = Color(0xFF1F2940), line = Color(0xFF2A3550),
+        text = Color(0xFFF4F6FA), textSoft = Color(0xFFC9D2E0), textMuted = Color(0xFFA9B6CB),
+        accent = Color(0xFFF4F6FA), onAccent = Color(0xFF0A0E1A), highlight = Color(0xFF8EC5FF),
+    ),
 )
 
 /**
@@ -188,6 +197,7 @@ enum class AppStyle(
     AZE("Aze", "Nachtblau mit Türkis, Fokus mit farbigem Rahmen", "Aze Nachtblau", 12, 1.03f, 1.0f, 8),
     KINO("Kino", "Fast schwarz, kantig, weiße Auswahl, Rot für Laufendes – Poster wachsen beim Fokus", "Kino", 4, 1.0f, 1.07f, 4),
     GLAS("Glas", "Weiche Flächen, große runde Kacheln, helle Auswahl mit Schatten", "Glas", 18, 1.04f, 1.06f, 14),
+    KLAR("Klar", "Neuer Entwurf: tiefes Nachtblau, viel Ruhe, die Auswahl wird hell, größer und hebt sich mit Schatten ab", "Klar", 14, 1.04f, 1.08f, 14),
     ;
     companion object { fun of(i: Int) = entries.getOrElse(i) { AZE } }
 }
@@ -214,7 +224,7 @@ object Palette {
     /** Ecken für Listenzeilen und Knöpfe (folgt dem Stil) */
     val radius get() = style.radius.dp
     /** Ecken für große Flächen (Infoleiste, Fenster) */
-    val barRadius get() = when (style) { AppStyle.AZE -> 20.dp; AppStyle.KINO -> 6.dp; AppStyle.GLAS -> 28.dp }
+    val barRadius get() = when (style) { AppStyle.AZE -> 20.dp; AppStyle.KINO -> 6.dp; AppStyle.GLAS -> 28.dp; AppStyle.KLAR -> 24.dp }
 
     val Ground get() = scheme.ground
     val Panel get() = scheme.panel
@@ -278,6 +288,11 @@ fun Modifier.rowFocus(focused: Boolean, playing: Boolean, rowShape: androidx.com
             .graphicsLayer { shadowElevation = 10f; this.shape = rowShape; clip = false }
             .background(Color.White.copy(alpha = 0.20f), shape)
             .border(1.dp, Color.White.copy(alpha = 0.28f), shape)
+        // Klar: deutlich hell + weißer Rahmen + Schatten – die Auswahl ist nicht nur an der Farbe zu erkennen
+        AppStyle.KLAR -> this
+            .graphicsLayer { shadowElevation = 14f; this.shape = rowShape; clip = false }
+            .background(Color.White.copy(alpha = 0.24f), shape)
+            .border(2.dp, Color.White.copy(alpha = 0.92f), shape)
     }
     playing -> this.background(Palette.Highlight.copy(alpha = if (Palette.style == AppStyle.KINO) 0.16f else 0.10f), shape)
     else -> this

@@ -684,7 +684,7 @@ private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boo
                     .aspectRatio(2f / 3f)
                     .graphicsLayer {
                         scaleX = ps; scaleY = ps
-                        if (focused && st == de.aze.iptv.ui.AppStyle.GLAS) { shadowElevation = 16f; shape = pShape }
+                        if (focused && (st == de.aze.iptv.ui.AppStyle.GLAS || st == de.aze.iptv.ui.AppStyle.KLAR)) { shadowElevation = 16f; shape = pShape }
                     }
                     .clip(pShape)
                     .background(Palette.Raised)
@@ -694,6 +694,7 @@ private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boo
                             de.aze.iptv.ui.AppStyle.AZE -> Modifier.border(3.dp, Palette.Accent, pShape)
                             de.aze.iptv.ui.AppStyle.KINO -> Modifier.border(2.dp, Color.White, pShape)
                             de.aze.iptv.ui.AppStyle.GLAS -> Modifier.border(1.dp, Color.White.copy(alpha = 0.5f), pShape)
+                            de.aze.iptv.ui.AppStyle.KLAR -> Modifier.border(3.dp, Color.White, pShape)
                         },
                     ),
                 contentAlignment = Alignment.Center,

@@ -363,7 +363,7 @@ class Store(context: Context) {
         get() = prefs.getInt("scheme", 0)
         set(v) = prefs.edit().putInt("scheme", v).apply()
 
-    /** Stil der Oberfläche (Index in AppStyle: 0 Aze, 1 Kino, 2 Glas) */
+    /** Stil der Oberfläche (Index in AppStyle: 0 Aze, 1 Kino, 2 Glas, 3 Klar) */
     var appStyle: Int
         get() = prefs.getInt("appStyle", 0)
         set(v) = prefs.edit().putInt("appStyle", v).apply()
