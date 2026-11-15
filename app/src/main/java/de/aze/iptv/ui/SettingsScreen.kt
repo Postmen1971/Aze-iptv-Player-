@@ -223,6 +223,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             when (cats.getOrNull(shownCat)) {
                 "Suchen" -> SettingsSearch(onGo = { name -> onTv = false; cat = cats.indexOf(name).coerceAtLeast(0) })
                 "Sender & Playlists" -> {
+                    if (!app.hasAnySource) WelcomeSection()
                     PhoneInputSection(app)
                     PlaylistSection(app)
                     FreeListSection(app)
@@ -250,7 +251,8 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 "Aussehen" -> AppearanceSection(app)
                 "Bild & Ton" -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
                 "Programmzeitschrift" -> EpgSection(app)
-                "PIN & Kinderschutz" -> Section("PIN & Kinderschutz") {
+                "PIN & Kinderschutz" -> {
+                    Section("PIN & Kinderschutz") {
                     Text(
                         if (app.pinIsDefault) "Die PIN ist noch 0000. Bitte eine eigene PIN festlegen."
                         else "Die Einstellungen sind mit deiner PIN geschützt.",
@@ -282,6 +284,8 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                         color = Palette.TextMuted, fontSize = 13.sp,
                     )
                     TvButton("PIN ändern", onClick = { pinStep = 1 })
+                }
+                    PrivacySection()
                 }
                 "Sichern" -> BackupSection(app)
                 "System" -> {
@@ -431,6 +435,46 @@ private fun ControlsSection(app: AppController) {
 }
 
 /** Freie Sender (iptv-org) per Knopfdruck dazunehmen – jeweils als eigene Playlist und eigene Gruppe. */
+/** Erster Start (noch keine Liste): klar sagen, was die App ist – ein Player ohne eigene Inhalte. */
+@Composable
+private fun WelcomeSection() {
+    Section("Willkommen") {
+        Text("Dein Player für deine eigenen Listen", color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(
+            "Aze ist ein reiner Player. Die App enthält keine Sender, Filme oder Serien. Du spielst nur Inhalte ab, " +
+                "für die du selbst die Rechte oder ein gültiges Abo hast.",
+            color = Palette.TextSoft, fontSize = 15.sp,
+        )
+        Text(
+            "Kein Konto nötig. Deine Zugangsdaten bleiben verschlüsselt auf diesem Gerät. Mehr dazu unter „PIN & Kinderschutz“ → Datenschutz.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+    }
+}
+
+/** Datenschutz in Klartext: was auf dem Gerät bleibt und was ins Internet geht. */
+@Composable
+private fun PrivacySection() {
+    Section("Datenschutz") {
+        Text("Die App braucht kein Konto und sammelt keine Daten über dich.", color = Palette.Text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            "Auf dem Gerät bleiben: deine Listen und Zugangsdaten (verschlüsselt), Favoriten, Einstellungen und das Hänger-Protokoll.",
+            color = Palette.TextSoft, fontSize = 14.sp,
+        )
+        Text(
+            "Ins Internet geht nur, was zum Abspielen und Anzeigen nötig ist: Anfragen an deinen Anbieter, an die Quellen der " +
+                "Programmzeitschrift, an die Bilderdienste für Cover (abschaltbar unter „Filme & Serien“), an die Fußball-Übersicht " +
+                "und an die Update-Seite. Diese Dienste sehen dabei wie bei jeder Webseite deine Internet-Adresse.",
+            color = Palette.TextSoft, fontSize = 14.sp,
+        )
+        Text(
+            "Nur auf deinen Knopfdruck: Das Hänger-Protokoll und gemerkte Sender-Zuordnungen werden erst hochgeladen, wenn du " +
+                "„Hochladen“ oder „Teilen“ wählst. Darin stehen Sendernamen und Zeiten, keine Adressen oder Zugangsdaten.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+    }
+}
+
 @Composable
 private fun FreeListSection(app: AppController) {
     Section("Freie Sender (iptv-org)") {
