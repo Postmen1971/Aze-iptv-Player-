@@ -36,16 +36,9 @@ import java.io.InterruptedIOException
  * machen mit. Ein Verbindungsabbruch mitten im Stream zählt wie ein Ende (statt bis zum Leerlaufen zu warten).
  */
 @OptIn(UnstableApi::class)
-class LiveSource(context: Context, http: HttpDataSource.Factory, fastHttp: HttpDataSource.Factory? = null) {
+class LiveSource(context: Context, http: HttpDataSource.Factory) {
     private val plain: DataSource.Factory = DefaultDataSource.Factory(context, http)
-    /** Gleiche Verbindung mit kurzer Lesezeit: tote Leitung wird früher erkannt (siehe [EndOnDropDataSource]). */
-    private val plainFast: DataSource.Factory? = fastHttp?.let { DefaultDataSource.Factory(context, it) }
-    /**
-     * Aktueller Vorrat des Players in ms (vom Wächter jede Sekunde gesetzt; −1 = unbekannt). Solange genug Vorrat da
-     * ist, wird eine Sendepause des Anbieters NICHT als tote Leitung gewertet (siehe [EndOnDropDataSource]).
-     */
-    @Volatile var bufferedMs = -1L
-    private val endOnDrop = DataSource.Factory { EndOnDropDataSource(plain.createDataSource(), plainFast?.createDataSource()) { bufferedMs } }
+    private val endOnDrop = DataSource.Factory { EndOnDropDataSource(plain.createDataSource()) }
     private val policy = livePolicy()
     private val adaptive = DefaultMediaSourceFactory(plain).setLoadErrorHandlingPolicy(policy)
     private val progressive = ProgressiveMediaSource.Factory(endOnDrop).setLoadErrorHandlingPolicy(policy)
@@ -171,100 +164,36 @@ class LiveSource(context: Context, http: HttpDataSource.Factory, fastHttp: HttpD
  * Bricht die Leitung ab, NACHDEM schon Daten kamen, gilt das als „Stream zu Ende“ statt als Fehler.
  * So hängt [LiveSource] sofort die neue Verbindung an (Media3 würde sonst erst nach dem ganzen Vorrat neu starten).
  *
- * Mit [fast] (kurze Lesezeit) wird eine tote Leitung – Verbindung offen, aber es kommt nichts mehr – nach wenigen
- * Sekunden statt nach 10 s erkannt. Sicherung gegen Fehlalarme: Antwortet ein Server beim Verbinden langsamer als
- * die kurze Lesezeit oder macht er öfter längere Sendepausen, gilt für ihn ab dann wieder die geduldige Verbindung.
+ * WICHTIG – nicht wieder einbauen: eine KURZE Lesezeit, um „tote Leitungen schneller zu erkennen“ (Versuch in
+ * 1.0.255 mit 4 s). Viele Anbieter schicken erst einen großen Vorrat und danach nur noch stoßweise mit Pausen von
+ * mehreren Sekunden. Eine kurze Lesezeit hält so eine Pause für eine tote Leitung; nach dem Neuverbinden schickt der
+ * Anbieter denselben Vorrat noch einmal und Szenen laufen doppelt. „Nach Zeitablauf einfach weiterlesen“ geht auf
+ * Android auch nicht (die Verbindung wird beim Zeitablauf geschlossen). Die Lesezeit kommt deshalb vom Aufrufer
+ * (PlayerScreen: 20 s); eine wirklich tote Leitung bemerkt der Wächter am leeren Vorrat.
  */
 @OptIn(UnstableApi::class)
-private class EndOnDropDataSource(private val slow: DataSource, private val fast: DataSource?, private val bufferedMs: () -> Long) : DataSource {
-    private var up: DataSource = slow
+private class EndOnDropDataSource(private val up: DataSource) : DataSource {
     private var got = 0L
-    private var host: String? = null
 
-    override fun addTransferListener(transferListener: TransferListener) {
-        slow.addTransferListener(transferListener)
-        fast?.addTransferListener(transferListener)
-    }
+    override fun addTransferListener(transferListener: TransferListener) = up.addTransferListener(transferListener)
 
     override fun open(dataSpec: DataSpec): Long {
         got = 0
-        host = dataSpec.uri.host
-        val f = fast
-        val h = host
-        if (f != null && h != null && !slowHosts.containsKey(h)) {
-            up = f
-            val t0 = android.os.SystemClock.elapsedRealtime()
-            try {
-                return f.open(dataSpec)
-            } catch (e: IOException) {
-                // nur „Server antwortet zu langsam“ (nicht: Verbindungsaufbau scheitert, Fehlercode, Abbruch)
-                val quick = android.os.SystemClock.elapsedRealtime() - t0 < 10_000
-                if (!quick || !isTimeout(e) || Thread.currentThread().isInterrupted) throw e
-                slowHosts[h] = true
-                try { f.close() } catch (_: Exception) {}
-            }
-        }
-        up = slow
-        return slow.open(dataSpec)
+        return up.open(dataSpec)
     }
 
-    override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
-        var silent = 0L
-        while (true) {
-            val t0 = android.os.SystemClock.elapsedRealtime()
-            try {
-                return up.read(buffer, offset, length).also { if (it > 0) got += it }
-            } catch (e: IOException) {
-                val timeout = isTimeout(e)
-                if (timeout && got > 0 && !Thread.currentThread().isInterrupted) {
-                    // Sendepause. Viele Anbieter schicken erst einen großen Vorrat auf einmal und dann nur noch
-                    // stoßweise alle paar Sekunden. Solange der Player genug Vorrat hat, ist das KEINE tote Leitung:
-                    // weiter warten. Neu verbinden würde dasselbe Stück noch einmal liefern (Szene läuft doppelt).
-                    silent += android.os.SystemClock.elapsedRealtime() - t0
-                    if (bufferedMs() > KEEP_WAITING_MS && silent < MAX_SILENT_MS) continue
-                    noteTimeout()
-                    return C.RESULT_END_OF_INPUT
-                }
-                // abgebrochener Ladevorgang (kein Zeitablauf) wird weitergereicht
-                if (e is InterruptedIOException && !timeout) throw e
-                if (got > 0) return C.RESULT_END_OF_INPUT
-                throw e
-            }
-        }
-    }
-
-    /** Dritte Lesezeit-Überschreitung der kurzen Verbindung in 2 Minuten → dieser Server bekommt wieder 10 s Geduld. */
-    private fun noteTimeout() {
-        val h = host ?: return
-        if (up !== fast) return
-        val now = android.os.SystemClock.elapsedRealtime()
-        val c = timeouts.getOrPut(h) { longArrayOf(0L, now) }
-        synchronized(c) {
-            if (now - c[1] > 120_000) { c[0] = 0; c[1] = now }
-            if (++c[0] >= 3) slowHosts[h] = true
-        }
-    }
-
-    private fun isTimeout(e: Throwable): Boolean {
-        var c: Throwable? = e
-        var n = 0
-        while (c != null && n++ < 6) {
-            if (c is java.net.SocketTimeoutException) return true
-            c = c.cause
-        }
-        return false
+    override fun read(buffer: ByteArray, offset: Int, length: Int): Int = try {
+        up.read(buffer, offset, length).also { if (it > 0) got += it }
+    } catch (e: java.net.SocketTimeoutException) {
+        // Lesezeit überschritten = Leitung tot (SocketTimeoutException ist eine InterruptedIOException)
+        if (got > 0) C.RESULT_END_OF_INPUT else throw e
+    } catch (e: InterruptedIOException) {
+        throw e // abgebrochener Ladevorgang
+    } catch (e: IOException) {
+        if (got > 0) C.RESULT_END_OF_INPUT else throw e
     }
 
     override fun getUri(): Uri? = up.uri
     override fun getResponseHeaders(): Map<String, List<String>> = up.responseHeaders
     override fun close() = up.close()
-
-    private companion object {
-        /** mehr Vorrat als das → Sendepause aussitzen statt neu verbinden */
-        const val KEEP_WAITING_MS = 6_000L
-        /** so lange darf eine Verbindung trotz Vorrat höchstens stumm sein */
-        const val MAX_SILENT_MS = 30_000L
-        val slowHosts = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
-        val timeouts = java.util.concurrent.ConcurrentHashMap<String, LongArray>()
-    }
 }

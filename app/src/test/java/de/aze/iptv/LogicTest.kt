@@ -201,6 +201,33 @@ class LogicTest {
         assertEquals("(TR) 7-24 Disney+ 1", Football.matchByNameLoose("Disney+ Norge (${'$'}/geo/R)", idx).single().channel.name)
     }
 
+    @Test fun football_belgianChannelComesBeforeGermanOne() {
+        val own = M3uParser.parse(
+            """
+            #EXTM3U
+            #EXTINF:-1 group-title="DE-Sport",DE: DAZN 1
+            http://x/d1.ts
+            #EXTINF:-1 group-title="DE-Sport",DE: DAZN 2
+            http://x/d2.ts
+            #EXTINF:-1 tvg-id="dazn1.de" group-title="BE-BELGIUM",BE: DAZN 1 FHD
+            http://x/b1.ts
+            #EXTINF:-1 group-title="BE-BELGIUM",DAZN 2
+            http://x/b2.ts
+            """.trimIndent(),
+        )
+        // Vorsatz „BE:“ zählt vor der vom deutschen Sender übernommenen tvg-id; Gruppe „BE-BELGIUM“ ohne Vorsatz
+        assertEquals("be", Football.ownCountry(own[2]))
+        assertEquals("be", Football.ownCountry(own[3]))
+        assertEquals("de", Football.ownCountry(own[0]))
+        val idx = Football.nameIndex(Numbering.build(own, emptyList()))
+        val loose = Football.matchByNameLoose("DAZN Belgium (${'$'}/geo/R)", idx).map { it.channel.name }
+        assertEquals(listOf("BE: DAZN 1 FHD", "DAZN 2"), loose.take(2))
+        // automatisch zugeordnet wird nur das passende Land
+        assertEquals(listOf("BE: DAZN 1 FHD", "DAZN 2"), Football.matchByName("DAZN Belgium (${'$'}/geo/R)", idx).map { it.channel.name })
+        assertTrue(Football.otherCountryHint("DAZN España (${'$'}/geo/R)", own[0])!!.contains("Spanien"))
+        assertEquals(null, Football.otherCountryHint("DAZN Belgium", own[2]))
+    }
+
     @Test fun football_otherLeagueIsNotThisMatch() {
         val kick = 1_700_000_000_000L
         fun ch(n: String, id: String) = Channel(n, "Sport", null, "http://x/$id.ts", tvgId = id)

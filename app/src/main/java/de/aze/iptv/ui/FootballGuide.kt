@@ -597,6 +597,8 @@ private fun ListingZap(
             ) {
                 Text("In deiner Liste", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text("★ gemerkt · ✓ von anderen bestätigt · ◀ zurück", color = Palette.TextMuted, fontSize = 11.sp)
+                val hint = remember(name, candidates) { name?.let { Football.otherCountryHint(it, candidates.firstOrNull()?.channel) } }
+                if (hint != null) Text(hint, color = Palette.Accent, fontSize = 12.sp)
                 if (candidates.isEmpty()) {
                     Text(
                         "„${name ?: ""}“ gibt es in deiner Liste nicht – links einen anderen Sender wählen.",

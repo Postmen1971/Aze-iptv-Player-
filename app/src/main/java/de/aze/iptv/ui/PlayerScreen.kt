@@ -281,9 +281,6 @@ fun PlayerScreen(
             val f = probe.frames
             val pos = player.currentPosition
             val buffered = player.bufferedPosition
-            // für „Sendepause aussitzen“ in der Verbindung: nur wenn das Bild wirklich läuft – beim Puffern oder bei
-            // widersprüchlichen Vorrats-Angaben (Ton weit voraus, Bild fehlt) gilt „kein Vorrat“
-            live.bufferedMs = if (player.isPlaying) minOf(player.totalBufferedDuration, (buffered - pos).coerceAtLeast(0)) else 0L
             // Pausiert, obwohl Live-TV laufen soll (z. B. nach HDMI-Umschaltung)? Sofort weiter.
             if (!switching && player.playbackState != Player.STATE_IDLE && !player.playWhenReady) {
                 player.playWhenReady = true

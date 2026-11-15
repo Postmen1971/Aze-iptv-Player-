@@ -236,8 +236,24 @@ object Football {
     )
     private val shortAlias = mapOf("gb" to "uk", "ger" to "de", "fra" to "fr", "ita" to "it", "esp" to "es", "por" to "pt", "pol" to "pl", "rus" to "ru")
 
-    /** Land eines eigenen Senders: Vorsatz/Gruppe/tvg-id, sonst Länderwort oder Kürzel vorne/hinten in Name oder Gruppe. */
+    // Länderkürzel, wie sie als Vorsatz stehen: "BE: DAZN 1", "| PT | Sport TV", Gruppe "BE-BELGIUM"
+    private val prefixCodes = shortCodes + setOf("ie", "us", "ca", "mk", "xk", "cy", "ua", "lt", "lv", "ee", "me", "az", "tur", "bel", "ned", "sui", "aut")
+    private val prefixAlias = shortAlias + mapOf("tur" to "tr", "bel" to "be", "ned" to "nl", "sui" to "ch", "aut" to "at", "ie" to "uk")
+    // im Sendernamen nur mit ":" "|" oder Klammer (ein Bindestrich wäre z. B. bei "RS-TV" kein Länder-Vorsatz),
+    // in der Gruppe auch mit Bindestrich ("BE-BELGIUM", "DE-Doku")
+    private val namePrefixRx = Regex("""^\s*[|(\[]?\s*([A-Za-z]{2,3})\s*[:|)\]]""")
+    private val groupPrefixRx = Regex("""^\s*[|(\[]?\s*([A-Za-z]{2,3})\s*[:|)\]\-–]""")
+    private fun prefixCountry(s: String, rx: Regex): String? =
+        rx.find(s)?.groupValues?.get(1)?.lowercase(Locale.ROOT)?.takeIf { it in prefixCodes }?.let { prefixAlias[it] ?: it }
+
+    /**
+     * Land eines eigenen Senders. Der ausdrückliche Vorsatz im Namen ("BE: …") und die Gruppe ("BE-BELGIUM") zählen
+     * zuerst – vor der tvg-id, denn Anbieter übernehmen die oft vom deutschen Sender ("dazn1.de" beim belgischen DAZN).
+     */
     fun ownCountry(ch: Channel): String? {
+        prefixCountry(ch.name, namePrefixRx)?.let { return it }
+        prefixCountry(ch.group, groupPrefixRx)?.let { return it }
+        listedCountry(ch.group)?.let { return it }
         Epg.countryOf(ch)?.let { return it }
         listedCountry(ch.name)?.let { return it }
         listedCountry(ch.group)?.let { return it }
@@ -259,7 +275,28 @@ object Football {
         "czech" to "cz", "slovakia" to "sk", "albania" to "al", "kosovo" to "xk", "macedonia" to "mk", "baltic" to "baltic",
         "francais" to "fr", "italy" to "it", "spain" to "es", "poland" to "pl", "russia" to "ru", "rossiya" to "ru",
         "qazaqstan" to "kz", "kazakhstan" to "kz", "english" to "uk",
+        "belgique" to "be", "belgie" to "be", "belgien" to "be", "sweden" to "se", "finland" to "fi", "croatia" to "hr",
+        "serbia" to "rs", "bosnia" to "ba", "slovenia" to "si", "turkei" to "tr", "armenia" to "am", "georgia" to "ge",
+        "israel" to "il", "ukraine" to "ua", "arabia" to "ar", "mena" to "ar", "usa" to "us", "canada" to "ca",
     )
+
+    private val countryNames = mapOf(
+        "be" to "Belgien", "fr" to "Frankreich", "es" to "Spanien", "it" to "Italien", "pt" to "Portugal", "nl" to "Niederlande",
+        "uk" to "England", "pl" to "Polen", "ro" to "Rumänien", "bg" to "Bulgarien", "gr" to "Griechenland", "rs" to "Serbien",
+        "hr" to "Kroatien", "ba" to "Bosnien", "si" to "Slowenien", "hu" to "Ungarn", "cz" to "Tschechien", "sk" to "Slowakei",
+        "dk" to "Dänemark", "se" to "Schweden", "no" to "Norwegen", "fi" to "Finnland", "ru" to "Russland", "al" to "Albanien",
+        "de" to "Deutschland", "at" to "Österreich", "ch" to "Schweiz", "tr" to "Türkei", "am" to "Armenien", "us" to "USA",
+    )
+
+    /**
+     * Hinweis für die Auswahl: Der Sender aus dem TV-Plan gehört zu einem Land, aber der erste Vorschlag aus der eigenen
+     * Liste nicht (z. B. „DAZN Belgium“ → nur deutsche DAZN-Sender gefunden). null = passt oder Land unbekannt.
+     */
+    fun otherCountryHint(listed: String, first: Channel?): String? {
+        val lc = listedCountry(listed) ?: return null
+        if (first == null || ownCountry(first) == lc) return null
+        return "Kein Sender aus ${countryNames[lc] ?: lc.uppercase(Locale.ROOT)} mit diesem Namen in deiner Liste – das sind ähnliche aus anderen Ländern."
+    }
 
     /** Land eines Senders laut liveonsat-Namen (null = nicht angegeben). */
     fun listedCountry(listed: String): String? =
