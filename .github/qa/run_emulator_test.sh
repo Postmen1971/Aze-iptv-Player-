@@ -463,7 +463,12 @@ if [ "$(count "BACKUP_OK")" -gt 0 ] && qa | grep -E "BACKUP_" | tail -1 | grep -
   tap "Ja, löschen" || fail "Touch: Sicherheitsfrage „Ja, löschen“ nicht antippbar"
   for w in 1 2 3 4 5 6 7 8; do [ "$(count "BACKUP_DELETED")" -gt 0 ] && break; sleep 1.5; done
   [ "$(count "BACKUP_DELETED")" -gt 0 ] || fail "Touch: Sicherung wurde nicht gelöscht"
-elif qa | grep -E "BACKUP_" | tail -1 | grep -q BACKUP_FAIL; then fail "Sichern geht nicht:$(qa | grep BACKUP_FAIL | tail -1 | sed 's/.*BACKUP_FAIL//')"
+elif qa | grep -E "BACKUP_" | tail -1 | grep -q BACKUP_FAIL; then
+  why="$(qa | grep BACKUP_FAIL | tail -1 | sed 's/.*BACKUP_FAIL//')"
+  # Hochlade-Dienste im Internet vom Test-Rechner aus nicht erreichbar = Störung draußen, kein Fehler der App
+  if echo "$why" | grep -qiE "failed to connect|timed out|timeout|UnknownHost|Unable to resolve|Trust anchor|ECONNREFUSED|Network is unreachable"; then
+    note "Sichern" "Hochlade-Dienst gerade nicht erreichbar (übersprungen):$why"
+  else fail "Sichern geht nicht:$why"; fi
 else fail "Touch: „Sicherung erstellen“ zeigt kein Ergebnis"; fi
 # Links direkt antippen (öffnet den Browser) – Einstellungen frisch öffnen
 adb shell am start -S -n $PKG/.MainActivity >/dev/null; sleep 8
