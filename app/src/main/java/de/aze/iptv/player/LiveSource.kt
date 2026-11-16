@@ -213,13 +213,25 @@ internal object Ts {
     }
 
     /** PTS, wenn hier ein Bild-Paket (Video-PES) beginnt, sonst −1. */
-    fun videoPts(b: ByteArray, p: Int): Long {
+    fun videoPts(b: ByteArray, p: Int): Long = pesPts(b, p, videoOnly = true)
+
+    /** Stream-Kennung (stream_id), wenn hier ein PES beginnt, sonst −1. */
+    fun pesSid(b: ByteArray, p: Int): Int {
         if (!pusi(b, p)) return -1
         val s = payload(b, p)
-        if (s < 0 || s + 14 > p + SIZE) return -1
+        if (s < 0 || s + 4 > p + SIZE) return -1
         if (b[s].toInt() != 0 || b[s + 1].toInt() != 0 || b[s + 2].toInt() != 1) return -1
-        val sid = b[s + 3].toInt() and 0xFF
-        if (sid !in 0xE0..0xEF) return -1
+        return b[s + 3].toInt() and 0xFF
+    }
+
+    fun isVideo(sid: Int) = sid in 0xE0..0xEF
+
+    /** PTS, wenn hier ein PES beginnt (Bild oder Ton), sonst −1. */
+    fun pesPts(b: ByteArray, p: Int, videoOnly: Boolean = false): Long {
+        val sid = pesSid(b, p)
+        if (sid < 0 || (videoOnly && !isVideo(sid))) return -1
+        val s = payload(b, p)
+        if (s + 14 > p + SIZE) return -1
         if ((b[s + 7].toInt() and 0x80) == 0) return -1
         val t = s + 9
         return (((b[t].toLong() shr 1) and 7L) shl 30) or
@@ -272,7 +284,13 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
     private var relax = false
     private var relaxAt = 0L
     private val pmts = HashSet<Int>()
-    private val psi = LinkedHashMap<Int, ByteArray>()
+    private val seenPes = HashSet<Int>()
+    private val started = HashSet<Int>()
+    private var videoPid = -1
+    private var scanPos = 0
+    private var filterPos = 0
+    private var logged = false
+    private val kept = java.io.ByteArrayOutputStream()
     private var out: ByteArray? = null
     private var outPos = 0
     private val tmp = ByteArray(64 * 1024)
@@ -294,7 +312,8 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
         got = 0; accLen = 0; dropped = 0; firstPts = -1; latestPts = -1; t0 = 0; relax = false
         out = null; outPos = 0; tbLen = 0; connMax = -1
         if (acc.size < 256 * 1024) acc = ByteArray(256 * 1024)
-        pmts.clear(); psi.clear()
+        pmts.clear(); seenPes.clear(); started.clear(); videoPid = -1; scanPos = 0; filterPos = 0; logged = false
+        kept.reset()
         cut = cutPts
         phase = if (cut >= 0) 1 else 0
     }
@@ -329,49 +348,90 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
         return n
     }
 
-    /** Liest so lange, bis feststeht, ab wo neu ist. false = Verbindung zu Ende, bevor etwas Neues kam. */
+    /**
+     * Liest so lange, bis feststeht, ab wo neu ist, und gibt nur Neues weiter. false = Verbindung zu Ende, bevor etwas
+     * Neues kam.
+     *
+     * Jede Spur einzeln: Der TON läuft ab dem ersten Ton-Paket hinter [cut] nahtlos weiter; das BILD steigt am nächsten
+     * vollständigen Bild (Schlüsselbild) hinter [cut] ein. Am Übergang bleibt so höchstens kurz das Bild stehen,
+     * der Ton springt nicht (vorher sprangen Bild und Ton gemeinsam bis zum Schlüsselbild nach vorn – kleiner Ruck).
+     */
     private fun cutting(): Boolean {
         while (phase != 0) {
             val n = upRead(tmp, 0, tmp.size)
-            if (n == C.RESULT_END_OF_INPUT) { phase = 0; return false }
+            if (n == C.RESULT_END_OF_INPUT) {
+                // Phase 1 ohne Bild: alles weitergeben; Phase 2: nur, was schon als neu erkannt ist
+                val rest = if (phase == 1) acc.copyOf(accLen) else ByteArray(0)
+                val last = if (phase == 2 && (videoPid < 0 || videoPid !in started)) ByteArray(0) else kept.toByteArray()
+                phase = 0; accLen = 0; kept.reset()
+                val all = last + rest
+                if (all.isEmpty()) return false
+                return emit(all)
+            }
             if (t0 == 0L) t0 = android.os.SystemClock.elapsedRealtime()
             if (accLen + n > acc.size) acc = acc.copyOf(maxOf(acc.size * 2, accLen + n))
             System.arraycopy(tmp, 0, acc, accLen, n)
             accLen += n
-            var p = 0
+
+            if (phase == 1) {
+                // erst entscheiden: Ist überhaupt etwas doppelt?
+                var p = scanPos
+                while (accLen - p >= Ts.SIZE) {
+                    if (acc[p].toInt() != 0x47) { p++; continue }
+                    val pts = Ts.videoPts(acc, p)
+                    if (pts >= 0) {
+                        firstPts = pts; latestPts = pts
+                        val d = Ts.diff(pts, cut)
+                        // nichts doppelt (schon neuer) oder ganz andere Zeitrechnung: alles wie bisher weitergeben
+                        if (d > 0 || d < -60L * 90_000) { phase = 0; return passRest() }
+                        phase = 2; filterPos = 0
+                        break
+                    }
+                    p += Ts.SIZE
+                }
+                scanPos = p
+                // noch kein Bild gefunden: nicht endlos sammeln (z. B. Radio ohne Bild) → wie bisher weitergeben
+                if (phase == 1) { if (accLen > 1024 * 1024) { phase = 0; return passRest() }; continue }
+            }
+
+            // Phase 2: Paket für Paket
+            var p = filterPos
             while (accLen - p >= Ts.SIZE) {
                 if (acc[p].toInt() != 0x47) { p++; continue }
                 val pid = Ts.pid(acc, p)
-                if (pid == 0) { Ts.patPmts(acc, p, pmts); psi[pid] = acc.copyOfRange(p, p + Ts.SIZE) }
-                else if (pid in pmts && Ts.pusi(acc, p)) psi[pid] = acc.copyOfRange(p, p + Ts.SIZE)
-                val pts = Ts.videoPts(acc, p)
-                if (pts >= 0) {
-                    val d = Ts.diff(pts, cut)
-                    latestPts = pts
-                    if (phase == 1) {
-                        firstPts = pts
-                        // nichts doppelt (schon neuer) oder ganz andere Zeitrechnung: alles wie bisher weitergeben
-                        if (d > 0 || d < -60L * 90_000) { finish(0, keepPsi = false, overlap = 0); return true }
-                        phase = 2
+                var keep: Boolean
+                if (pid == 0) { Ts.patPmts(acc, p, pmts); keep = true }
+                else if (pid in pmts) keep = true
+                else {
+                    val sid = Ts.pesSid(acc, p)
+                    if (sid >= 0) {
+                        seenPes.add(pid)
+                        if (Ts.isVideo(sid)) videoPid = pid
+                        if (pid !in started) {
+                            val pts = Ts.pesPts(acc, p)
+                            if (Ts.isVideo(sid) && pts >= 0) latestPts = pts
+                            val d = if (pts >= 0) Ts.diff(pts, cut) else Long.MIN_VALUE
+                            val ok = if (Ts.isVideo(sid)) {
+                                if (relax) Ts.rai(acc, p) || android.os.SystemClock.elapsedRealtime() - relaxAt > 1_500
+                                else d > 0 && (Ts.rai(acc, p) || d > 2L * 90_000)
+                            } else relax || d > 0
+                            if (ok) started.add(pid)
+                        }
                     }
-                    // (sendet der Anbieter keine Einstiegs-Markierung: nach 1,5 s am nächsten Bild)
-                    if (phase == 2 && relax && (Ts.rai(acc, p) || android.os.SystemClock.elapsedRealtime() - relaxAt > 1_500)) {
-                        finish(p, keepPsi = true, overlap = -1)
-                        return true
-                    }
-                    if (phase == 2 && d > 0 && (Ts.rai(acc, p) || d > 2L * 90_000)) {
-                        finish(p, keepPsi = true, overlap = Ts.diff(cut, firstPts))
-                        return true
-                    }
+                    keep = pid in started
                 }
+                if (keep) kept.write(acc, p, Ts.SIZE) else dropped += Ts.SIZE
                 p += Ts.SIZE
             }
-            // noch kein Bild gefunden: nicht endlos sammeln (z. B. Radio ohne Bild) → wie bisher weitergeben
-            if (phase == 1 && accLen > 1024 * 1024) { finish(0, keepPsi = false, overlap = 0); return true }
-            if (phase == 2 && !relax) {
-                // Kommt der Rückblick-Vorrat nicht im Schnelldurchlauf (Anbieter beginnt jede Verbindung mit neuer
-                // Zeitrechnung und liefert in Echtzeit), würde das Warten bis hinter [cut] lange Schwarzbild kosten.
-                // Dauert es voraussichtlich länger als 4 s: nicht weiter überspringen, am nächsten Schlüsselbild rein.
+            // verarbeitete Bytes aus dem Sammelpuffer nehmen
+            System.arraycopy(acc, p, acc, 0, accLen - p)
+            accLen -= p
+            filterPos = 0
+
+            // Kommt der Rückblick-Vorrat nicht im Schnelldurchlauf (Anbieter beginnt jede Verbindung mit neuer
+            // Zeitrechnung und liefert in Echtzeit), würde das Warten bis hinter [cut] lange Schwarzbild kosten.
+            // Dauert es voraussichtlich länger als 4 s: nicht weiter überspringen, am nächsten Schlüsselbild rein.
+            if (!relax && videoPid !in started) {
                 val ms = android.os.SystemClock.elapsedRealtime() - t0
                 if (ms >= 1_000 && firstPts >= 0 && latestPts >= 0) {
                     val span = Ts.diff(latestPts, firstPts) / 90_000.0
@@ -380,35 +440,43 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
                     if (left / rate > 4.0) { relax = true; relaxAt = android.os.SystemClock.elapsedRealtime() }
                 }
             }
-            if (phase == 2) {
-                // alles vor p ist schon gezeigt – wegwerfen (Tabellen PAT/PMT werden gemerkt)
-                dropped += p
-                System.arraycopy(acc, p, acc, 0, accLen - p)
-                accLen -= p
-                if (dropped > 24L * 1024 * 1024) { finish(0, keepPsi = true, overlap = -1); return true }
+            val videoIn = videoPid >= 0 && videoPid in started
+            if (videoIn && !logged) {
+                logged = true
+                if (!relax) logSkip(Ts.diff(cut, firstPts))
             }
+            // fertig: Bild läuft wieder und alle Spuren sind dabei (oder Ton kommt nicht nach) → ab jetzt durchreichen
+            if (videoIn && (started.containsAll(seenPes) || kept.size() > 2 * 1024 * 1024)) {
+                phase = 0
+                val rest = acc.copyOf(accLen); accLen = 0
+                return emit(kept.toByteArray().also { kept.reset() } + rest)
+            }
+            if (dropped > 24L * 1024 * 1024) { phase = 0; return emit(kept.toByteArray().also { kept.reset() } + passBytes()) }
+            // schon Neues da (z. B. Ton): sofort weitergeben, damit der Player nicht leerläuft
+            if (kept.size() > 0) return emit(kept.toByteArray().also { kept.reset() })
         }
         return true
     }
 
-    /** Ab [from] im Sammelpuffer weitergeben, davor die gemerkten Tabellen. */
-    private fun finish(from: Int, keepPsi: Boolean, overlap: Long) {
-        val head = if (keepPsi) psi.values.fold(ByteArray(0)) { a, b -> a + b } else ByteArray(0)
-        val rest = acc.copyOfRange(from, accLen)
-        val all = head + rest
-        dropped += from
-        phase = 0
-        accLen = 0
-        acc = ByteArray(0)
-        out = if (all.isEmpty()) null else all
+    private fun passBytes(): ByteArray { val r = acc.copyOf(accLen); accLen = 0; return r }
+
+    private fun passRest(): Boolean = emit(passBytes())
+
+    /** Bytes als nächste Ausgabe bereitstellen (leer: einfach weiterlesen). */
+    private fun emit(all: ByteArray): Boolean {
+        if (all.isEmpty()) return true
+        out = all
         outPos = 0
-        if (all.isNotEmpty()) watch(all, 0, all.size)
-        if (overlap > 0) {
-            val sec = overlap / 9_000 / 10.0
-            val mb = dropped / 1024 / 1024.0
-            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                de.aze.iptv.data.HangLog.add("DOPPELT_UEBERSPRUNGEN %.1f s (%.1f MB) – Anbieter schickte schon Gezeigtes noch einmal".format(java.util.Locale.GERMANY, sec, mb))
-            }
+        watch(all, 0, all.size)
+        return true
+    }
+
+    private fun logSkip(overlap: Long) {
+        if (overlap <= 0) return
+        val sec = overlap / 9_000 / 10.0
+        val mb = dropped / 1024 / 1024.0
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            de.aze.iptv.data.HangLog.add("DOPPELT_UEBERSPRUNGEN %.1f s (%.1f MB) – Anbieter schickte schon Gezeigtes noch einmal".format(java.util.Locale.GERMANY, sec, mb))
         }
     }
 

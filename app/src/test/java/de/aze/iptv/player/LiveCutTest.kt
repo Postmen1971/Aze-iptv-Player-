@@ -32,6 +32,17 @@ class LiveCutTest {
         0, 1, (0xE0 or (pmt shr 8)).toByte(), (pmt and 0xFF).toByte(), 0, 0, 0, 0,
     ))
 
+    private fun ptsBytes(pts: Long) = byteArrayOf(
+            (0x21L or (((pts shr 30) and 7L) shl 1)).toInt().toByte(),
+            ((pts shr 22) and 0xFFL).toInt().toByte(),
+            ((((pts shr 15) and 0x7FL) shl 1) or 1L).toInt().toByte(),
+            ((pts shr 7) and 0xFFL).toInt().toByte(),
+            (((pts and 0x7FL) shl 1) or 1L).toInt().toByte(),
+        )
+
+    private fun audioPes(pts: Long) =
+        pkt(0x101, true, payload = byteArrayOf(0, 0, 1, 0xC0.toByte(), 0, 0, 0x80.toByte(), 0x80.toByte(), 5) + ptsBytes(pts))
+
     private fun video(pts: Long, key: Boolean): ByteArray {
         val t = byteArrayOf(
             (0x21L or (((pts shr 30) and 7L) shl 1)).toInt().toByte(),
@@ -45,15 +56,27 @@ class LiveCutTest {
 
     private fun audio() = pkt(0x101, false)
 
-    /** Strom: Bild alle 0,04 s, Schlüsselbild jede Sekunde, PTS ab [from] (Sekunden) für [secs] Sekunden. */
-    private fun stream(from: Int, secs: Int): ByteArray {
+    /**
+     * Strom: Bild alle 0,04 s, Schlüsselbild alle [keyEvery] Bilder, PTS ab [from] (Sekunden) für [secs] Sekunden.
+     * [audioPes]: Ton mit eigenen Zeitstempeln (sonst nur Fülldaten).
+     */
+    private fun stream(from: Int, secs: Int, keyEvery: Int = 25, audioPes: Boolean = false): ByteArray {
         val o = ByteArrayOutputStream()
         o.write(pat(0x1000)); o.write(pkt(0x1000, true, payload = byteArrayOf(0, 2)))
         for (f in 0 until secs * 25) {
             val pts = (from * 25L + f) * 3600
-            o.write(video(pts, f % 25 == 0)); o.write(audio())
+            o.write(video(pts, f % keyEvery == 0)); o.write(if (audioPes) audioPes(pts) else audio())
         }
         return o.toByteArray()
+    }
+
+    private fun firstAudioPts(b: ByteArray): Long {
+        var p = 0
+        while (p + 188 <= b.size) {
+            if (Ts.pid(b, p) == 0x101) { val t = Ts.pesPts(b, p); if (t >= 0) return t }
+            p += 188
+        }
+        return -1
     }
 
     private class Fake(private val data: ByteArray) : DataSource {
@@ -126,5 +149,15 @@ class LiveCutTest {
         EndOnDropDataSource(Fake(stream(100, 25)), track).also { it.begin(-1); readAll(it) }
         val src = EndOnDropDataSource(Fake(stream(105, 15)), track); src.begin(track.last)
         assertEquals(0, readAll(src).size)
+    }
+
+    @Test fun rejoin_soundContinuesAtCut_pictureAtNextKeyframe() {
+        val track = PtsTrack()
+        // alt: 100,00–112,96 s; neu ab 104 s, Schlüsselbild alle 2 s (104, 106 … 112, 114)
+        EndOnDropDataSource(Fake(stream(100, 13, audioPes = true)), track).also { it.begin(-1); readAll(it) }
+        val src = EndOnDropDataSource(Fake(stream(104, 20, keyEvery = 50, audioPes = true)), track); src.begin(track.last)
+        val out = readAll(src)
+        assertEquals(113 * 25L * 3600, firstAudioPts(out)) // Ton nahtlos ab dem ersten neuen Stück
+        assertEquals(114 * 25L * 3600, firstVideoPts(out)) // Bild ab dem nächsten Schlüsselbild
     }
 }
