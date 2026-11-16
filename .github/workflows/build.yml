@@ -93,14 +93,14 @@ jobs:
           # Test-Build für den Emulator (wird nicht veröffentlicht)
           mkdir -p qa
           cp app/build/outputs/apk/qa/app-x86_64-qa.apk qa/aze-qa-x86_64.apk
-          # Vergleichs-App „Aze alt“ (alter Abspiel-Baustein Media3 1.5.1), läuft neben der normalen App
+          # Vergleichs-App „Aze-IPTV-46“ (alter Abspiel-Baustein Media3 1.5.1), läuft neben der normalen App
           if gradle :app:assembleRelease -Palt=true --stacktrace > build-alt.log 2>&1; then
             for f in app/build/outputs/apk/release/app-*-release.apk; do
               abi=$(basename "$f" | sed -e 's/^app-//' -e 's/-release.apk$//')
               cp "$f" "out/Aze-alt-${abi}.apk"
             done
           else
-            echo "::warning::Aze alt ließ sich nicht bauen"
+            echo "::warning::Aze-IPTV-46 ließ sich nicht bauen"
             grep -E "^e: |What went wrong" -A2 build-alt.log | head -30 | while IFS= read -r l; do echo "::warning::$l"; done
           fi
           ls -la out
