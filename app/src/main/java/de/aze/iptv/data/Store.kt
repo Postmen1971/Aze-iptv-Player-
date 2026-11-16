@@ -225,6 +225,11 @@ class Store(context: Context) {
         get() = prefs.getBoolean("showDiag", false)
         set(v) = prefs.edit().putBoolean("showDiag", v).apply()
 
+    /** Player-Verbindung über OkHttp statt Androids Standard (an = Standard ab 1.0.282) */
+    var okHttpPlayer: Boolean
+        get() = prefs.getBoolean("okHttpPlayer", true)
+        set(v) = prefs.edit().putBoolean("okHttpPlayer", v).apply()
+
     /** YouTube-Sender in der offiziellen YouTube-App öffnen statt im eingebauten Player. */
     var youtubeExternal: Boolean
         get() = prefs.getBoolean("ytExternal", false)

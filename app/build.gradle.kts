@@ -117,6 +117,8 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-exoplayer-dash:$media3")
     implementation("androidx.media3:media3-ui:$media3")
+    // OkHttp als Verbindung für den Player (stabiler bei IPTV-Servern: Verbindungen wiederverwenden, sauberes Neuverbinden)
+    implementation("androidx.media3:media3-datasource-okhttp:$media3")
 
     // Poster und Bilder für Filme & Serien
     implementation("io.coil-kt:coil-compose:2.7.0")

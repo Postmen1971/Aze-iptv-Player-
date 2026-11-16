@@ -526,6 +526,8 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         private set
     var showDiag by mutableStateOf(store.showDiag)
         private set
+    var okHttpPlayer by mutableStateOf(store.okHttpPlayer)
+        private set
 
     /** Zum Ausprobieren (Einstellungen → System): schnelles Umschalten / schnellerer Wächter bei stehendem Bild */
     var zapFast by mutableStateOf(store.zapFast)
@@ -594,6 +596,11 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     fun updateMultiViewOn(on: Boolean) {
         multiViewOn = on
         store.multiViewOn = on
+    }
+
+    fun updateOkHttpPlayer(on: Boolean) {
+        okHttpPlayer = on
+        store.okHttpPlayer = on
     }
 
     fun updateShowDiag(on: Boolean) {

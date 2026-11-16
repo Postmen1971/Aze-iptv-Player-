@@ -967,7 +967,8 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
     val rootFocus = remember { FocusRequester() }
 
     val player = remember {
-        val http = DefaultHttpDataSource.Factory().setUserAgent(Http.USER_AGENT).setAllowCrossProtocolRedirects(true)
+        // Filme: Standard-Zeiten von Media3 (8 s Verbinden/Lesen) – wie bisher, nur wahlweise über OkHttp
+        val http = Http.playerFactory(app.okHttpPlayer, connectMs = 8_000, readMs = 8_000)
         ExoPlayer.Builder(context)
             .setRenderersFactory(
                 (if (app.audioDelay != 0) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context)).setEnableDecoderFallback(true),

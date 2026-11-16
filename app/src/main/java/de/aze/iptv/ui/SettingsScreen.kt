@@ -1082,6 +1082,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
                 "„Je Sender“ stellt bei jedem Sender passend um.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
+        TvSwitch("OkHttp für den Player", "Andere Verbindungstechnik für Live und Filme – bei Hängern zum Vergleich aus- und einschalten", app.okHttpPlayer) { app.updateOkHttpPlayer(!app.okHttpPlayer) }
         TvSwitch("Fehlersuche-Anzeige", "Messzeile oben links (Bilder/s, Vorrat, Zustand)", app.showDiag) { app.updateShowDiag(!app.showDiag) }
         TvSwitch("Multi-View (Beta)", "2 Sender gleichzeitig – jedes Bild ist eine eigene Verbindung; aus = nicht im Schnellmenü", app.multiViewOn) { app.updateMultiViewOn(!app.multiViewOn) }
       }
@@ -1485,7 +1486,7 @@ private fun HangLogSection(app: AppController) {
 private fun hangHeader(app: AppController): String =
     "Aze-IPTV-Player ${BuildConfig.VERSION_NAME}\n" +
         "Gerät: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})\n" +
-        "Puffer: ${app.bufferLevel.label} · Player: ${app.playerEngine.label} · Tunneling: ${app.tunneling} · " +
+        "Puffer: ${app.bufferLevel.label} · Player: ${app.playerEngine.label} · Tunneling: ${app.tunneling} · OkHttp: ${app.okHttpPlayer} · " +
         "Frequenz: ${if (app.afr50) "50 Hz" else if (app.afr) "je Sender" else "nie"} (Wartezeit ${app.afrDelay} s) · " +
         "Ton-Versatz: ${app.audioDelay} ms"
 

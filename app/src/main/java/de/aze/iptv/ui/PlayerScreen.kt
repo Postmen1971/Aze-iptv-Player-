@@ -122,28 +122,17 @@ fun PlayerScreen(
     // (Sender mit eigenem Versatz), und das kostete jedes Mal Decoder-Neustart und eine kurze Blockade.
     val maxLead = (app.audioDelay + (app.audioDelays.values.maxOrNull() ?: 0).coerceAtLeast(0)).coerceIn(0, 3_000)
     val audioLeadMs = ((maxLead + 499) / 500) * 500
-    val http = remember {
-        DefaultHttpDataSource.Factory()
-            .setUserAgent(Http.USER_AGENT)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            // Live-Sender schicken laufend Daten: 10 s Stille heißt Verbindung tot (vorher 20 s Standbild)
-            .setReadTimeoutMs(10_000)
-    }
+    val okHttp = app.okHttpPlayer
+    // Live-Sender schicken laufend Daten: 10 s Stille heißt Verbindung tot (vorher 20 s Standbild)
+    val http = remember(okHttp) { Http.playerFactory(okHttp, connectMs = 15_000, readMs = 10_000) }
     // Nahtloses Neuverbinden, wenn der Anbieter den Stream beendet (siehe LiveSource)
     // Live-Sender lesen mit 20 s Geduld. Viele Anbieter schicken erst einen großen Vorrat und danach nur noch stoßweise
     // mit Pausen von mehreren Sekunden. Eine kürzere Lesezeit (4 s in 1.0.255, auch die alten 10 s gelegentlich) hielt
     // so eine Pause für eine tote Leitung; nach dem Neuverbinden kam derselbe Vorrat noch einmal → Szenen liefen doppelt.
     // Android schließt die Verbindung bei Zeitablauf selbst – „einfach weiterlesen“ geht danach nicht.
     // Eine wirklich tote Leitung bemerkt der Wächter am leeren Vorrat (puffert 5 s ohne Fortschritt → neu verbinden).
-    val httpLive = remember {
-        DefaultHttpDataSource.Factory()
-            .setUserAgent(Http.USER_AGENT)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
-    }
-    val live = remember { de.aze.iptv.player.LiveSource(context, httpLive) }
+    val httpLive = remember(okHttp) { Http.playerFactory(okHttp, connectMs = 15_000, readMs = 20_000) }
+    val live = remember(httpLive) { de.aze.iptv.player.LiveSource(context, httpLive) }
     /** Zeitpunkt des letzten Senderwechsels (0 = keiner offen) – für die Messung der Umschaltzeit */
     val zapStartedAt = remember { longArrayOf(0L) }
     // Zeitpunkt des letzten Senderwechsels (für die kurze Wartezeit beim einzelnen Umschalten)
@@ -152,7 +141,7 @@ fun PlayerScreen(
     val playerViewRef = remember { arrayOfNulls<PlayerView>(1) }
     // muss VOR player.stop() gesetzt sein – darum direkt an der Bildfläche, nicht über den Compose-Zustand
     fun keepFrame(on: Boolean) { playerViewRef[0]?.setKeepContentOnPlayerReset(on) }
-    val player = remember(level, tunnel, syncUsed, audioLeadMs) {
+    val player = remember(level, tunnel, syncUsed, audioLeadMs, okHttp) {
         ExoPlayer.Builder(context)
             .setRenderersFactory(
                 (if (syncUsed) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context)).setEnableDecoderFallback(true),

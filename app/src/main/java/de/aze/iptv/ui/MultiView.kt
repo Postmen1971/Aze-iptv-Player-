@@ -354,17 +354,13 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
     val chNow by androidx.compose.runtime.rememberUpdatedState(channel)
     /** Portal-Sender: hochzählen = Link neu holen und Sender neu starten */
     var reload by remember { mutableIntStateOf(0) }
-    val http = remember {
-        DefaultHttpDataSource.Factory()
-            .setUserAgent(Http.USER_AGENT)
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            // 20 s Geduld wie im normalen Bild (1.0.272): kürzere Lesezeiten halten Sendepausen des Anbieters für eine
+    val http = remember(app.okHttpPlayer) {
+        // 20 s Geduld wie im normalen Bild (1.0.272): kürzere Lesezeiten halten Sendepausen des Anbieters für eine
             // tote Leitung, verbinden neu und der Anbieter schickt denselben Vorrat noch einmal → Szenen laufen doppelt.
-            // Bei 4 Bildern teilen sich die Verbindungen die Leitung, die Pausen sind dann eher länger.
-            .setReadTimeoutMs(20_000)
+        // Bei 4 Bildern teilen sich die Verbindungen die Leitung, die Pausen sind dann eher länger.
+        Http.playerFactory(app.okHttpPlayer, connectMs = 15_000, readMs = 20_000)
     }
-    val live = remember { de.aze.iptv.player.LiveSource(context, http) }
+    val live = remember(http) { de.aze.iptv.player.LiveSource(context, http) }
     val viewRef = remember { arrayOfNulls<androidx.media3.ui.PlayerView>(1) }
     val player = remember {
         ExoPlayer.Builder(context)

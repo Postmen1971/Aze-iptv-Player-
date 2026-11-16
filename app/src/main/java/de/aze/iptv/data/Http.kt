@@ -9,6 +9,37 @@ import java.net.URL
 /** Kleine HTTP-Hilfe, die auch Weiterleitungen zwischen http und https folgt. */
 object Http {
 
+    /** Gemeinsamer OkHttp-Client für den Player – ein Verbindungs-Pool für Live und Filme. */
+    private val playerClient: okhttp3.OkHttpClient by lazy {
+        okhttp3.OkHttpClient.Builder()
+            .connectionPool(okhttp3.ConnectionPool(5, 5, java.util.concurrent.TimeUnit.MINUTES))
+            .followRedirects(true)
+            // wie setAllowCrossProtocolRedirects(true): http ↔ https folgen
+            .followSslRedirects(true)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+
+    /**
+     * Verbindung für den Player. [okHttp] = true: OkHttp (Einstellung „OkHttp für den Player“),
+     * sonst Androids Standard (HttpURLConnection) wie bis 1.0.281. Zeiten gelten in beiden Fällen gleich.
+     */
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+    fun playerFactory(okHttp: Boolean, connectMs: Int, readMs: Int): androidx.media3.datasource.HttpDataSource.Factory =
+        if (okHttp) {
+            val client = playerClient.newBuilder()
+                .connectTimeout(connectMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(readMs.toLong(), java.util.concurrent.TimeUnit.MILLISECONDS)
+                .build()
+            androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(client).setUserAgent(USER_AGENT)
+        } else {
+            androidx.media3.datasource.DefaultHttpDataSource.Factory()
+                .setUserAgent(USER_AGENT)
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(connectMs)
+                .setReadTimeoutMs(readMs)
+        }
+
     // Viele IPTV-Anbieter lassen nur bekannte Player zu – deshalb wie VLC melden.
     const val USER_AGENT = "VLC/3.0.20 LibVLC/3.0.20"
 
