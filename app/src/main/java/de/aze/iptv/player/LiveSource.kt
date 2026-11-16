@@ -44,6 +44,17 @@ class LiveSource(context: Context, http: HttpDataSource.Factory) {
     private val policy = livePolicy()
     private val adaptive = DefaultMediaSourceFactory(plain).setLoadErrorHandlingPolicy(policy)
     private val progressive = ProgressiveMediaSource.Factory(endOnDrop).setLoadErrorHandlingPolicy(policy)
+    /**
+     * Für Folge-Verbindungen, bei denen Doppeltes übersprungen wird: Der Einstieg liegt am nächsten Einstiegsbild des
+     * Anbieters. Manche Sender (z. B. TEVE 2) setzen die Einstiegsmarke auf Vollbilder, die Media3 sonst NICHT als
+     * Einstieg akzeptiert („kein IDR“) – dann stand das Bild nach dem Übergang mehrere Sekunden. Mit diesem Schalter
+     * zählen auch diese Vollbilder; schlimmstenfalls ist das allererste Bild nach dem Übergang kurz unsauber.
+     */
+    private val progressiveRejoin = ProgressiveMediaSource.Factory(
+        endOnDrop,
+        androidx.media3.extractor.DefaultExtractorsFactory()
+            .setTsExtractorFlags(androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES),
+    ).setLoadErrorHandlingPolicy(policy)
 
     /** Ein durchgehender Stream (.ts o. ä.) – nur dafür wird nahtlos neu verbunden. HLS/DASH regeln das selbst. */
     fun isProgressive(item: MediaItem): Boolean {
@@ -63,7 +74,7 @@ class LiveSource(context: Context, http: HttpDataSource.Factory) {
     private fun createRejoin(item: MediaItem): MediaSource {
         val last = track.last
         if (!isProgressive(item) || last < 0) return create(item)
-        return progressive.createMediaSource(item.buildUpon().setCustomCacheKey(CUT_PREFIX + last).build())
+        return progressiveRejoin.createMediaSource(item.buildUpon().setCustomCacheKey(CUT_PREFIX + last).build())
     }
 
     /**
