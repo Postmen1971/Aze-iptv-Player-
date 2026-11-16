@@ -359,7 +359,10 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
             .setUserAgent(Http.USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(10_000)
+            // 20 s Geduld wie im normalen Bild (1.0.272): kürzere Lesezeiten halten Sendepausen des Anbieters für eine
+            // tote Leitung, verbinden neu und der Anbieter schickt denselben Vorrat noch einmal → Szenen laufen doppelt.
+            // Bei 4 Bildern teilen sich die Verbindungen die Leitung, die Pausen sind dann eher länger.
+            .setReadTimeoutMs(20_000)
     }
     val live = remember { de.aze.iptv.player.LiveSource(context, http) }
     val viewRef = remember { arrayOfNulls<androidx.media3.ui.PlayerView>(1) }
