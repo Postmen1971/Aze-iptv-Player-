@@ -222,11 +222,11 @@ internal object Ts {
         if (sid !in 0xE0..0xEF) return -1
         if ((b[s + 7].toInt() and 0x80) == 0) return -1
         val t = s + 9
-        return ((b[t].toLong() shr 1) and 7 shl 30) or
-            ((b[t + 1].toLong() and 0xFF) shl 22) or
-            (((b[t + 2].toLong() and 0xFF) shr 1) shl 15) or
-            ((b[t + 3].toLong() and 0xFF) shl 7) or
-            ((b[t + 4].toLong() and 0xFF) shr 1)
+        return (((b[t].toLong() shr 1) and 7L) shl 30) or
+            ((b[t + 1].toLong() and 0xFFL) shl 22) or
+            (((b[t + 2].toLong() and 0xFFL) shr 1) shl 15) or
+            ((b[t + 3].toLong() and 0xFFL) shl 7) or
+            ((b[t + 4].toLong() and 0xFFL) shr 1)
     }
 
     /** a − b mit Überlauf (33 Bit), Ergebnis mit Vorzeichen. */

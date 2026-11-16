@@ -34,11 +34,11 @@ class LiveCutTest {
 
     private fun video(pts: Long, key: Boolean): ByteArray {
         val t = byteArrayOf(
-            (0x21 or (((pts shr 30) and 7) shl 1).toInt()).toByte(),
-            ((pts shr 22) and 0xFF).toByte(),
-            ((((pts shr 15) and 0x7F) shl 1) or 1).toByte(),
-            ((pts shr 7) and 0xFF).toByte(),
-            (((pts and 0x7F) shl 1) or 1).toByte(),
+            (0x21L or (((pts shr 30) and 7L) shl 1)).toInt().toByte(),
+            ((pts shr 22) and 0xFFL).toInt().toByte(),
+            ((((pts shr 15) and 0x7FL) shl 1) or 1L).toInt().toByte(),
+            ((pts shr 7) and 0xFFL).toInt().toByte(),
+            (((pts and 0x7FL) shl 1) or 1L).toInt().toByte(),
         )
         return pkt(0x100, true, key, byteArrayOf(0, 0, 1, 0xE0.toByte(), 0, 0, 0x80.toByte(), 0x80.toByte(), 5) + t)
     }
