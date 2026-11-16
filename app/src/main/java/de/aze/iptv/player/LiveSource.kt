@@ -301,6 +301,7 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
     private var scanPos = 0
     private var filterPos = 0
     private var logged = false
+    private var keptMedia = false
     private val kept = java.io.ByteArrayOutputStream()
     private var out: ByteArray? = null
     private var outPos = 0
@@ -323,7 +324,7 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
         got = 0; accLen = 0; dropped = 0; firstPts = -1; latestPts = -1; t0 = 0; relax = false
         out = null; outPos = 0; tbLen = 0; connMax = -1
         if (acc.size < 256 * 1024) acc = ByteArray(256 * 1024)
-        pmts.clear(); seenPes.clear(); started.clear(); videoPid = -1; scanPos = 0; filterPos = 0; logged = false
+        pmts.clear(); seenPes.clear(); started.clear(); videoPid = -1; scanPos = 0; filterPos = 0; logged = false; keptMedia = false
         kept.reset()
         cut = cutPts
         phase = if (cut >= 0) 1 else 0
@@ -431,7 +432,7 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
                     }
                     keep = pid in started
                 }
-                if (keep) kept.write(acc, p, Ts.SIZE) else dropped += Ts.SIZE
+                if (keep) { kept.write(acc, p, Ts.SIZE); if (pid != 0 && pid !in pmts) keptMedia = true } else dropped += Ts.SIZE
                 p += Ts.SIZE
             }
             // verarbeitete Bytes aus dem Sammelpuffer nehmen
@@ -464,7 +465,8 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
             }
             if (dropped > 24L * 1024 * 1024) { phase = 0; return emit(kept.toByteArray().also { kept.reset() } + passBytes()) }
             // schon Neues da (z. B. Ton): sofort weitergeben, damit der Player nicht leerläuft
-            if (kept.size() > 0) return emit(kept.toByteArray().also { kept.reset() })
+            // (nur Tabellen allein noch nicht – sonst bekäme der Player eine „leere“ Verbindung)
+            if (keptMedia && kept.size() > 0) return emit(kept.toByteArray().also { kept.reset() })
         }
         return true
     }
