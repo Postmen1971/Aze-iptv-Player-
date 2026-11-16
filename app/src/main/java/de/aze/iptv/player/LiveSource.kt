@@ -266,6 +266,11 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
     private var accLen = 0
     private var dropped = 0L
     private var firstPts = -1L
+    private var latestPts = -1L
+    private var t0 = 0L
+    /** Kein Rückblick-Vorrat, sondern laufendes Programm mit neuer Zeitrechnung: am nächsten Schlüsselbild einsteigen. */
+    private var relax = false
+    private var relaxAt = 0L
     private val pmts = HashSet<Int>()
     private val psi = LinkedHashMap<Int, ByteArray>()
     private var out: ByteArray? = null
@@ -286,7 +291,8 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
 
     /** Neue Verbindung: [cutPts] ≥ 0 = alles bis zu diesem Bild-Zeitstempel ist schon gezeigt. */
     internal fun begin(cutPts: Long) {
-        got = 0; accLen = 0; dropped = 0; firstPts = -1; out = null; outPos = 0; tbLen = 0; connMax = -1
+        got = 0; accLen = 0; dropped = 0; firstPts = -1; latestPts = -1; t0 = 0; relax = false
+        out = null; outPos = 0; tbLen = 0; connMax = -1
         if (acc.size < 256 * 1024) acc = ByteArray(256 * 1024)
         pmts.clear(); psi.clear()
         cut = cutPts
@@ -328,6 +334,7 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
         while (phase != 0) {
             val n = upRead(tmp, 0, tmp.size)
             if (n == C.RESULT_END_OF_INPUT) { phase = 0; return false }
+            if (t0 == 0L) t0 = android.os.SystemClock.elapsedRealtime()
             if (accLen + n > acc.size) acc = acc.copyOf(maxOf(acc.size * 2, accLen + n))
             System.arraycopy(tmp, 0, acc, accLen, n)
             accLen += n
@@ -340,11 +347,17 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
                 val pts = Ts.videoPts(acc, p)
                 if (pts >= 0) {
                     val d = Ts.diff(pts, cut)
+                    latestPts = pts
                     if (phase == 1) {
                         firstPts = pts
                         // nichts doppelt (schon neuer) oder ganz andere Zeitrechnung: alles wie bisher weitergeben
                         if (d > 0 || d < -60L * 90_000) { finish(0, keepPsi = false, overlap = 0); return true }
                         phase = 2
+                    }
+                    // (sendet der Anbieter keine Einstiegs-Markierung: nach 1,5 s am nächsten Bild)
+                    if (phase == 2 && relax && (Ts.rai(acc, p) || android.os.SystemClock.elapsedRealtime() - relaxAt > 1_500)) {
+                        finish(p, keepPsi = true, overlap = -1)
+                        return true
                     }
                     if (phase == 2 && d > 0 && (Ts.rai(acc, p) || d > 2L * 90_000)) {
                         finish(p, keepPsi = true, overlap = Ts.diff(cut, firstPts))
@@ -355,6 +368,18 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
             }
             // noch kein Bild gefunden: nicht endlos sammeln (z. B. Radio ohne Bild) → wie bisher weitergeben
             if (phase == 1 && accLen > 1024 * 1024) { finish(0, keepPsi = false, overlap = 0); return true }
+            if (phase == 2 && !relax) {
+                // Kommt der Rückblick-Vorrat nicht im Schnelldurchlauf (Anbieter beginnt jede Verbindung mit neuer
+                // Zeitrechnung und liefert in Echtzeit), würde das Warten bis hinter [cut] lange Schwarzbild kosten.
+                // Dauert es voraussichtlich länger als 4 s: nicht weiter überspringen, am nächsten Schlüsselbild rein.
+                val ms = android.os.SystemClock.elapsedRealtime() - t0
+                if (ms >= 1_000 && firstPts >= 0 && latestPts >= 0) {
+                    val span = Ts.diff(latestPts, firstPts) / 90_000.0
+                    val rate = maxOf(span / (ms / 1000.0), 0.1)
+                    val left = Ts.diff(cut, latestPts) / 90_000.0
+                    if (left / rate > 4.0) { relax = true; relaxAt = android.os.SystemClock.elapsedRealtime() }
+                }
+            }
             if (phase == 2) {
                 // alles vor p ist schon gezeigt – wegwerfen (Tabellen PAT/PMT werden gemerkt)
                 dropped += p
