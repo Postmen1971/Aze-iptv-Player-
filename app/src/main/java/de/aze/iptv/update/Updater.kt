@@ -46,7 +46,11 @@ object Updater {
                 val a = assets.getJSONObject(i)
                 val url = a.optString("browser_download_url")
                 // Nur APKs aus diesem GitHub-Repository
-                if (a.optString("name").endsWith(".apk") && url.startsWith("https://github.com/${BuildConfig.UPDATE_REPO}/")) apks.add(a)
+                val name = a.optString("name")
+                // Vergleichs-App „Aze alt“ nimmt nur ihre eigenen APKs, die normale App nie diese
+                if (name.endsWith(".apk") && url.startsWith("https://github.com/${BuildConfig.UPDATE_REPO}/") &&
+                    name.startsWith("Aze-alt-") == BuildConfig.ALT
+                ) apks.add(a)
             }
         }
         val abis = if (Build.VERSION.SDK_INT >= 21) Build.SUPPORTED_ABIS.toList() else emptyList()

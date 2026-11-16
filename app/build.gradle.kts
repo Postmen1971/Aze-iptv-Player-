@@ -7,6 +7,9 @@ plugins {
 // Versionsnummer kommt aus dem GitHub-Build (Laufnummer). Lokal: 1.
 val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 val keystoreFile = System.getenv("KEYSTORE_FILE")
+// Vergleichs-App „Aze alt“: gleicher Code, aber alter Abspiel-Baustein (Media3 1.5.1), eigene App neben der normalen.
+// Bauen mit:  gradle :app:assembleRelease -Palt=true
+val alt = (findProperty("alt") as String?) == "true"
 
 android {
     namespace = "de.aze.iptv"
@@ -20,6 +23,10 @@ android {
         versionName = "1.0.$buildNumber"
         vectorDrawables.useSupportLibrary = true
         buildConfigField("String", "UPDATE_REPO", "\"Postmen1971/Aze-iptv-Player-\"")
+        // Vergleichs-App: eigener Name und eigene Kennung (läuft neben der normalen), holt nur „alt“-Updates
+        buildConfigField("boolean", "ALT", alt.toString())
+        manifestPlaceholders["appLabel"] = if (alt) "Aze alt" else "@string/app_name"
+        if (alt) applicationIdSuffix = ".alt"
         // TMDB-Schlüssel für Ersatz-Cover: kommt aus dem GitHub-Secret TMDB_KEY (leer = aus)
         buildConfigField("String", "TMDB_KEY", "\"${(System.getenv("TMDB_KEY") ?: "").filter { it.isLetterOrDigit() }}\"")
         // Test-Zugänge (Start-Parameter für die Test-Playlist) – nur im Test-Build "qa" an
@@ -104,7 +111,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
-    val media3 = "1.11.1"
+    val media3 = if (alt) "1.5.1" else "1.11.1"
     implementation("androidx.media3:media3-exoplayer:$media3")
     implementation("androidx.media3:media3-extractor:$media3")
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
