@@ -426,7 +426,10 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
                             val ok = if (Ts.isVideo(sid)) {
                                 if (relax) Ts.rai(acc, p) || android.os.SystemClock.elapsedRealtime() - relaxAt > 1_500
                                 else d > 0 && (Ts.rai(acc, p) || d > 2L * 90_000)
-                            } else relax || d > 0
+                            } else if (relax) {
+                                // neue Zeitrechnung: hier gibt es keinen „nahtlosen“ Ton – Ton erst zusammen mit dem Bild
+                                videoPid >= 0 && videoPid in started
+                            } else d > 0
                             if (ok) started.add(pid)
                         }
                     }
