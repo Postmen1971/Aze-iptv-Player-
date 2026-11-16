@@ -196,6 +196,8 @@ fun PlayerScreen(
     val fullRestart = remember { booleanArrayOf(false) }
     /** Stream-Enden kurz hintereinander: [Anzahl, Zeitpunkt des letzten] – für die wachsende Pause vor dem Neuverbinden */
     val endedRuns = remember { longArrayOf(0L, 0L) }
+    /** Zeitpunkt des letzten nahtlosen Übergangs (Folge-Verbindung) – danach darf das Bild kurz auf ein Schlüsselbild warten */
+    val switchedAt = remember { longArrayOf(0L) }
     var switching by remember { mutableStateOf(false) }
     val probe = remember(player) {
         FpsProbe { fps ->
@@ -309,7 +311,10 @@ fun PlayerScreen(
 
             frozen = if (!switching && ready && hasVideo && firstFrameSeen && !pictureMoving) frozen + 1 else 0
             // Zeitsprung im Stream: Uhr/Ton läuft, Vorrat da, aber kein neues Bild (Bilder „noch nicht dran“) → nach 3 s neu
-            jump = if (!switching && !app.tunneling && player.isPlaying && hasVideo && firstFrameSeen &&
+            // Ausnahme: kurz nach einem nahtlosen Übergang läuft der Ton schon weiter, während das Bild auf das nächste
+            // Schlüsselbild wartet (Doppeltes übersprungen) – das ist gewollt und kein Zeitsprung (bis 6 s).
+            val afterSwitch = android.os.SystemClock.elapsedRealtime() - switchedAt[0] < 6_000
+            jump = if (!switching && !app.tunneling && !afterSwitch && player.isPlaying && hasVideo && firstFrameSeen &&
                 lastFrames >= 0 && f == lastFrames && lastPos >= 0 && pos != lastPos && buffered - pos > 1_000
             ) jump + 1 else 0
             starved = if (!switching && buffering && buffered == lastBuffered && (firstFrameSeen || sinceStart >= 10_000)) starved + 1 else 0
@@ -608,7 +613,7 @@ fun PlayerScreen(
         val detachLive = live.attach(
             player,
             onRejoin = { qaLog("REJOIN ${app.current?.channel?.name}") },
-            onSwitch = { qaLog("TRANSITION ${app.current?.channel?.name}") },
+            onSwitch = { switchedAt[0] = android.os.SystemClock.elapsedRealtime(); qaLog("TRANSITION ${app.current?.channel?.name}") },
         )
         onDispose {
             retryJob?.cancel()
