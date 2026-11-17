@@ -301,6 +301,11 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                             app.zapFast,
                         ) { app.updateZapFast(!app.zapFast) }
                         TvSwitch(
+                            "Kein Schwarz beim Umschalten",
+                            "Ein = das alte Bild bleibt stehen, bis der neue Sender sein erstes Bild hat · Aus = dazwischen kurz schwarz (wie früher).",
+                            app.holdFrame,
+                        ) { app.updateHoldFrame(!app.holdFrame) }
+                        TvSwitch(
                             "Stehendes Bild schneller beheben",
                             "Ein = Neuverbinden schon nach 4 s Standbild · Aus = nach 6 s (bewährt). Aus, falls das Bild dadurch öfter kurz neu startet.",
                             app.freezeFast,

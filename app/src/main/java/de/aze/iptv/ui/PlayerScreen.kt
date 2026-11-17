@@ -690,8 +690,9 @@ fun PlayerScreen(
             lastZapAt[0] = nowZap
             zapStartedAt[0] = nowZap
         }
-        // neuer Sender: altes Bild nicht stehen lassen; gleicher Sender (Neustart): letztes Bild halten
-        keepFrame(startedKey == ch.key)
+        // gleicher Sender (Neustart): letztes Bild halten. Neuer Sender: mit „Bild halten“ (Standard) bleibt das alte
+        // Bild stehen, bis das neue da ist – kein Schwarz dazwischen, Umschalten wirkt sofort. Aus = wie früher schwarz.
+        keepFrame(startedKey == ch.key || app.holdFrame)
         startedKey = ch.key
         noPicture = true
         ytError = null

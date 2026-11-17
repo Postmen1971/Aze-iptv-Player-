@@ -534,6 +534,9 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         private set
 
     fun updateZapFast(on: Boolean) { zapFast = on; store.zapFast = on }
+    var holdFrame by mutableStateOf(store.holdFrame)
+        private set
+    fun updateHoldFrame(on: Boolean) { holdFrame = on; store.holdFrame = on }
     fun updateFreezeFast(on: Boolean) { freezeFast = on; store.freezeFast = on }
 
     /** Bis wann der Bildschirm noch mit dem Umschalten beschäftigt ist (Wiedergabe so lange zurückhalten). */

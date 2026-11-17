@@ -216,6 +216,11 @@ class Store(context: Context) {
         get() = prefs.getBoolean("zapFast", true)
         set(v) = prefs.edit().putBoolean("zapFast", v).apply()
 
+    /** Beim Umschalten das letzte Bild des alten Senders stehen lassen, bis das neue da ist (statt Schwarz). */
+    var holdFrame: Boolean
+        get() = prefs.getBoolean("holdFrame", true)
+        set(v) = prefs.edit().putBoolean("holdFrame", v).apply()
+
     /** Wächter greift bei stehendem Bild schon nach 4 s statt 6 s ein – zum Ausprobieren, Standard aus */
     var freezeFast: Boolean
         get() = prefs.getBoolean("freezeFast", false)
