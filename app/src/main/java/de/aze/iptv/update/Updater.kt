@@ -47,16 +47,19 @@ object Updater {
                 val url = a.optString("browser_download_url")
                 // Nur APKs aus diesem GitHub-Repository
                 val name = a.optString("name")
-                // Vergleichs-App „Aze alt“ nimmt nur ihre eigenen APKs, die normale App nie diese
+                // Vergleichs-App „Aze-IPTV-46“ nimmt nur ihre eigenen APKs (Aze-IPTV-46_<abi>.apk), die normale App nie
+                // diese. WICHTIG: deren Namen dürfen NICHT auf „-<abi>.apk“ enden und kein „universal“ enthalten –
+                // ältere Versionen der normalen App (bis 1.0.287) hätten sonst die Vergleichs-App als Update geladen.
                 if (name.endsWith(".apk") && url.startsWith("https://github.com/${BuildConfig.UPDATE_REPO}/") &&
-                    name.startsWith("Aze-alt-") == BuildConfig.ALT
+                    !name.startsWith("Aze-alt-") && name.startsWith("Aze-IPTV-46_") == BuildConfig.ALT
                 ) apks.add(a)
             }
         }
         val abis = if (Build.VERSION.SDK_INT >= 21) Build.SUPPORTED_ABIS.toList() else emptyList()
         // Passende APK: nach Prozessor-Typ, sonst „universal“ – nie eine beliebige andere
-        val apk = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { it.optString("name").endsWith("-$abi.apk") } }
-            ?: apks.firstOrNull { it.optString("name").contains("universal") }
+        val sep = if (BuildConfig.ALT) "_" else "-"
+        val apk = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { it.optString("name").endsWith("$sep$abi.apk") } }
+            ?: apks.firstOrNull { val n = it.optString("name"); if (BuildConfig.ALT) n.endsWith("_alle.apk") else n.contains("universal") }
         if (apk == null || code <= BuildConfig.VERSION_CODE) null
         else Release(
             code, tag.removePrefix("v"), apk.optString("browser_download_url"), json.optString("body"),

@@ -97,7 +97,10 @@ jobs:
           if gradle :app:assembleRelease -Palt=true --stacktrace > build-alt.log 2>&1; then
             for f in app/build/outputs/apk/release/app-*-release.apk; do
               abi=$(basename "$f" | sed -e 's/^app-//' -e 's/-release.apk$//')
-              cp "$f" "out/Aze-alt-${abi}.apk"
+              [ "$abi" = "universal" ] && abi=alle
+              # Name darf NICHT auf „-<abi>.apk“ enden und kein „universal“ enthalten: ältere normale Apps (bis 1.0.287)
+              # hätten sonst diese Vergleichs-App als Update installiert (passiert am 16.11. mit Aze-alt-*.apk)
+              cp "$f" "out/Aze-IPTV-46_${abi}.apk"
             done
           else
             echo "::warning::Aze-IPTV-46 ließ sich nicht bauen"
