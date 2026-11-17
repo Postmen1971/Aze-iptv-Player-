@@ -159,8 +159,13 @@ class LiveSource(context: Context, http: HttpDataSource.Factory) {
     }
 
     companion object {
-        /** So kurz vor dem Ende des Vorrats wird die Folge-Verbindung geöffnet (Zeit für Verbinden + erstes Bild). */
-        const val REJOIN_LEAD_MS = 3_000L
+        /**
+         * So viel Vorrat ist noch übrig, wenn die Folge-Verbindung geöffnet wird. 3 s (1.0.269) reichte nicht: liefert
+         * der Anbieter die neue Verbindung NICHT im Schnelldurchlauf (Now TV, 17.11.), lief der Vorrat nach dem
+         * Überspringen des Doppelten leer → Puffern, Wächter. Seit das Doppelte übersprungen wird (1.0.281), kostet
+         * früheres Neuverbinden keine Wiederholung mehr – also mehr Sicherheitsabstand.
+         */
+        const val REJOIN_LEAD_MS = 10_000L
 
         /** Schlüssel-Vorsatz einer Folge-Verbindung: dahinter der PTS des zuletzt empfangenen Bildes. */
         internal const val CUT_PREFIX = "aze-cut:"
