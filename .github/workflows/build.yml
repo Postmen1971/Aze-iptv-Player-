@@ -128,7 +128,7 @@ jobs:
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_test) }}
     # feste Ubuntu-Version: auf dem neuen Abbild hing die ffmpeg-Installation (Lauf brach nach 40 min ab)
     runs-on: ubuntu-24.04
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
