@@ -12,3 +12,9 @@
 
 # Fehlermeldungen lesbar halten
 -keepattributes SourceFile,LineNumberTable
+
+# Umschalten: die App schaltet „dynamic scheduling“ von Media3 per Namen ab (Name je nach Media3-Version anders) –
+# ohne diese Regel benennt R8 die Methode um bzw. entfernt sie, und der Aufruf geht ins Leere.
+-keepclassmembers class androidx.media3.exoplayer.ExoPlayer$Builder {
+    *** *DynamicScheduling*(...);
+}

@@ -183,11 +183,11 @@ fun PlayerScreen(
                 // Media3 1.11 schaltet „dynamic scheduling“ neu ein (Arbeitsschleife nicht mehr im festen Takt).
                 // Aziz: Umschalten war mit 1.9.4 schneller → aus, wie bis 1.9.4. Per Name, weil die Methode je nach
                 // Media3-Version anders heißt (Vergleichs-App mit 1.5.1); fehlt sie, bleibt alles wie es ist.
-                for (m in listOf("experimentalSetDynamicSchedulingEnabled", "setDynamicSchedulingEnabled")) {
-                    if (runCatching { b.javaClass.getMethod(m, Boolean::class.javaPrimitiveType).invoke(b, false) }.isSuccess) {
-                        qaLog("PLANUNG_FEST $m"); break
-                    }
+                val m = b.javaClass.methods.firstOrNull {
+                    it.name.contains("DynamicScheduling") && it.parameterTypes.contentEquals(arrayOf(Boolean::class.javaPrimitiveType))
                 }
+                if (m != null && runCatching { m.invoke(b, false) }.isSuccess) qaLog("PLANUNG_FEST ${m.name}")
+                else qaLog("PLANUNG_FEST fehlt")
             }
             .build()
             .apply {
