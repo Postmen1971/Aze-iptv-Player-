@@ -143,6 +143,15 @@ class MainActivity : ComponentActivity() {
                     app.addSource(de.aze.iptv.data.PlaylistSource(java.util.UUID.randomUUID().toString(), "Test", de.aze.iptv.data.SourceType.M3U, url))
                 }
             }
+            // einen bestimmten Sender (nach Adresse) abspielen, sobald er in der Liste ist
+            intent?.getStringExtra("aze_test_play_url")?.let { url ->
+                lifecycleScope.launch {
+                    repeat(120) {
+                        app.lineup.all.firstOrNull { it.channel.url == url }?.let { ch -> app.play(ch); de.aze.iptv.ui.qaLog("TEST_PLAY ${ch.channel.name}"); return@launch }
+                        kotlinx.coroutines.delay(500)
+                    }
+                }
+            }
         }
         if (crashFile.exists()) {
             val first = runCatching { crashFile.readLines().take(2).joinToString(" · ") }.getOrDefault("")

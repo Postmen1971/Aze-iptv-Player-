@@ -647,7 +647,8 @@ adb shell wm size reset; adb shell wm density reset
 
 log "== Test 16: Sender mit Dolby-Ton (AC3) – Ton-Umwandler in der App springt ein, Bild und Ton laufen"
 c=$(count "FIRST_FRAME Test D"); cd0=$(count "TON_DECODER"); ce0=$(count "ERROR ")
-adb shell am start -S -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/dolby.m3u" >/dev/null
+adb shell wm size reset; adb shell wm density reset
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv --es aze_test_playlist "http://10.0.2.2:8090/dolby.m3u" --es aze_test_play_url "http://10.0.2.2:8090/dolby.ts" >/dev/null
 if wait_for "FIRST_FRAME Test D" $((c+1)) 90 >/dev/null; then
   sleep 20; shot "test16-dolby"
   dec=$(qa | grep "TON_DECODER" | tail -n +$((cd0+1)) | tail -1 | sed 's/.*TON_DECODER //')
