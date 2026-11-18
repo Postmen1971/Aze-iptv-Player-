@@ -645,6 +645,21 @@ alive || fail "Fernseher: App nicht mehr da"
 hang_check "Fernseher" "$T15"
 adb shell wm size reset; adb shell wm density reset
 
+log "== Test 16: Sender mit Dolby-Ton (AC3) – Ton-Umwandler in der App springt ein, Bild und Ton laufen"
+c=$(count "FIRST_FRAME Test D"); cd0=$(count "TON_DECODER"); ce0=$(count "ERROR ")
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/dolby.m3u" >/dev/null
+if wait_for "FIRST_FRAME Test D" $((c+1)) 90 >/dev/null; then
+  sleep 20; shot "test16-dolby"
+  dec=$(qa | grep "TON_DECODER" | tail -n +$((cd0+1)) | tail -1 | sed 's/.*TON_DECODER //')
+  if [ -z "$dec" ]; then fail "Dolby: kein Ton-Entschlüssler gestartet (Ton fehlt)"
+  else note "Dolby-Ton" "Entschlüssler: $dec"; fi
+  [ "$(count "ERROR ")" -eq "$ce0" ] || fail "Dolby: Abspielfehler:$(qa | grep 'ERROR ' | tail -1 | sed 's/.*AzeQA *: //')"
+  w=$(qa | grep -c "WATCHDOG.*Test D" || true); [ "$w" -eq 0 ] || fail "Dolby: Wächter musste eingreifen ($w×)"
+else
+  fail "Dolby: Sender mit AC3-Ton startet nicht"
+fi
+alive || fail "Dolby: App nicht mehr da"
+
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
 if adb logcat -d -b crash | grep -q "$PKG"; then

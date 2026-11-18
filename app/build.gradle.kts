@@ -117,6 +117,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:$media3")
     implementation("androidx.media3:media3-exoplayer-dash:$media3")
     implementation("androidx.media3:media3-ui:$media3")
+    // Ton-Umwandler (FFmpeg) für Dolby AC3/E-AC3, wenn das Gerät den Ton selbst nicht abspielen kann.
+    // Fertig gebaute Fassung von Jellyfin (Maven Central); neueste ist für Media3 1.9 gebaut (läuft mit 1.11 –
+    // Emulator-Test 16 prüft das), die Vergleichs-App nimmt die zu 1.5 passende.
+    implementation(if (alt) "org.jellyfin.media3:media3-ffmpeg-decoder:1.5.0+1" else "org.jellyfin.media3:media3-ffmpeg-decoder:1.9.0+1")
 
     // Poster und Bilder für Filme & Serien
     implementation("io.coil-kt:coil-compose:2.7.0")

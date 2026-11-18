@@ -155,7 +155,11 @@ fun PlayerScreen(
     val player = remember(level, tunnel, syncUsed, audioLeadMs) {
         ExoPlayer.Builder(context)
             .setRenderersFactory(
-                (if (syncUsed) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context)).setEnableDecoderFallback(true),
+                (if (syncUsed) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context))
+                    .setEnableDecoderFallback(true)
+                    // Ton-Umwandler (FFmpeg) als Rückfall: springt nur ein, wenn das Gerät eine Tonart (z. B. Dolby
+                    // AC3/E-AC3) weder selbst abspielen noch weiterreichen kann. Alles andere läuft wie bisher.
+                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
             )
             // Audio-Fokus: bei Anrufen/anderen Apps leiser bzw. Pause, wie es Android erwartet
             .setAudioAttributes(
@@ -182,7 +186,39 @@ fun PlayerScreen(
                 (trackSelector as? androidx.media3.exoplayer.trackselection.DefaultTrackSelector)?.let { ts ->
                     ts.setParameters(ts.buildUponParameters().setTunnelingEnabled(tunnel))
                 }
+                // Welcher Ton-Entschlüssler läuft? Umwandler in der App → ins Protokoll (zur Fehlersuche)
+                addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+                    override fun onAudioDecoderInitialized(
+                        eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                        decoderName: String,
+                        initializedTimestampMs: Long,
+                        initializationDurationMs: Long,
+                    ) {
+                        qaLog("TON_DECODER $decoderName")
+                        if (decoderName.contains("ffmpeg", ignoreCase = true)) {
+                            de.aze.iptv.data.HangLog.add("TON_UMGEWANDELT ${app.current?.channel?.name} ($decoderName)")
+                        }
+                    }
+                })
             }
+    }
+
+    // Schnellmenü „Dolby-Ton umwandeln“ (nur für diesen Sender): den Ton-Weg des Geräts abschalten, damit der
+    // Umwandler in der App übernimmt. Für alle anderen Sender bleibt der Ton-Weg des Geräts an.
+    val dolbyForced = app.current?.channel?.key?.let { it in app.dolbyChannels } == true
+    LaunchedEffect(player, dolbyForced) {
+        val ts = player.trackSelector as? androidx.media3.exoplayer.trackselection.DefaultTrackSelector ?: return@LaunchedEffect
+        var platform = -1
+        var hasConverter = false
+        for (i in 0 until player.rendererCount) {
+            val r = player.getRenderer(i)
+            if (r is androidx.media3.exoplayer.audio.MediaCodecAudioRenderer) platform = i
+            if (r.javaClass.simpleName.contains("Ffmpeg")) hasConverter = true
+        }
+        // ohne Umwandler nie den Geräte-Ton abschalten (sonst wäre es ganz stumm)
+        if (platform < 0 || !hasConverter) return@LaunchedEffect
+        ts.setParameters(ts.buildUponParameters().setRendererDisabled(platform, dolbyForced))
+        qaLog("DOLBY_UMWANDELN ${if (dolbyForced) "an" else "aus"}")
     }
 
     // Bildwiederholrate an den Sender anpassen
@@ -1291,6 +1327,10 @@ fun PlayerScreen(
                     else TrackHelper.nextAudio(player)?.language?.let { app.updateAudioLanguage(it) }
                     tracksVersion++
                 },
+                // gilt nur für diesen Sender: kein Ton (z. B. Dolby auf Chromecast) → Ton in der App umwandeln
+                if (!useVlc && curCh != null) QuickItem("Dolby-Ton umwandeln", if (curCh.key in app.dolbyChannels) "an · nur hier" else "aus") {
+                    app.toggleDolby(curCh.key)
+                } else null,
                 if (app.multiViewOn) QuickItem("Multi-View", "Beta · 2 Sender") {
                     quickMenu = false
                     mvSecond = null

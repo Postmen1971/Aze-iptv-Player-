@@ -662,6 +662,15 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         store.saveChannelAspects(channelAspects)
     }
 
+    /** Dolby-Ton in der App umwandeln – gilt nur für diese Sender (Schnellmenü „Dolby-Ton umwandeln“). */
+    var dolbyChannels by mutableStateOf(runCatching { store.dolbyChannels() }.getOrDefault(emptySet()))
+        private set
+
+    fun toggleDolby(key: String) {
+        dolbyChannels = if (key in dolbyChannels) dolbyChannels - key else dolbyChannels + key
+        store.saveDolbyChannels(dolbyChannels)
+    }
+
     fun clearChannelAspects() {
         channelAspects = emptyMap()
         store.saveChannelAspects(channelAspects)

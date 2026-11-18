@@ -368,7 +368,10 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
     val viewRef = remember { arrayOfNulls<androidx.media3.ui.PlayerView>(1) }
     val player = remember {
         ExoPlayer.Builder(context)
-            .setRenderersFactory(DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+            .setRenderersFactory(
+                DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
+            )
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             // 10 MB je Bild (vorher 20): bei 4 Bildern sonst 80 MB – zu viel für Fire TV mit 1–2 GB
             .setLoadControl(PlaybackConfig.loadControl(context, app.bufferLevel, maxBytes = 10 * 1024 * 1024))

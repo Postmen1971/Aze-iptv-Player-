@@ -289,6 +289,12 @@ class Store(context: Context) {
         prefs.edit().putString("chAspects", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
     }
 
+    /** Sender, bei denen Dolby-Ton immer in der App umgewandelt wird (Schnellmenü „Dolby-Ton umwandeln“). */
+    fun dolbyChannels(): Set<String> = jsonMap(Secure.decrypt(prefs.getString("chDolby", "")) ?: "") { o, k -> o.getInt(k) }.keys
+    fun saveDolbyChannels(s: Set<String>) {
+        prefs.edit().putString("chDolby", Secure.encrypt(JSONObject(s.associateWith { 1 } as Map<*, *>).toString())).apply()
+    }
+
     fun audioDelays(): Map<String, Int> = jsonMap(Secure.decrypt(prefs.getString("audioDelays", "")) ?: "") { o, k -> o.getInt(k) }
 
     fun saveAudioDelays(m: Map<String, Int>) {

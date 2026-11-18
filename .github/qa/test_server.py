@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MEDIA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
-DURATION = {"ok.ts": 240.0, "vstop.ts": 150.0, "jump.ts": 135.0}
+DURATION = {"ok.ts": 240.0, "vstop.ts": 150.0, "jump.ts": 135.0, "dolby.ts": 120.0}
 
 PLAYLIST = """#EXTM3U
 #EXTINF:-1 group-title="QA",Test 1 Normal
@@ -76,6 +76,8 @@ class Handler(BaseHTTPRequestHandler):
             time.sleep(0.05)
             with open(os.path.join(MEDIA, "poster.jpg"), "rb") as fh:
                 return self.send_body(fh.read(), "image/jpeg")
+        if path == "dolby.m3u":  # ein Sender mit Dolby-Ton (AC3)
+            return self.send_body('#EXTM3U\n#EXTINF:-1 group-title="QA",Test D Dolby\nhttp://10.0.2.2:{p}/dolby.ts\n'.format(p=PORT).encode(), "audio/x-mpegurl")
         if path == "demo.m3u":  # wirklichkeitsnahe Namen für die Erklär-Videos (Bild kommt vom Test-Sender)
             return self.send_body(DEMO.encode(), "audio/x-mpegurl")
         if path == "list.m3u":
@@ -88,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         mode = {"ok.ts": ("ok.ts", None), "stall.ts": ("ok.ts", "stall"),
                 "vstop.ts": ("vstop.ts", None), "drop.ts": ("ok.ts", "drop"), "jump.ts": ("jump.ts", None),
-                "one.ts": ("ok.ts", "one"), "ok2.ts": ("ok.ts", None)}.get(path)
+                "one.ts": ("ok.ts", "one"), "ok2.ts": ("ok.ts", None), "dolby.ts": ("dolby.ts", None)}.get(path)
         if mode is None:
             self.send_error(404)
             return

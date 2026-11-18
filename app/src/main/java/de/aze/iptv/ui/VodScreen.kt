@@ -970,7 +970,9 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
         val http = DefaultHttpDataSource.Factory().setUserAgent(Http.USER_AGENT).setAllowCrossProtocolRedirects(true)
         ExoPlayer.Builder(context)
             .setRenderersFactory(
-                (if (app.audioDelay != 0) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context)).setEnableDecoderFallback(true),
+                (if (app.audioDelay != 0) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context))
+                    .setEnableDecoderFallback(true)
+                    .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
             )
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
             .setAudioAttributes(
