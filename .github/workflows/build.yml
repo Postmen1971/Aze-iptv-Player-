@@ -152,7 +152,8 @@ jobs:
           key: qa-media-${{ hashFiles('.github/qa/make_media.sh') }}
 
       - name: Test-Sender erzeugen und Test-Server starten
-        timeout-minutes: 12
+        # 25 min: wenn die Test-Videos neu erzeugt werden müssen (neuer Sender), dauert ffmpeg-Installation + Erzeugen länger
+        timeout-minutes: 25
         run: |
           if [ "${{ steps.media.outputs.cache-hit }}" != "true" ]; then
             # ffmpeg: erst Paketquelle (max. 4 min), sonst fertiges Programm herunterladen
