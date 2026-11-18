@@ -249,6 +249,9 @@ if [ "$n" -ge 6 ]; then
   limit=500
   note "Umschaltzeit" "Median ${med} ms · langsamster ${mx} ms · Messungen: $(echo $vals | tr '\n' ' ') · Grenze ${limit} ms (Basis ${base:-keine})"
   [ "$med" -le "$limit" ] || fail "Umschalten zu langsam: Median ${med} ms (Grenze ${limit} ms)"
+  run=$(qa | grep -o "ZAPLAUF [0-9]*" | tail -10 | awk '{print $2}' | sort -n)
+  rmed=$(echo "$run" | awk 'NF{a[++n]=$1} END{if(n) print a[int((n+1)/2)]; else print "-"}')
+  note "Bild läuft" "Median ${rmed} ms bis Bild und Ton laufen · Messungen: $(echo $run | tr '\n' ' ') · Planung fest: $(qa | grep -c PLANUNG_FEST)"
 else
   fail "Umschaltzeit: zu wenige Messungen ($n)"
 fi

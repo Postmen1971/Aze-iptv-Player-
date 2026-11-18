@@ -146,6 +146,8 @@ fun PlayerScreen(
     val live = remember { de.aze.iptv.player.LiveSource(context, httpLive) }
     /** Zeitpunkt des letzten Senderwechsels (0 = keiner offen) – für die Messung der Umschaltzeit */
     val zapStartedAt = remember { longArrayOf(0L) }
+    /** wie zapStartedAt, aber bis das Bild LÄUFT (mit Ton) – das erste Bild kann noch kurz stehen */
+    val zapRunAt = remember { longArrayOf(0L) }
     // Zeitpunkt des letzten Senderwechsels (für die kurze Wartezeit beim einzelnen Umschalten)
     val lastZapAt = remember { longArrayOf(0L) }
     /** Beim Neuverbinden das letzte Bild stehen lassen statt Schwarz (beim Senderwechsel aus) */
@@ -177,6 +179,16 @@ fun PlayerScreen(
                     .setInitialBitrateEstimate(8_000_000L)
                     .build(),
             )
+            .also { b ->
+                // Media3 1.11 schaltet „dynamic scheduling“ neu ein (Arbeitsschleife nicht mehr im festen Takt).
+                // Aziz: Umschalten war mit 1.9.4 schneller → aus, wie bis 1.9.4. Per Name, weil die Methode je nach
+                // Media3-Version anders heißt (Vergleichs-App mit 1.5.1); fehlt sie, bleibt alles wie es ist.
+                for (m in listOf("experimentalSetDynamicSchedulingEnabled", "setDynamicSchedulingEnabled")) {
+                    if (runCatching { b.javaClass.getMethod(m, Boolean::class.javaPrimitiveType).invoke(b, false) }.isSuccess) {
+                        qaLog("PLANUNG_FEST $m"); break
+                    }
+                }
+            }
             .build()
             .apply {
                 playWhenReady = true
@@ -575,6 +587,14 @@ fun PlayerScreen(
                 tracksVersion++
             }
 
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                // Umschaltzeit bis das Bild wirklich läuft (erstes Bild + Start-Vorrat) – fürs Hänger-Protokoll
+                if (isPlaying && zapRunAt[0] > 0) {
+                    qaLog("ZAPLAUF ${android.os.SystemClock.elapsedRealtime() - zapRunAt[0]} ${app.current?.channel?.name}")
+                    zapRunAt[0] = 0
+                }
+            }
+
             override fun onPlaybackStateChanged(state: Int) {
                 // Manche Live-Streams "enden" einfach (Verbindung vom Server getrennt): neu verbinden.
                 if (state == Player.STATE_ENDED && player.currentMediaItem != null) {
@@ -725,6 +745,7 @@ fun PlayerScreen(
             if (app.zapFast && nowZap - lastZapAt[0] > 700) settleMs = 60L
             lastZapAt[0] = nowZap
             zapStartedAt[0] = nowZap
+            zapRunAt[0] = nowZap
         }
         // gleicher Sender (Neustart): letztes Bild halten. Neuer Sender: mit „Bild halten“ (Standard) bleibt das alte
         // Bild stehen, bis das neue da ist – kein Schwarz dazwischen, Umschalten wirkt sofort. Aus = wie früher schwarz.
