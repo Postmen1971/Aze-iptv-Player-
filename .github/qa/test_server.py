@@ -11,6 +11,8 @@ import os, sys, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MEDIA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "media")
+# fest im Projekt liegende Test-Dateien (ohne ffmpeg im Test-Lauf), z. B. der Dolby-Sender (AC3-Ton)
+FIXED = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixed")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8090
 DURATION = {"ok.ts": 240.0, "vstop.ts": 150.0, "jump.ts": 135.0, "dolby.ts": 120.0}
 
@@ -153,7 +155,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def stream(self, name, behaviour, speed, cut):
         path = name
-        f = os.path.join(MEDIA, name)
+        f = os.path.join(FIXED, name) if os.path.exists(os.path.join(FIXED, name)) else os.path.join(MEDIA, name)
         size = os.path.getsize(f)
         # Bytes pro Sekunde = Echtzeit. vstop hat nach 15 s nur noch Ton (wenige Bytes): mit der Rate des normalen
         # Senders liefern, sonst kommt der Bild-Teil viel zu langsam (das wäre ein anderer Fall: „Anbieter zu langsam“)
