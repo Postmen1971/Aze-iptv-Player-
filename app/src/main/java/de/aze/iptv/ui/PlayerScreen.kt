@@ -148,6 +148,8 @@ fun PlayerScreen(
     val zapStartedAt = remember { longArrayOf(0L) }
     /** wie zapStartedAt, aber bis das Bild LÄUFT (mit Ton) – das erste Bild kann noch kurz stehen */
     val zapRunAt = remember { longArrayOf(0L) }
+    /** true, solange beim Umschalten der alte Sender nur angehalten ist (Wächter soll ihn nicht wieder starten) */
+    val zapHold = remember { booleanArrayOf(false) }
     // Zeitpunkt des letzten Senderwechsels (für die kurze Wartezeit beim einzelnen Umschalten)
     val lastZapAt = remember { longArrayOf(0L) }
     /** Beim Neuverbinden das letzte Bild stehen lassen statt Schwarz (beim Senderwechsel aus) */
@@ -332,7 +334,7 @@ fun PlayerScreen(
             val pos = player.currentPosition
             val buffered = player.bufferedPosition
             // Pausiert, obwohl Live-TV laufen soll (z. B. nach HDMI-Umschaltung)? Sofort weiter.
-            if (!switching && player.playbackState != Player.STATE_IDLE && !player.playWhenReady) {
+            if (!switching && !zapHold[0] && player.playbackState != Player.STATE_IDLE && !player.playWhenReady) {
                 player.playWhenReady = true
             }
             // Fernseher/Box: Eine andere App (Sprachassistent, Hinweiston) hat den Ton kurz übernommen und gibt ihn nie
@@ -739,7 +741,8 @@ fun PlayerScreen(
         // desselben Senders), wartet die volle Zeit – so lädt beim Durchzappen weiter nur der letzte Sender.
         var settleMs = 220L
         if (fullRestart[0]) { fullRestart[0] = false; retries = 0 }
-        if (startedKey != ch.key) {
+        val newChannel = startedKey != ch.key
+        if (newChannel) {
             retries = 0
             val nowZap = android.os.SystemClock.elapsedRealtime()
             if (app.zapFast && nowZap - lastZapAt[0] > 700) settleMs = 60L
@@ -755,12 +758,19 @@ fun PlayerScreen(
         ytError = null
         resolvedUrl = null
         // Altes Programm sofort anhalten, damit beim schnellen Durchschalten nichts nachläuft.
-        player.stop()
+        // Neuer Sender: nur anhalten statt stoppen – stop() baut die Entschlüssler (Bild/Ton) ab, beim nächsten
+        // Sender müssen sie neu aufgebaut werden. Mit setMediaSource unten bleiben sie erhalten und werden nur
+        // geleert (Media3 nimmt sie weiter, wenn das Format passt) → erstes Bild schneller.
+        // Neustart desselben Senders, VLC und YouTube: wie bisher ganz stoppen.
+        val keepDecoder = newChannel && !useVlc && !YouTube.isYouTube(ch.url) && player.playbackState != Player.STATE_IDLE
+        zapHold[0] = keepDecoder
+        if (keepDecoder) player.playWhenReady = false else player.stop()
         // erst NACH dem Anhalten zurücksetzen – sonst zählen Bilder des alten Senders für den neuen
         firstFrameSeen = false
         probe.restart()
         // App im Hintergrund (Home-Taste): nichts starten, sonst läuft der Ton hinter anderen Apps
-        if (inBackground) return@LaunchedEffect
+        // im Hintergrund nichts festhalten (Entschlüssler für andere Apps freigeben)
+        if (inBackground) { zapHold[0] = false; player.stop(); return@LaunchedEffect }
         if (YouTube.isYouTube(ch.url)) {
             // YouTube läuft in einem eigenen Player; Media3 leeren.
             player.clearMediaItems()
@@ -798,11 +808,14 @@ fun PlayerScreen(
             // Portal antwortet nicht (z. B. Netz direkt nach dem Einschalten noch nicht da): nicht schwarz stehen bleiben,
             // sondern von selbst neu versuchen – wie bei einem Abspielfehler (2 / 4 / 8 / 15 s)
             ytError = "Portal: Sender nicht verfügbar – neuer Versuch …"
+            zapHold[0] = false
+            player.stop()
             val wait = minOf(2_000L shl minOf(retries, 3), 15_000L)
             retryJob = scope.launch { delay(wait); retries++; relinkTick++ }
             return@LaunchedEffect
         }
-        if (inBackground) return@LaunchedEffect
+        // im Hintergrund nichts festhalten (Entschlüssler für andere Apps freigeben)
+        if (inBackground) { zapHold[0] = false; player.stop(); return@LaunchedEffect }
         resolvedUrl = url
         if (useVlc) return@LaunchedEffect
         // Bevorzugte Tonsprache und Untertitel-Wahl gelten für jeden neuen Sender.
@@ -823,6 +836,7 @@ fun PlayerScreen(
         builder.setLiveConfiguration(liveCfg.build())
         player.setMediaSource(live.create(builder.build()))
         // Live-TV läuft immer – auch falls der Player zuvor (z. B. vom System) pausiert wurde
+        zapHold[0] = false
         player.playWhenReady = true
         preparedAt = System.currentTimeMillis()
         player.prepare()
