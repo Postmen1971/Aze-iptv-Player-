@@ -418,9 +418,10 @@ private fun Browse(
                 // Vorschau oben (wie im Entwurf): zeigt den gewählten Film – sonst den ersten der Liste
                 val heroState = remember(list) { mutableStateOf<VodItem?>(null) }
                 Column {
-                    // Handy (wenig Höhe oder schmal): keine Vorschau, damit die Poster Platz haben
+                    // Vorschau nur mit Fernbedienung: am Handy/Tablet startet Antippen den Film sofort, die Leiste
+                    // zeigte dort nur den ersten Film und nahm Platz weg (Aziz) → nur Kacheln
                     val cfg = androidx.compose.ui.platform.LocalConfiguration.current
-                    if (!list.isNullOrEmpty() && cfg.screenHeightDp >= 480 && cfg.screenWidthDp >= 600) {
+                    if (!Device.isTouch && !list.isNullOrEmpty() && cfg.screenHeightDp >= 480 && cfg.screenWidthDp >= 600) {
                         VodHeroSlot(app, api, heroState, list.first(), series, sourceId, title)
                     }
                     // Oben: Kategorie bzw. Suche und rechts die Anzahl
