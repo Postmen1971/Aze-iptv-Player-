@@ -1,0 +1,40 @@
+name: Webseite (Anleitung + Fernhilfe)
+
+# Veröffentlicht die Webseite neu, wenn sich die Fernhilfe-Seite ändert – ohne die Anleitung neu aufzunehmen:
+# die fertige Anleitung kommt aus dem Release „hilfe“ (anleitung.zip), dazu alle Seiten aus web/.
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  pages:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Anleitung holen und Fernhilfe dazulegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p site
+          if gh release download hilfe -p anleitung.zip -D /tmp 2>/dev/null; then unzip -q /tmp/anleitung.zip -d site; fi
+          cp web/*.html site/
+          ls site | head -20
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

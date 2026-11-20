@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fernhilfe">
+<meta name="theme-color" content="#0E1116">
+<title>Aze-IPTV Fernhilfe</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<style>
+:root{--bg:#0E1116;--panel:#151A21;--raised:#1F2630;--line:#2A3340;--text:#EDEFF3;--soft:#B9C1CC;--muted:#7F8A99;--acc:#5AA0FF;--ok:#3EE6A1;--warn:#F07A6A}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:16px;-webkit-text-size-adjust:100%}
+button{font:inherit;border:0;border-radius:10px;background:var(--raised);color:var(--text);padding:10px 14px;cursor:pointer;min-height:44px}
+button.pri{background:var(--acc);color:#0B1220;font-weight:700}
+button.bad{background:#3A1E1E;color:#FFB4A8}
+button:disabled{opacity:.45}
+input,select{font:inherit;width:100%;height:46px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);padding:0 12px}
+label{display:block;color:var(--soft);font-size:14px;margin:12px 0 6px}
+main{max-width:760px;margin:0 auto;padding:16px 16px 110px}
+h1{font-size:22px;margin:6px 0 4px}
+h2{font-size:18px;margin:22px 0 8px}
+.hint{color:var(--muted);font-size:14px;margin:6px 0 12px;line-height:1.4}
+.status{color:var(--soft);font-size:15px;margin:6px 0}
+.status.ok{color:var(--ok)}.status.err{color:var(--warn)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
+.card .t{font-weight:700}
+.card .s{color:var(--muted);font-size:14px;margin-top:2px;word-break:break-all}
+.card .st{font-size:14px;margin-top:4px;color:var(--acc)}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.btns button{flex:1 1 auto}
+.seg{display:flex;gap:6px}.seg button{flex:1}.seg button.on{background:var(--acc);color:#0B1220;font-weight:700}
+#code{font-size:28px;letter-spacing:4px;text-transform:uppercase;text-align:center;height:60px}
+.big{width:100%;height:52px;margin-top:14px}
+/* Senderliste */
+.row{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin:6px 0}
+.head{display:flex;align-items:center;gap:6px;padding:6px 8px;min-height:48px}
+.h{touch-action:none;cursor:grab;color:var(--muted);font-size:22px;padding:6px 8px;user-select:none;-webkit-user-select:none}
+.name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.name small{color:var(--muted);margin-left:6px}
+.num{color:var(--acc);font-weight:700;min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+.off .name,.off .num{opacity:.4;text-decoration:line-through}
+.ico{background:transparent;padding:6px 8px;color:var(--soft);min-height:40px}
+.chs{padding:0 8px 8px 26px}
+.chs .row{background:var(--raised);margin:4px 0}
+.drag{position:fixed;z-index:20;pointer-events:none;opacity:.92;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+.ph{border:2px dashed var(--acc);border-radius:10px;margin:6px 0}
+#bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;justify-content:center}
+#bar span{color:var(--soft);font-size:14px;flex:1;max-width:460px}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;width:min(560px,94vw);padding:18px}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+</style>
+</head>
+<body>
+<main>
+  <!-- 1. Code eingeben -->
+  <section id="vLogin">
+    <h1>Fernhilfe</h1>
+    <p class="hint">Auf der Box, der du helfen willst: Einstellungen → Sender &amp; Playlists → Fernhilfe → „Fernhilfe erlauben – Code zeigen“. Den Code hier eingeben oder einfügen.</p>
+    <label for="code">Code von der Box</label>
+    <input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="K7M4-Q2XP">
+    <button class="pri big" id="go">Verbinden</button>
+    <p id="lerr" class="status err"></p>
+    <p class="hint">Alles wird mit dem Code verschlüsselt, bevor es über den Briefkasten im Internet (ntfy.sh) geht. Ohne den Code kann niemand mitlesen. Die Fernhilfe endet von selbst, wenn eine Minute lang nichts passiert (frühestens nach 10 Minuten).</p>
+  </section>
+
+  <!-- 2. Übersicht: Playlists der anderen Box -->
+  <section id="vMain" hidden>
+    <h1 id="title">Fernhilfe</h1>
+    <p id="status" class="status">Verbinde …</p>
+    <p id="left" class="hint"></p>
+    <div class="btns">
+      <button class="pri" id="openList" disabled>Senderliste sortieren &amp; ausblenden</button>
+      <button id="refresh">Liste neu laden</button>
+      <button class="bad" id="end">Beenden</button>
+    </div>
+    <h2>Playlists der anderen Box</h2>
+    <div id="sources"></div>
+    <h2>Playlist hinzufügen</h2>
+    <div class="seg" id="addType">
+      <button data-t="M3U" class="on">M3U-Link</button><button data-t="XTREAM">Server + Login</button><button data-t="STALKER">Portal + MAC</button>
+    </div>
+    <div id="addForm"></div>
+    <button class="pri big" id="add">Hinzufügen und laden</button>
+  </section>
+
+  <!-- 3. Senderliste -->
+  <section id="vList" hidden>
+    <h1>Senderliste der anderen Box</h1>
+    <p class="hint">≡ gedrückt halten und ziehen = verschieben · ⤒ an den Anfang · 👁 ein-/ausblenden · ✎ umbenennen · Gruppe antippen zeigt ihre Sender. Unten „Übertragen“ schickt alles zur Box.</p>
+    <div id="groups"></div>
+  </section>
+</main>
+<div id="bar" hidden><span id="barMsg">Keine Änderungen</span><button id="back">Zurück</button><button class="pri" id="send" disabled>Übertragen</button></div>
+
+<dialog id="dlg">
+  <h2 style="margin-top:0">Playlist ändern</h2>
+  <div id="dlgForm"></div>
+  <div class="btns"><button class="pri" id="dlgSave">Speichern und neu laden</button><button id="dlgCancel">Abbrechen</button></div>
+</dialog>
+
+<script>
+"use strict";
+var RELAY = "https://ntfy.sh";
+var ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function $(id){return document.getElementById(id)}
+function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+
+/* ---------- Code, Schlüssel, Verschlüsselung (gleich wie in der App) ---------- */
+function norm(s){
+  s=(s||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+  if(s.length!==8)return null;
+  for(var i=0;i<8;i++)if(ALPHA.indexOf(s[i])<0)return null;
+  return s;
+}
+function b64(u8){var s="";for(var i=0;i<u8.length;i+=0x8000)s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000));return btoa(s)}
+function unb64(t){var s=atob(t),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u}
+async function makeKeys(code){
+  var enc=new TextEncoder();
+  var base=await crypto.subtle.importKey("raw",enc.encode(code),"PBKDF2",false,["deriveKey"]);
+  var key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:enc.encode("aze-fernhilfe-1"),iterations:20000,hash:"SHA-1"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+  var d=new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode("aze-fh1|"+code)));
+  var h=Array.prototype.map.call(d,function(b){return("0"+b.toString(16)).slice(-2)}).join("").slice(0,40);
+  return {key:key,toBox:"azefh"+h+"a",toHelper:"azefh"+h+"b"};
+}
+async function seal(obj){
+  var iv=crypto.getRandomValues(new Uint8Array(12));
+  var packed=pako.gzip(new TextEncoder().encode(JSON.stringify(obj)));
+  var ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv:iv},K.key,packed));
+  var all=new Uint8Array(12+ct.length);all.set(iv);all.set(ct,12);
+  return "AZF1:"+b64(all);
+}
+async function unseal(text){
+  try{
+    text=text.trim();if(text.indexOf("AZF1:")!==0)return null;
+    var d=unb64(text.slice(5));
+    var raw=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv:d.subarray(0,12)},K.key,d.subarray(12)));
+    return JSON.parse(new TextDecoder().decode(pako.ungzip(raw)));
+  }catch(e){return null}
+}
+
+/* ---------- Briefkasten ---------- */
+var K=null, RUN=false, ctl=null, sendChain=Promise.resolve();
+function publish(obj){
+  sendChain=sendChain.then(async function(){
+    var p=await seal(obj);
+    var big=p.length>3500;
+    var r=await fetch(RELAY+"/"+K.toBox+(big?"?filename=aze.txt":""),{method:big?"PUT":"POST",body:p});
+    if(!r.ok)throw new Error("Senden fehlgeschlagen ("+r.status+")");
+  }).catch(function(e){setStatus(e.message,"err")});
+  return sendChain;
+}
+async function listen(){
+  var since="all",seen={},pause=1000;
+  while(RUN){
+    try{
+      ctl=new AbortController();
+      var r=await fetch(RELAY+"/"+K.toHelper+"/json?since="+encodeURIComponent(since),{signal:ctl.signal});
+      if(!r.ok)throw new Error("Briefkasten "+r.status);
+      if(!CONNECTED)setStatus("Warte auf die Box …");
+      pause=1000;
+      var rd=r.body.getReader(),dec=new TextDecoder(),buf="";
+      while(RUN){
+        var x=await rd.read();if(x.done)break;
+        buf+=dec.decode(x.value,{stream:true});
+        var i;
+        while((i=buf.indexOf("\n"))>=0){
+          var line=buf.slice(0,i);buf=buf.slice(i+1);
+          var o;try{o=JSON.parse(line)}catch(e){continue}
+          if(o.event!=="message"||!o.id||seen[o.id])continue;
+          seen[o.id]=1;since=o.id;
+          var text=o.message;
+          if(o.attachment&&o.attachment.url){
+            try{text=await (await fetch(o.attachment.url)).text()}catch(e){continue}
+          }
+          var m=await unseal(text);if(m)handle(m);
+        }
+      }
+    }catch(e){if(!RUN)break;if(!CONNECTED)setStatus("Briefkasten nicht erreichbar – neuer Versuch …","err")}
+    await new Promise(function(res){setTimeout(res,pause)});pause=Math.min(pause*2,10000);
+  }
+}
+
+/* ---------- Ablauf ---------- */
+var CONNECTED=false, STATE=null, PENDING=null, expiresAt=0, lastPing=0, DATA=null, dirty=false, closed=false;
+function setStatus(t,cls){var s=$("status");s.textContent=t;s.className="status"+(cls?" "+cls:"")}
+function show(v){["vLogin","vMain","vList"].forEach(function(x){$(x).hidden=x!==v});$("bar").hidden=v!=="vList"}
+function activity(){
+  if(!CONNECTED||closed)return;
+  expiresAt=Math.max(expiresAt,Date.now()+60000);
+  if(Date.now()-lastPing>20000){lastPing=Date.now();publish({op:"ping"})}
+}
+function order(obj,text){
+  if(!CONNECTED||closed)return;
+  expiresAt=Math.max(expiresAt,Date.now()+60000);lastPing=Date.now();
+  setStatus(text+" – wird übertragen …");
+  publish(obj);
+}
+async function connect(){
+  var code=norm($("code").value);
+  if(!code){$("lerr").textContent="Der Code hat 8 Zeichen (Buchstaben und Zahlen), z. B. K7M4-Q2XP.";return}
+  if(!window.crypto||!crypto.subtle){$("lerr").textContent="Dieser Browser kann nicht verschlüsseln – bitte Safari oder Chrome aktuell halten.";return}
+  $("lerr").textContent="";
+  try{sessionStorage.setItem("azeFhCode",code)}catch(e){}
+  K=await makeKeys(code);RUN=true;closed=false;
+  show("vMain");setStatus("Verbinde …");
+  listen();
+  for(var i=0;i<6&&!CONNECTED&&RUN;i++){
+    publish({op:"hello"});
+    await new Promise(function(res){setTimeout(res,7000)});
+  }
+  if(!CONNECTED&&RUN)setStatus("Keine Antwort. Stimmt der Code, und ist auf der Box „Fernhilfe erlauben“ noch offen?","err");
+}
+function handle(m){
+  if(m.op==="state"){
+    CONNECTED=true;STATE=m;
+    expiresAt=Date.now()+(m.left||0)*1000;
+    $("title").textContent="Fernhilfe"+(m.device?" für "+m.device:"");
+    setStatus("Verbunden – Änderungen gelten sofort auf der Box.","ok");
+    $("openList").disabled=false;
+    renderSources();
+    if(!$("vList").hidden&&dirty)PENDING=m; else if(!$("vList").hidden)loadList(m);
+  }else if(m.op==="msg"){
+    setStatus(m.text||"");if(!$("vList").hidden)$("barMsg").textContent=m.text||"";
+  }else if(m.op==="bye"){
+    closed=true;RUN=false;if(ctl)ctl.abort();
+    setStatus("Die Box hat die Fernhilfe beendet"+(m.text?" ("+m.text+")":"")+".","err");
+    $("openList").disabled=true;show("vMain");
+  }
+}
+setInterval(function(){
+  if(!CONNECTED||closed){$("left").textContent="";return}
+  var s=Math.max(0,Math.round((expiresAt-Date.now())/1000));
+  $("left").textContent="Offen noch etwa "+Math.floor(s/60)+":"+("0"+s%60).slice(-2)+" min · jede Aktion verlängert um 1 Minute.";
+},1000);
+document.addEventListener("pointerdown",activity,true);
+document.addEventListener("input",activity,true);
+
+/* ---------- Playlists ---------- */
+var TYPES={M3U:"M3U-Link",XTREAM:"Server + Login",STALKER:"Portal + MAC"};
+function shortUrl(u){try{var x=new URL(u.indexOf("://")>0?u:"http://"+u);return x.host+(x.pathname.length>1?"/…":"")}catch(e){return u.slice(0,30)+"…"}}
+function renderSources(){
+  var box=$("sources");box.innerHTML="";
+  var list=(STATE&&STATE.sources)||[];
+  if(!list.length)box.appendChild(el("p","hint","Noch keine Playlist auf der Box."));
+  list.forEach(function(s,i){
+    var c=el("div","card");
+    c.appendChild(el("div","t",s.name+(s.on?"":" (pausiert)")));
+    c.appendChild(el("div","s",TYPES[s.type]+" · "+shortUrl(s.url)));
+    var st=STATE.status&&STATE.status[s.id];if(st)c.appendChild(el("div","st",st));
+    var b=el("div","btns");
+    function add(t,fn,cls){var x=el("button",cls||"",t);x.onclick=fn;b.appendChild(x)}
+    if(i>0)add("▲",function(){order({op:"move",id:s.id,d:-1},"Verschieben")});
+    if(i<list.length-1)add("▼",function(){order({op:"move",id:s.id,d:1},"Verschieben")});
+    add("Ändern",function(){editSource(s)});
+    add(s.on?"Pausieren":"Einschalten",function(){order({op:"enable",id:s.id,on:!s.on},s.on?"Pausieren":"Einschalten")});
+    add("Löschen",function(){if(confirm("„"+s.name+"“ auf der Box löschen?"))order({op:"remove",id:s.id},"Löschen")},"bad");
+    c.appendChild(b);box.appendChild(c);
+  });
+}
+function fields(box,type,v){
+  box.innerHTML="";
+  function f(id,label,val,ph,kind){
+    box.appendChild(el("label",null,label));
+    var i=el("input");i.id=id;i.value=val||"";i.placeholder=ph||"";i.autocomplete="off";i.spellcheck=false;i.autocapitalize="off";
+    if(kind)i.type=kind;box.appendChild(i);
+  }
+  f(box.id+"_name","Name",v.name,"z. B. Mein Anbieter");
+  if(type==="M3U")f(box.id+"_url","M3U-Link (komplett)",v.url,"http://…","url");
+  else if(type==="STALKER"){f(box.id+"_url","Portal-Adresse",v.url,"http://server:port/c/","url");f(box.id+"_user","MAC-Adresse",v.user||"00:1A:79:","00:1A:79:XX:XX:XX")}
+  else{f(box.id+"_url","Server-Adresse",v.url,"http://server:port","url");f(box.id+"_user","Benutzer",v.user);f(box.id+"_pass","Passwort",v.pass,"","password")}
+}
+function read(box,type,base){
+  function g(n){var x=$(box.id+"_"+n);return x?x.value.trim():""}
+  var s=Object.assign({},base,{name:g("name"),url:g("url"),user:g("user"),pass:$(box.id+"_pass")?$(box.id+"_pass").value:"",type:type});
+  if(type==="STALKER")s.user=s.user.toUpperCase();
+  if(!s.url)return "Link bzw. Adresse fehlt.";
+  if(type==="XTREAM"&&(!s.user||!s.pass))return "Benutzer und Passwort fehlen.";
+  if(type==="STALKER"&&!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(s.user))return "MAC-Adresse bitte vollständig (00:1A:79:XX:XX:XX).";
+  return s;
+}
+var addType="M3U";
+[].forEach.call($("addType").children,function(b){b.onclick=function(){addType=b.dataset.t;[].forEach.call($("addType").children,function(x){x.className=x===b?"on":""});fields($("addForm"),addType,{})}});
+fields($("addForm"),"M3U",{});
+$("add").onclick=function(){
+  var s=read($("addForm"),addType,{id:"neu",on:true});
+  if(typeof s==="string"){setStatus(s,"err");return}
+  if(!s.name)s.name=addType==="M3U"?"Playlist":addType==="STALKER"?"Portal":"Anbieter";
+  order({op:"add",s:s},"Playlist hinzufügen");fields($("addForm"),addType,{});
+};
+var editing=null;
+function editSource(s){editing=s;fields($("dlgForm"),s.type,s);$("dlg").showModal()}
+$("dlgCancel").onclick=function(){$("dlg").close()};
+$("dlgSave").onclick=function(){
+  var s=read($("dlgForm"),editing.type,editing);
+  if(typeof s==="string"){alert(s);return}
+  if(!s.name)s.name=editing.name;
+  $("dlg").close();order({op:"update",s:s},"Playlist ändern");
+};
+$("refresh").onclick=function(){order({op:"refresh"},"Neu laden")};
+$("end").onclick=function(){
+  if(CONNECTED&&!closed)publish({op:"bye"});
+  closed=true;RUN=false;if(ctl)ctl.abort();
+  setStatus("Fernhilfe beendet.");$("openList").disabled=true;
+};
+$("go").onclick=connect;
+$("code").onkeydown=function(e){if(e.key==="Enter")connect()};
+
+/* ---------- Senderliste (wie die Bearbeiten-Seite im Heimnetz) ---------- */
+function loadList(m){
+  DATA={v:m.v,groups:(m.groups||[]).map(function(g,i){return{i:i,n:g.n,o:g.o,s:g.s,h:g.h,open:false,c:g.c.map(function(c,k){return{i:k,n:c[0],h:c[1]}})}})};
+  PENDING=null;setDirty(false);render();
+}
+$("openList").onclick=function(){if(!STATE)return;show("vList");loadList(STATE);window.scrollTo(0,0)};
+$("back").onclick=function(){
+  if(dirty&&!confirm("Änderungen nicht übertragen – trotzdem zurück?"))return;
+  show("vMain");if(PENDING){STATE=PENDING;PENDING=null;renderSources()}
+};
+$("send").onclick=function(){
+  var body={op:"layout",v:DATA.v,groups:DATA.groups.map(function(g){return{i:g.i,n:g.n,h:g.h,c:g.c.map(function(c){return[c.i,c.h]})}})};
+  order(body,"Senderliste");setDirty(false);$("barMsg").textContent="Übertragen – die Box übernimmt die Liste …";
+};
+function setDirty(d){dirty=d;$("send").disabled=!d;$("barMsg").textContent=d?"Noch nicht übertragen":"Keine Änderungen"}
+function btn(text,title,fn){var b=el("button","ico",text);b.title=title;b.onclick=function(ev){ev.stopPropagation();fn()};return b}
+function render(){var box=$("groups");box.innerHTML="";DATA.groups.forEach(function(g){box.appendChild(groupRow(g))});numberAll()}
+function groupRow(g){
+  var row=el("div","row"+(g.h?" off":""));row.dataset.i=g.i;row._g=g;
+  var head=el("div","head");
+  head.appendChild(el("span","h","≡"));
+  var name=el("span","name",g.n);name.appendChild(el("small",null,g.c.length+" Sender"+(g.s?" · "+g.s:"")));
+  head.appendChild(name);
+  head.appendChild(btn("⤒","An den Anfang",function(){DATA.groups.splice(DATA.groups.indexOf(g),1);DATA.groups.unshift(g);render();setDirty(true)}));
+  head.appendChild(btn("✎","Umbenennen",function(){var n=prompt("Name der Gruppe (leer = Original „"+g.o+"“)",g.n);if(n===null)return;g.n=n.trim()||g.o;render();setDirty(true)}));
+  head.appendChild(btn("👁","Ein-/ausblenden",function(){g.h=g.h?0:1;row.classList.toggle("off",!!g.h);numberAll();setDirty(true)}));
+  head.onclick=function(e){if(e.target.closest(".h"))return;g.open=!g.open;var old=row.querySelector(".chs");if(old)old.remove();if(g.open)row.appendChild(channelList(g));numberAll()};
+  row.appendChild(head);if(g.open)row.appendChild(channelList(g));
+  return row;
+}
+function channelList(g){
+  var box=el("div","chs");
+  g.c.forEach(function(c){box.appendChild(channelRow(g,c))});
+  sortable(box,function(){g.c=[].map.call(box.children,function(r){return r._c});numberAll();setDirty(true)});
+  return box;
+}
+function channelRow(g,c){
+  var row=el("div","row"+(c.h?" off":""));row._c=c;
+  var head=el("div","head");
+  head.appendChild(el("span","h","≡"));head.appendChild(el("span","num",""));head.appendChild(el("span","name",c.n));
+  head.appendChild(btn("⤒","An den Anfang der Gruppe",function(){g.c.splice(g.c.indexOf(c),1);g.c.unshift(c);var box=row.parentNode;box.insertBefore(row,box.firstChild);numberAll();setDirty(true)}));
+  head.appendChild(btn("👁","Ein-/ausblenden",function(){c.h=c.h?0:1;row.classList.toggle("off",!!c.h);numberAll();setDirty(true)}));
+  row.appendChild(head);return row;
+}
+function numberAll(){
+  var n=0;
+  DATA.groups.forEach(function(g){
+    var row=document.querySelector('#groups > .row[data-i="'+g.i+'"]');
+    var nums=row?row.querySelectorAll(".chs .num"):[];
+    g.c.forEach(function(c,k){var t="";if(!g.h&&!c.h){n++;t=n}if(nums[k])nums[k].textContent=t});
+  });
+}
+function sortable(list,onDone){
+  list.addEventListener("pointerdown",function(e){
+    var h=e.target.closest(".h");if(!h)return;
+    var row=h.closest(".row");if(!row||row.parentNode!==list)return;
+    e.preventDefault();e.stopPropagation();
+    var r=row.getBoundingClientRect(),offY=e.clientY-r.top,lastY=e.clientY;
+    var ph=el("div","ph");ph.style.height=r.height+"px";row.after(ph);
+    row.classList.add("drag");row.style.width=r.width+"px";row.style.left=r.left+"px";row.style.top=r.top+"px";
+    try{h.setPointerCapture(e.pointerId)}catch(_){}
+    var timer=setInterval(function(){var y=lastY;if(y<90)window.scrollBy(0,-14);else if(y>innerHeight-110)window.scrollBy(0,14);place(y)},30);
+    function place(y){
+      var sibs=[].filter.call(list.children,function(x){return x!==row&&x!==ph});
+      var lo=0,hi=sibs.length;
+      while(lo<hi){var mid=(lo+hi)>>1,b=sibs[mid].getBoundingClientRect();if(y<b.top+b.height/2)hi=mid;else lo=mid+1}
+      if(lo<sibs.length){if(sibs[lo]!==ph.nextSibling)list.insertBefore(ph,sibs[lo])}else if(list.lastChild!==ph)list.appendChild(ph);
+    }
+    function move(ev){lastY=ev.clientY;row.style.top=(ev.clientY-offY)+"px";place(ev.clientY)}
+    function up(){
+      clearInterval(timer);
+      h.removeEventListener("pointermove",move);h.removeEventListener("pointerup",up);h.removeEventListener("pointercancel",up);
+      ph.replaceWith(row);row.classList.remove("drag");row.style.width=row.style.left=row.style.top="";
+      onDone();
+    }
+    h.addEventListener("pointermove",move);h.addEventListener("pointerup",up);h.addEventListener("pointercancel",up);
+  });
+}
+sortable($("groups"),function(){DATA.groups=[].map.call($("groups").children,function(r){return r._g});numberAll();setDirty(true)});
+window.addEventListener("beforeunload",function(e){if(dirty){e.preventDefault();e.returnValue=""}});
+// Link/QR mit Code (…/fernhilfe.html?c=K7M4Q2XP): gleich verbinden
+try{
+  var qc=new URLSearchParams(location.search).get("c");
+  if(qc&&norm(qc)){$("code").value=qc;connect()}
+  else{var sc=sessionStorage.getItem("azeFhCode");if(sc)$("code").value=sc}
+}catch(e){}
+</script>
+</body>
+</html>

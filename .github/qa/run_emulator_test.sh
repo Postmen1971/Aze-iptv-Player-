@@ -682,8 +682,14 @@ t="azefhci$RANDOM$RANDOM"
 r1=$(curl -s -m 20 -d "AZF1:test" "https://ntfy.sh/$t" | head -c 200)
 head -c 6000 /dev/urandom | base64 -w0 > /tmp/fh_big.txt
 r2=$(curl -s -m 30 -X PUT -H "Filename: aze.txt" --data-binary @/tmp/fh_big.txt "https://ntfy.sh/$t" | head -c 300)
+sleep 2
 r3=$(curl -s -m 20 "https://ntfy.sh/$t/json?poll=1&since=all" | head -c 900)
-note "Fernhilfe ntfy.sh" "klein: $r1 · Anhang: $r2 · abholen: $r3"
+r4=$(curl -s -N -m 6 "https://ntfy.sh/$t/json?since=all" | head -c 900)
+u=$(echo "$r4$r3" | grep -o 'https://ntfy.sh/file/[A-Za-z0-9]*\.txt' | head -1)
+r5=$( [ -n "$u" ] && curl -s -m 20 "$u" | wc -c)
+cors=$(curl -s -m 10 -o /dev/null -D - -H "Origin: https://postmen1971.github.io" "https://ntfy.sh/$t/json?poll=1" | grep -i "access-control-allow-origin" | tr -d '\r')
+cors2=$( [ -n "$u" ] && curl -s -m 10 -o /dev/null -D - -H "Origin: https://postmen1971.github.io" "$u" | grep -i "access-control-allow-origin" | tr -d '\r')
+note "Fernhilfe ntfy.sh" "klein: $r1 · Anhang: $r2 · abholen (poll): $r3 · Strom: $r4 · Anhang geladen: $r5 Bytes · CORS: $cors / Anhang: $cors2"
 
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"

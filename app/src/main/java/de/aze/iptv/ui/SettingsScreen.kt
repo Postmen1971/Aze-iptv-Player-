@@ -682,6 +682,13 @@ private fun RemoteHelpSection(app: AppController, onGive: (String) -> Unit) {
                 },
                 color = if (host.connected) Palette.Accent else Palette.TextSoft, fontSize = 14.sp,
             )
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                QrCode("$REMOTE_HELP_URL?c=${host.code}", 120.dp)
+                Text(
+                    "Steht der Helfer neben dir: diesen QR-Code mit dem Handy scannen – dann ist er sofort verbunden.",
+                    color = Palette.TextMuted, fontSize = 13.sp, modifier = Modifier.weight(1f),
+                )
+            }
             TvButton("Fernhilfe beenden", danger = true, onClick = { host.stop("selbst beendet") })
         } else {
             Text(
@@ -694,6 +701,14 @@ private fun RemoteHelpSection(app: AppController, onGive: (String) -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 TvButton("Fernhilfe erlauben – Code zeigen", onClick = { host.start() })
                 TvButton("Fernhilfe geben – Code eingeben", onClick = { asking = true })
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                QrCode(REMOTE_HELP_URL, 110.dp)
+                Text(
+                    "Helfen geht auch vom iPhone oder PC: QR-Code scannen oder $REMOTE_HELP_URL öffnen, " +
+                        "Code der anderen Box eingeben – fertig. Tipp: als Lesezeichen bzw. „Zum Home-Bildschirm“ speichern.",
+                    color = Palette.TextMuted, fontSize = 13.sp, modifier = Modifier.weight(1f),
+                )
             }
         }
     }
@@ -1920,6 +1935,7 @@ private fun HelpVideosSection(onPlay: (HelpVideo) -> Unit) {
 
 /** Anleitung mit Bildern (Webseite) – QR-Code mit dem Handy scannen */
 const val GUIDE_URL = "https://postmen1971.github.io/Aze-iptv-Player-/"
+const val REMOTE_HELP_URL = "https://postmen1971.github.io/Aze-iptv-Player-/fernhilfe.html"
 
 @Composable
 private fun GuideSection() {
