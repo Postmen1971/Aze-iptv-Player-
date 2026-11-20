@@ -41,7 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import de.aze.iptv.AppController
+import de.aze.iptv.data.ListEditTarget
 
 /**
  * Senderlisten-Verwaltung im Stil von IBO Player:
@@ -50,7 +50,7 @@ import de.aze.iptv.AppController
  *  Auf dem Tablet: tippen = ein-/ausblenden, lange drücken = verschieben (▲▼ erscheinen), „›“ zeigt die Sender.
  */
 @Composable
-fun ListEditor(app: AppController, onClose: () -> Unit) {
+fun ListEditor(app: ListEditTarget, onClose: () -> Unit, title: String = "Senderliste verwalten", note: String? = null) {
     var selectedKey by remember { mutableStateOf(app.editGroups.firstOrNull()?.key) }
     var movingGroup by remember { mutableStateOf<String?>(null) }
     var movingChannel by remember { mutableStateOf<String?>(null) }
@@ -130,7 +130,8 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
             TvButton("Fertig", onClick = onClose)
         }
         val title: @Composable () -> Unit = {
-            Text("Senderliste verwalten", color = Palette.Text, fontSize = if (narrow) 20.sp else 24.sp, fontWeight = FontWeight.Bold)
+            Text(title, color = Palette.Text, fontSize = if (narrow) 20.sp else 24.sp, fontWeight = FontWeight.Bold)
+            note?.let { Text(it, color = Palette.Accent, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             Text(
                 if (sorting) "SORTIEREN: OK = Kategorie bzw. Sender aufnehmen · ▲▼ verschieben · OK = ablegen · ▶ zu den Sendern · fertig: „Sortieren beenden“"
                 else Device.hint(
@@ -210,15 +211,9 @@ fun ListEditor(app: AppController, onClose: () -> Unit) {
                     )
                     LazyColumn(state = channelState, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         itemsIndexed(g.channels, key = { _, c -> c.key }) { ci, ch ->
-                            val nr = app.lineup.byKey[ch.key]?.number
                             ManageRow(
                                 title = ch.name,
-                                subtitle = when {
-                                    ch.key in hidden -> "ausgeblendet"
-                                    nr != null && app.isFavorite(ch) -> "Nr. $nr · Favorit"
-                                    nr != null -> "Nr. $nr"
-                                    else -> ""
-                                },
+                                subtitle = if (ch.key in hidden) "ausgeblendet" else app.channelNote(ch),
                                 visible = ch.key !in hidden,
                                 moving = movingChannel == ch.key,
                                 active = false,

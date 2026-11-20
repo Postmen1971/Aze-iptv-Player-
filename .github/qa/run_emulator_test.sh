@@ -664,6 +664,27 @@ else
 fi
 alive || fail "Dolby: App nicht mehr da"
 
+log "== Test 17: Fernhilfe – Code, verschlüsselter Briefkasten, Senderliste aus der Ferne ausblenden/einblenden, Playlist umbenennen"
+c=$(count "FH_TEST_OK"); cf=$(count "FH_TEST_FAIL")
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv --es aze_test_fernhilfe "http://10.0.2.2:8090/ntfy" >/dev/null
+for i in $(seq 1 120); do
+  [ "$(count "FH_TEST_OK")" -gt "$c" ] && break
+  [ "$(count "FH_TEST_FAIL")" -gt "$cf" ] && break
+  sleep 2
+done
+fh=$(qa | grep -E "FH_" | tail -14 | sed 's/.*AzeQA *: //')
+if [ "$(count "FH_TEST_OK")" -gt "$c" ]; then note "Fernhilfe" "$fh"
+else fail "Fernhilfe:$(qa | grep 'FH_TEST_FAIL' | tail -1 | sed 's/.*AzeQA *: //') · $(echo "$fh" | tail -4 | tr '\n' ' ')"; fi
+shot "test17-fernhilfe"
+alive || fail "Fernhilfe: App nicht mehr da"
+# echter Briefkasten (ntfy.sh) vom Test-Rechner aus: kleine Nachricht + Anhang wie die App sie schickt
+t="azefhci$RANDOM$RANDOM"
+r1=$(curl -s -m 20 -d "AZF1:test" "https://ntfy.sh/$t" | head -c 200)
+head -c 6000 /dev/urandom | base64 -w0 > /tmp/fh_big.txt
+r2=$(curl -s -m 30 -X PUT -H "Filename: aze.txt" --data-binary @/tmp/fh_big.txt "https://ntfy.sh/$t" | head -c 300)
+r3=$(curl -s -m 20 "https://ntfy.sh/$t/json?poll=1&since=all" | head -c 900)
+note "Fernhilfe ntfy.sh" "klein: $r1 · Anhang: $r2 · abholen: $r3"
+
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
 if adb logcat -d -b crash | grep -q "$PKG"; then

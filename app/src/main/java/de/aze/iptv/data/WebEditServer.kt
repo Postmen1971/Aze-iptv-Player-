@@ -266,17 +266,7 @@ class WebEditServer(
         val hidden = hiddenChannels()
         snapshot = list
         version++
-        val arr = JSONArray()
-        list.forEach { g ->
-            val ch = JSONArray()
-            g.channels.forEach { c -> ch.put(JSONArray().put(c.name).put(if (c.key in hidden) 1 else 0)) }
-            arr.put(
-                JSONObject()
-                    .put("n", g.name).put("o", g.originalName).put("s", g.sourceName ?: "")
-                    .put("h", if (g.hidden) 1 else 0).put("c", ch),
-            )
-        }
-        return JSONObject().put("v", version).put("groups", arr).toString()
+        return JSONObject().put("v", version).put("groups", ListEditCodec.encode(list, hidden)).toString()
     }
 
     private class Conflict : Exception("Die Senderliste hat sich inzwischen geändert – bitte Seite neu laden.")
@@ -285,25 +275,7 @@ class WebEditServer(
         val o = JSONObject(text)
         val snap = snapshot
         if (o.optInt("v") != version || snap.isEmpty()) throw Conflict()
-        val arr = o.getJSONArray("groups")
-        if (arr.length() != snap.size) throw IllegalArgumentException("Gruppen unvollständig")
-        val seenGroups = HashSet<Int>()
-        val edits = (0 until arr.length()).map { i ->
-            val g = arr.getJSONObject(i)
-            val gi = g.getInt("i")
-            require(gi in snap.indices && seenGroups.add(gi)) { "Ungültige Gruppe" }
-            val orig = snap[gi]
-            val c = g.getJSONArray("c")
-            require(c.length() == orig.channels.size) { "Sender unvollständig in „${orig.name}“" }
-            val seen = HashSet<Int>()
-            val channels = (0 until c.length()).map { k ->
-                val pair = c.getJSONArray(k)
-                val ci = pair.getInt(0)
-                require(ci in orig.channels.indices && seen.add(ci)) { "Ungültiger Sender" }
-                orig.channels[ci].key to (pair.optInt(1) == 1)
-            }
-            WebGroupEdit(orig.key, g.optString("n").take(80), g.optInt("h") == 1, channels)
-        }
+        val edits = ListEditCodec.decode(o.getJSONArray("groups"), snap)
         val done = java.util.concurrent.CountDownLatch(1)
         main.post {
             try { onSave(edits, snap) } finally { done.countDown() }

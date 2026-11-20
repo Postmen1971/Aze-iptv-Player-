@@ -61,8 +61,89 @@ DEMO = "#EXTM3U\n" + "".join(
     for g, names in DEMO_GROUPS for n in names
 )
 
+# --- Fernhilfe: Briefkasten wie ntfy.sh (POST/PUT /ntfy/<name>, GET /ntfy/<name>/json als offener Strom) ---
+NTFY = {}           # name -> [(id, json-text)]
+NTFY_FILES = {}     # id -> bytes
+NTFY_COND = threading.Condition()
+NTFY_SEQ = [0]
+
+def ntfy_publish(topic, body, filename):
+    import json
+    with NTFY_COND:
+        NTFY_SEQ[0] += 1
+        mid = "m%06d" % NTFY_SEQ[0]
+        ev = {"id": mid, "time": int(time.time()), "event": "message", "topic": topic}
+        if filename:
+            NTFY_FILES[mid] = body
+            ev["message"] = "You received a file: " + filename
+            ev["attachment"] = {"name": filename, "url": "http://10.0.2.2:%d/ntfy/file/%s.txt" % (PORT, mid), "size": len(body)}
+        else:
+            ev["message"] = body.decode("utf-8")
+        NTFY.setdefault(topic, []).append((mid, json.dumps(ev)))
+        NTFY_COND.notify_all()
+    log(f"ntfy {topic[:12]}… {len(body)} Bytes" + (" (Anhang)" if filename else ""))
+    return mid
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.0"
+
+    def ntfy_post(self):
+        path = self.path.split("?")[0].lstrip("/")
+        n = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(n) if n else b""
+        topic = path[len("ntfy/"):]
+        if not topic or "/" in topic:
+            return self.send_error(400)
+        filename = self.headers.get("Filename")
+        if not filename and len(body) > 4096:
+            return self.send_error(413)
+        mid = ntfy_publish(topic, body, filename)
+        return self.send_body(('{"id":"%s","event":"message"}' % mid).encode(), "application/json")
+
+    do_POST = ntfy_post
+    do_PUT = ntfy_post
+
+    def ntfy_get(self, path):
+        import urllib.parse
+        if path.startswith("ntfy/file/"):
+            mid = path[len("ntfy/file/"):].split(".")[0]
+            data = NTFY_FILES.get(mid)
+            if data is None:
+                return self.send_error(404)
+            return self.send_body(data, "text/plain")
+        topic = path[len("ntfy/"):-len("/json")]
+        q = urllib.parse.parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+        since = (q.get("since") or ["all"])[0]
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson")
+        self.end_headers()
+        try:
+            self.wfile.write(b'{"event":"open"}\n'); self.wfile.flush()
+            pos = 0
+            if since != "all":
+                lst = NTFY.get(topic, [])
+                idx = [i for i, (mid, _) in enumerate(lst) if mid == since]
+                pos = idx[0] + 1 if idx else 0
+            last_beat = time.time()
+            while True:
+                with NTFY_COND:
+                    lst = NTFY.get(topic, [])
+                    new = lst[pos:]
+                    if not new:
+                        NTFY_COND.wait(timeout=5)
+                        lst = NTFY.get(topic, [])
+                        new = lst[pos:]
+                for _, ev in new:
+                    self.wfile.write(ev.encode() + b"\n")
+                pos += len(new)
+                if new:
+                    self.wfile.flush()
+                if time.time() - last_beat > 30:
+                    self.wfile.write(b'{"event":"keepalive"}\n'); self.wfile.flush()
+                    last_beat = time.time()
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def log_message(self, *a):
         pass
@@ -70,6 +151,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0].lstrip("/")
         log(f"GET /{path}")
+        if path.startswith("ntfy/"):
+            return self.ntfy_get(path)
         if path == "player_api.php":
             return self.xtream()
         if path == "get.php":  # Live-Liste des Test-Anbieters: leer (die Sender kommen aus list.m3u)

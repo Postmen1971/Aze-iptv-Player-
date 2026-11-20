@@ -56,6 +56,8 @@ import de.aze.iptv.AppController
 import de.aze.iptv.BuildConfig
 import de.aze.iptv.data.Network
 import de.aze.iptv.data.PlaylistSource
+import de.aze.iptv.data.PlaylistTarget
+import de.aze.iptv.RemoteHelpGuest
 import de.aze.iptv.data.ProxySettings
 import de.aze.iptv.data.ProxyType
 import de.aze.iptv.data.PhoneInputServer
@@ -91,6 +93,12 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     val visited = remember { booleanArrayOf(false) }
     if (editingList) {
         ListEditor(app, onClose = { editingList = false })
+        return
+    }
+    // Fernhilfe geben: Playlists und Senderliste einer anderen Box bearbeiten
+    var guest by remember { mutableStateOf<RemoteHelpGuest?>(null) }
+    guest?.let { g ->
+        RemoteHelpGuestScreen(g, onClose = { g.stop(); guest = null })
         return
     }
 
@@ -226,6 +234,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     if (!app.hasAnySource) WelcomeSection()
                     PhoneInputSection(app)
                     PlaylistSection(app)
+                    RemoteHelpSection(app, onGive = { code -> guest = app.remoteGuest(code) })
                     FreeListSection(app)
                     YouTubeSection(app)
                     RefreshSection(app)
@@ -499,8 +508,8 @@ private fun FreeListSection(app: AppController) {
 }
 
 @Composable
-private fun PlaylistSection(app: AppController) {
-    Section("Playlists") {
+internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
+    Section(title) {
         if (app.sources.isEmpty()) {
             Text("Noch keine Playlist. Füge unten einen M3U-Link oder Server + Login hinzu.", color = Palette.TextMuted, fontSize = 14.sp)
         }
@@ -513,6 +522,7 @@ private fun PlaylistSection(app: AppController) {
         }
         app.sources.forEachIndexed { i, src ->
             var renaming by remember(src.id) { mutableStateOf(false) }
+            var changing by remember(src.id) { mutableStateOf(false) }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -538,8 +548,12 @@ private fun PlaylistSection(app: AppController) {
                 }
                 // Pausieren: Liste wird nicht geladen, bleibt aber gespeichert und lässt sich jederzeit wieder einschalten
                 TvButton(if (src.enabled) "Pausieren" else "Einschalten", selected = !src.enabled, onClick = { app.setSourceEnabled(src, !src.enabled) })
+                TvButton("Ändern", onClick = { changing = true })
                 TvButton("Umbenennen", onClick = { renaming = true })
                 TvButton("Löschen", danger = true, onClick = { app.removeSource(src) })
+            }
+            if (changing) {
+                EditSourceDialog(src, onSave = { app.updateSource(it); changing = false }, onCancel = { changing = false })
             }
             if (renaming) {
                 InputDialog("Name der Playlist", src.name, password = false, keyboard = KeyboardType.Text, onDone = {
@@ -598,6 +612,97 @@ private fun PlaylistSection(app: AppController) {
             )
             name = ""; url = ""; user = ""; pass = ""
         })
+    }
+}
+
+/** Link, Login oder Name einer Playlist korrigieren (auch bei der Fernhilfe) */
+@Composable
+private fun EditSourceDialog(src: PlaylistSource, onSave: (PlaylistSource) -> Unit, onCancel: () -> Unit) {
+    var name by remember { mutableStateOf(src.name) }
+    var url by remember { mutableStateOf(src.url) }
+    var user by remember { mutableStateOf(src.user) }
+    var pass by remember { mutableStateOf(src.pass) }
+    Dialog(onDismissRequest = onCancel) {
+        Column(
+            Modifier.widthIn(max = 640.dp).fillMaxWidth().background(Palette.Panel, RoundedCornerShape(16.dp))
+                .verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Playlist ändern", color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            InputRow("Name", name) { name = it }
+            when (src.type) {
+                SourceType.M3U -> InputRow("M3U-Link (komplett)", url, placeholder = "http://…", keyboard = KeyboardType.Uri) { url = it }
+                SourceType.STALKER -> {
+                    InputRow("Portal-Adresse", url, placeholder = "http://server:port/c/", keyboard = KeyboardType.Uri) { url = it }
+                    InputRow("MAC-Adresse", user, placeholder = "00:1A:79:XX:XX:XX") { user = it.uppercase() }
+                }
+                SourceType.XTREAM -> {
+                    InputRow("Server-Adresse", url, placeholder = "http://server:port", keyboard = KeyboardType.Uri) { url = it }
+                    InputRow("Benutzer", user) { user = it }
+                    InputRow("Passwort", pass, password = true) { pass = it }
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton("Speichern und neu laden", onClick = {
+                    if (url.isBlank()) return@TvButton
+                    onSave(src.copy(name = name.trim().ifEmpty { src.name }, url = url.trim(), user = user.trim(), pass = pass))
+                })
+                TvButton("Abbrechen", onClick = onCancel)
+            }
+        }
+    }
+}
+
+/** Fernhilfe: Code zeigen (Hilfe bekommen) oder Code eingeben (helfen) */
+@Composable
+private fun RemoteHelpSection(app: AppController, onGive: (String) -> Unit) {
+    val host = app.remoteHost
+    var asking by remember { mutableStateOf(false) }
+    Section("Fernhilfe") {
+        if (host.active) {
+            val now by androidx.compose.runtime.produceState(de.aze.iptv.RemoteHelpTime.now(), host.code) {
+                while (true) { value = de.aze.iptv.RemoteHelpTime.now(); delay(1_000) }
+            }
+            val left = ((host.expiresAt - now) / 1000).coerceAtLeast(0)
+            Text("Code für deinen Helfer:", color = Palette.TextSoft, fontSize = 14.sp)
+            Text(
+                de.aze.iptv.data.RemoteCrypto.pretty(host.code.orEmpty()),
+                color = Palette.Text, fontSize = 44.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp,
+            )
+            Text(
+                "Per WhatsApp oder Telefon weitergeben. Noch ${left / 60}:${"%02d".format(left % 60)} min – " +
+                    "nach 10 Minuten bleibt die Fernhilfe nur offen, solange der Helfer etwas macht (je Aktion 1 Minute).",
+                color = Palette.TextMuted, fontSize = 13.sp,
+            )
+            Text(
+                when {
+                    host.connected -> "Helfer ist verbunden." + (host.lastAction?.let { " Zuletzt: $it" } ?: "")
+                    host.online -> "Bereit – warte auf den Helfer …"
+                    else -> "Verbinde mit dem Briefkasten …"
+                },
+                color = if (host.connected) Palette.Accent else Palette.TextSoft, fontSize = 14.sp,
+            )
+            TvButton("Fernhilfe beenden", danger = true, onClick = { host.stop("selbst beendet") })
+        } else {
+            Text(
+                "Jemand soll deine Playlists einrichten, ohne vorbeizukommen? „Fernhilfe erlauben“ zeigt einen Code – " +
+                    "den gibst du ihm per WhatsApp oder Telefon. Er kann dann 10 Minuten lang (länger, solange er etwas macht) " +
+                    "Playlists hinzufügen, korrigieren, ein- und ausschalten und die Senderliste sortieren und ausblenden. " +
+                    "Alles geht verschlüsselt über einen Briefkasten im Internet; danach liegt alles nur auf dieser Box.",
+                color = Palette.TextMuted, fontSize = 13.sp,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                TvButton("Fernhilfe erlauben – Code zeigen", onClick = { host.start() })
+                TvButton("Fernhilfe geben – Code eingeben", onClick = { asking = true })
+            }
+        }
+    }
+    if (asking) {
+        InputDialog(
+            "Code von der anderen Box (z. B. K7M4-Q2XP)", "", password = false, keyboard = KeyboardType.Text,
+            onDone = { code -> asking = false; onGive(code) },
+            onCancel = { asking = false },
+        )
     }
 }
 

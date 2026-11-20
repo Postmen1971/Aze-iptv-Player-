@@ -34,6 +34,48 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var app: AppController
 
+    private suspend fun runRemoteHelpTest(relay: String) {
+        val log = { m: String -> de.aze.iptv.ui.qaLog(m) }
+        suspend fun waitFor(sec: Int, cond: () -> Boolean): Boolean {
+            repeat(sec * 2) { if (cond()) return true; kotlinx.coroutines.delay(500) }
+            return cond()
+        }
+        app.remoteRelay = relay
+        if (!waitFor(90) { app.editGroups.isNotEmpty() }) { log("FH_TEST_FAIL keine Senderliste"); return }
+        app.remoteHost.start(fixedCode = "TESTAB23")
+        val guest = app.remoteGuest("test-ab23")
+        if (!waitFor(60) { guest.connected && guest.list != null }) { log("FH_TEST_FAIL keine Verbindung: ${guest.status}"); return }
+        val model = guest.list!!
+        val first = model.editGroups.first()
+        log("FH_TEST_CONNECTED ${model.editGroups.size} Gruppen, ${guest.sources.size} Playlists, erste Gruppe ${first.name}")
+        // Senderliste: erste Gruppe ausblenden und ihren ersten Sender ans Ende schieben
+        guest.editing = true
+        model.toggleGroupHidden(first.key)
+        first.channels.firstOrNull()?.let { ch -> repeat(first.channels.size - 1) { model.moveChannel(first.key, ch.key, +1) } }
+        guest.sendList(model)
+        guest.editing = false
+        val origKey = app.editGroups.first().key
+        if (!waitFor(30) { app.editGroups.firstOrNull { it.key == origKey }?.hidden == true }) { log("FH_TEST_FAIL Ausblenden kam nicht an"); return }
+        log("FH_TEST_HIDDEN ok")
+        // wieder einblenden (neuer Stand von der Box muss erst da sein)
+        if (!waitFor(30) { guest.list !== model && guest.list?.editGroups?.firstOrNull { it.key == first.key }?.hidden == true }) { log("FH_TEST_FAIL kein neuer Stand"); return }
+        val m2 = guest.list!!
+        m2.toggleGroupHidden(first.key)
+        guest.sendList(m2)
+        if (!waitFor(30) { app.editGroups.firstOrNull { it.key == origKey }?.hidden == false }) { log("FH_TEST_FAIL Einblenden kam nicht an"); return }
+        log("FH_TEST_SHOWN ok")
+        // Playlist umbenennen (Korrektur aus der Ferne)
+        val src = app.sources.first()
+        guest.updateSource(guest.sources.first { it.id == src.id }.copy(name = "Test Fern"))
+        if (!waitFor(30) { app.sources.first().name == "Test Fern" }) { log("FH_TEST_FAIL Umbenennen kam nicht an"); return }
+        log("FH_TEST_RENAMED ok")
+        guest.updateSource(guest.sources.first { it.id == src.id }.copy(name = src.name))
+        waitFor(20) { app.sources.first().name == src.name }
+        guest.stop()
+        if (!waitFor(30) { !app.remoteHost.active }) { log("FH_TEST_FAIL Box blieb offen"); return }
+        log("FH_TEST_OK")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         guardMainLoop()
@@ -142,6 +184,10 @@ class MainActivity : ComponentActivity() {
                 if (app.sources.none { it.url == url }) {
                     app.addSource(de.aze.iptv.data.PlaylistSource(java.util.UUID.randomUUID().toString(), "Test", de.aze.iptv.data.SourceType.M3U, url))
                 }
+            }
+            // Fernhilfe im Test: diese App ist zugleich die Box mit Code und der Helfer (eigener Briefkasten im Test-Server)
+            intent?.getStringExtra("aze_test_fernhilfe")?.let { relay ->
+                lifecycleScope.launch { runRemoteHelpTest(relay) }
             }
             // einen bestimmten Sender (nach Adresse) abspielen, sobald er in der Liste ist
             intent?.getStringExtra("aze_test_play_url")?.let { url ->

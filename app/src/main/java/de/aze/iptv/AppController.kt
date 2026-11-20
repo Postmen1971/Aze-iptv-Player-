@@ -36,7 +36,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
 /** Zentraler Zustand der App: Quellen, Senderliste, Favoriten, aktueller Sender. */
-class AppController(context: Context, outerScope: CoroutineScope) {
+class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.data.ListEditTarget, de.aze.iptv.data.PlaylistTarget {
 
     /**
      * Eigener Bereich für Hintergrundarbeiten: ein Fehler in EINER Aufgabe (Laden, EPG, Portal …)
@@ -228,7 +228,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     fun effectiveDelay(key: String?): Int = (audioDelay + channelDelay(key)).coerceIn(-3000, 3000)
 
     // Anbieter-M3U-Links werden automatisch zu Server + Login (siehe PlaylistSource.normalized)
-    var sources by mutableStateOf(store.sources().map { it.normalized() })
+    final override var sources by mutableStateOf(store.sources().map { it.normalized() })
         private set
 
     /** Nur die eingeschalteten Playlists – pausierte werden weder geladen noch angezeigt. */
@@ -238,7 +238,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
      * Playlist pausieren bzw. wieder einschalten. Beim Pausieren bleiben Zugangsdaten und die zuletzt geladene
      * Liste auf dem Gerät – beim Einschalten ist sie sofort wieder da (und wird nur neu geladen, wenn nötig).
      */
-    fun setSourceEnabled(source: PlaylistSource, on: Boolean) {
+    override fun setSourceEnabled(source: PlaylistSource, on: Boolean) {
         sources = sources.map { if (it.id == source.id) it.copy(enabled = on) else it }
         store.saveSources(sources)
         if (!on && playlistFilter == source.id) playlistFilter = null
@@ -296,10 +296,16 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     private var layout: ListLayout = store.layout
 
     /** Alle Gruppen inkl. ausgeblendeter, in der eingestellten Reihenfolge. */
-    var editGroups by mutableStateOf<List<EditGroup>>(emptyList(), referentialEqualityPolicy())
+    final override var editGroups by mutableStateOf<List<EditGroup>>(emptyList(), referentialEqualityPolicy())
         private set
 
-    val hiddenChannels: Set<String> get() = layout.hiddenChannels
+    override val hiddenChannels: Set<String> get() = layout.hiddenChannels
+
+    override fun channelNote(channel: Channel): String {
+        if (channel.key in layout.hiddenChannels) return "ausgeblendet"
+        val nr = lineup.byKey[channel.key]?.number ?: return ""
+        return if (isFavorite(channel)) "Nr. $nr · Favorit" else "Nr. $nr"
+    }
 
     private fun saveLayout(l: ListLayout) {
         layout = l
@@ -335,7 +341,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         message = "Senderliste vom Handy übernommen."
     }
 
-    fun moveGroup(key: String, delta: Int) {
+    override fun moveGroup(key: String, delta: Int) {
         val keys = editGroups.map { it.key }.toMutableList()
         val i = keys.indexOf(key)
         val j = i + delta
@@ -368,19 +374,19 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         store.vodHidden = vodHidden
     }
 
-    fun toggleGroupHidden(key: String) {
+    override fun toggleGroupHidden(key: String) {
         val h = layout.hiddenGroups
         saveLayout(layout.copy(hiddenGroups = if (key in h) h - key else h + key))
     }
 
-    fun renameGroup(key: String, name: String) {
+    override fun renameGroup(key: String, name: String) {
         val trimmed = name.trim()
         val original = editGroups.firstOrNull { it.key == key }?.originalName
         val names = if (trimmed.isEmpty() || trimmed == original) layout.groupNames - key else layout.groupNames + (key to trimmed)
         saveLayout(layout.copy(groupNames = names))
     }
 
-    fun moveChannel(groupKey: String, channelKey: String, delta: Int) {
+    override fun moveChannel(groupKey: String, channelKey: String, delta: Int) {
         val group = editGroups.firstOrNull { it.key == groupKey } ?: return
         val keys = group.channels.map { it.key }.toMutableList()
         val i = keys.indexOf(channelKey)
@@ -390,13 +396,13 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         saveLayout(layout.copy(channelOrder = layout.channelOrder + (groupKey to keys)))
     }
 
-    fun toggleChannelHidden(channelKey: String) {
+    override fun toggleChannelHidden(channelKey: String) {
         val h = layout.hiddenChannels
         saveLayout(layout.copy(hiddenChannels = if (channelKey in h) h - channelKey else h + channelKey))
     }
 
     /** Eigene Anordnung einer Gruppe verwerfen. */
-    fun resetGroup(groupKey: String) {
+    override fun resetGroup(groupKey: String) {
         saveLayout(
             layout.copy(
                 channelOrder = layout.channelOrder - groupKey,
@@ -730,7 +736,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     }
 
     /** Je Playlist: wie viele Sender geladen wurden oder was schiefging (für die Einstellungen). */
-    var sourceStatus by mutableStateOf<Map<String, String>>(emptyMap())
+    final override var sourceStatus by mutableStateOf<Map<String, String>>(emptyMap())
         private set
 
     private fun updateStatus(errors: Map<String, String>) {
@@ -1077,10 +1083,22 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         rebuild(restoreKey = current?.channel?.key)
     }
 
-    fun addSource(source: PlaylistSource) {
+    override fun addSource(source: PlaylistSource) {
         sources = sources + source.normalized()
         store.saveSources(sources)
         refreshNow()
+    }
+
+    /** Link, Login oder Name einer Playlist korrigieren. Geänderter Zugang → neu laden. */
+    override fun updateSource(source: PlaylistSource) {
+        val old = sources.firstOrNull { it.id == source.id } ?: return
+        val n = source.normalized().copy(name = source.name.trim().ifEmpty { old.name })
+        sources = sources.map { if (it.id == n.id) n else it }
+        store.saveSources(sources)
+        if (old.type != n.type || old.url != n.url || old.user != n.user || old.pass != n.pass) {
+            repo.delete(old)
+            refreshNow()
+        } else rebuild(restoreKey = current?.channel?.key)
     }
 
     /** Welche Playlist die Senderliste zeigt: null = alle untereinander. */
@@ -1096,7 +1114,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     fun playlistName(id: String?): String =
         if (id == null) "Alle" else sources.firstOrNull { it.id == id }?.name ?: "Playlist"
 
-    fun renameSource(source: PlaylistSource, name: String) {
+    override fun renameSource(source: PlaylistSource, name: String) {
         if (name.isBlank()) return
         sources = sources.map { if (it.id == source.id) it.copy(name = name.trim()) else it }
         store.saveSources(sources)
@@ -1104,7 +1122,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
     }
 
     /** Reihenfolge der Playlists ändern (bestimmt auch die Nummerierung). */
-    fun moveSource(source: PlaylistSource, delta: Int) {
+    override fun moveSource(source: PlaylistSource, delta: Int) {
         val list = sources.toMutableList()
         val i = list.indexOfFirst { it.id == source.id }
         val j = i + delta
@@ -1129,7 +1147,7 @@ class AppController(context: Context, outerScope: CoroutineScope) {
         }
     }
 
-    fun removeSource(source: PlaylistSource) {
+    override fun removeSource(source: PlaylistSource) {
         if (playlistFilter == source.id) playlistFilter = null
         sources = sources.filterNot { it.id == source.id }
         store.saveSources(sources)
@@ -1139,6 +1157,16 @@ class AppController(context: Context, outerScope: CoroutineScope) {
             rebuild(restoreKey = current?.channel?.key)
         }
     }
+
+    /** Fernhilfe: diese Box lässt sich von einer anderen Box aus helfen (Code, 10 min + 1 min je Aktion) */
+    val remoteHost: RemoteHelpHost by lazy { RemoteHelpHost(this, scope) }
+
+    /** Briefkasten der Fernhilfe (nur der automatische Test stellt hier seinen eigenen Server ein) */
+    var remoteRelay: String = de.aze.iptv.data.Relay.DEFAULT
+        set(v) { field = v; remoteHost.relayBase = v }
+
+    /** Fernhilfe geben: mit dem Code einer anderen Box verbinden */
+    fun remoteGuest(code: String): RemoteHelpGuest = RemoteHelpGuest(code, scope, remoteRelay).also { it.start() }
 
     fun updateRefreshHours(hours: Int) {
         refreshHours = hours
