@@ -43,6 +43,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -89,6 +90,10 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
     var shownCat by remember { mutableStateOf(1) }
     // Fokus auf „Fernsehen“: rechts statt eines Bereichs das Aze-Logo und „OK = zurück zum Fernsehen“
     var onTv by remember { mutableStateOf(app.hasAnySource) }
+    // true = die Markierung ist in der linken Leiste. Fällt sie aus dem rechten Teil heraus (dort verschwand der
+    // markierte Knopf, z. B. „Handy-Eingabe starten“ → QR-Code), landet sie von selbst links oben auf „Fernsehen“ –
+    // das darf dann NICHT den Bereich schließen (sonst wurde z. B. die Handy-Eingabe sofort wieder beendet).
+    var inLeft by remember { mutableStateOf(true) }
     /** true, sobald die Übersicht einmal zu sehen war – danach ist jedes Erscheinen eine Rückkehr aus einer Unterseite */
     val visited = remember { booleanArrayOf(false) }
     if (editingList) {
@@ -186,10 +191,10 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     Text("Version ${BuildConfig.VERSION_NAME}", color = Palette.TextMuted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
-            CategoryItem("Fernsehen", selected = false, icon = LineIcon.TV, modifier = Modifier.focusRequester(firstFocus), onFocus = { if (app.hasAnySource) onTv = true }, onClick = onClose)
+            CategoryItem("Fernsehen", selected = false, icon = LineIcon.TV, modifier = Modifier.focusRequester(firstFocus), onFocus = { if (inLeft && app.hasAnySource) onTv = true; inLeft = true }, onClick = onClose)
             cats.forEachIndexed { i, name ->
                 // gewählter Bereich nur markiert, solange nicht „Fernsehen“ den Fokus hat (sonst zwei Markierungen gleichzeitig)
-                CategoryItem(name, selected = i == cat && !onTv, icon = CATEGORY_ICON[name], modifier = if (i == cat) Modifier.focusRequester(catFocus) else Modifier, onFocus = { onTv = false; cat = i }, onClick = { onTv = false; cat = i; shownCat = i; qaLog("SET_CAT $name") })
+                CategoryItem(name, selected = i == cat && !onTv, icon = CATEGORY_ICON[name], modifier = if (i == cat) Modifier.focusRequester(catFocus) else Modifier, onFocus = { if (inLeft) { onTv = false; cat = i }; inLeft = true }, onClick = { onTv = false; cat = i; shownCat = i; inLeft = true; qaLog("SET_CAT $name") })
             }
             Spacer(Modifier.height(14.dp))
             CategoryItem(
@@ -205,6 +210,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
+                .onFocusChanged { if (it.hasFocus) inLeft = false }
                 .verticalScroll(paneScroll)
                 .padding(horizontal = 30.dp, vertical = 26.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -653,11 +659,30 @@ private fun EditSourceDialog(src: PlaylistSource, onSave: (PlaylistSource) -> Un
     }
 }
 
+/**
+ * Wird ein markierter Knopf durch einen anderen ersetzt (Starten ↔ Beenden), soll die Markierung auf dem neuen
+ * landen statt aus dem Bereich zu fallen. [state] = was den Wechsel auslöst; erst ab dem ersten Wechsel aktiv.
+ */
+@Composable
+private fun focusOnSwap(state: Any?): FocusRequester {
+    val fr = remember { FocusRequester() }
+    val armed = remember { booleanArrayOf(false) }
+    LaunchedEffect(state) {
+        if (armed[0]) {
+            androidx.compose.runtime.withFrameNanos { }
+            runCatching { fr.requestFocus() }
+        }
+        armed[0] = true
+    }
+    return fr
+}
+
 /** Fernhilfe: Code zeigen (Hilfe bekommen) oder Code eingeben (helfen) */
 @Composable
 private fun RemoteHelpSection(app: AppController, onGive: (String) -> Unit) {
     val host = app.remoteHost
     var asking by remember { mutableStateOf(false) }
+    val swapFocus = focusOnSwap(host.active)
     Section("Fernhilfe") {
         if (host.active) {
             val now by androidx.compose.runtime.produceState(de.aze.iptv.RemoteHelpTime.now(), host.code) {
@@ -689,7 +714,7 @@ private fun RemoteHelpSection(app: AppController, onGive: (String) -> Unit) {
                     color = Palette.TextMuted, fontSize = 13.sp, modifier = Modifier.weight(1f),
                 )
             }
-            TvButton("Fernhilfe beenden", danger = true, onClick = { host.stop("selbst beendet") })
+            TvButton("Fernhilfe beenden", modifier = Modifier.focusRequester(swapFocus), danger = true, onClick = { host.stop("selbst beendet") })
         } else {
             Text(
                 "Jemand soll deine Playlists einrichten, ohne vorbeizukommen? „Fernhilfe erlauben“ zeigt einen Code – " +
@@ -699,7 +724,7 @@ private fun RemoteHelpSection(app: AppController, onGive: (String) -> Unit) {
                 color = Palette.TextMuted, fontSize = 13.sp,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TvButton("Fernhilfe erlauben – Code zeigen", onClick = { host.start() })
+                TvButton("Fernhilfe erlauben – Code zeigen", modifier = Modifier.focusRequester(swapFocus), onClick = { host.start() })
                 TvButton("Fernhilfe geben – Code eingeben", onClick = { asking = true })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -869,6 +894,7 @@ private fun PhoneInputSection(app: AppController) {
         onDispose { server?.stop() }
     }
 
+    val swapFocus = focusOnSwap(server != null)
     Section("Playlist vom Handy eingeben") {
         val s = server
         if (s == null) {
@@ -876,7 +902,7 @@ private fun PhoneInputSection(app: AppController) {
                 "Handy und Fernseher müssen im selben WLAN sein. Die Eingabe ist nur 5 Minuten offen und braucht einen Code.",
                 color = Palette.TextMuted, fontSize = 13.sp,
             )
-            TvButton("Handy-Eingabe starten", onClick = {
+            TvButton("Handy-Eingabe starten", modifier = Modifier.focusRequester(swapFocus), onClick = {
                 val ip = PhoneInputServer.localAddress()
                 if (ip == null) {
                     app.message = "Keine WLAN-/LAN-Adresse gefunden. Ist das Gerät mit dem Heimnetz verbunden?"
@@ -912,7 +938,7 @@ private fun PhoneInputSection(app: AppController) {
                 }
             }
             Text("Schließt sich nach der Eingabe oder nach 5 Minuten von selbst.", color = Palette.TextMuted, fontSize = 13.sp)
-            TvButton("Beenden", onClick = { s.stop() })
+            TvButton("Beenden", modifier = Modifier.focusRequester(swapFocus), onClick = { s.stop() })
         }
     }
 }
@@ -924,6 +950,7 @@ private fun WebEditSection(app: AppController) {
     var address by remember { mutableStateOf<String?>(null) }
     DisposableEffect(Unit) { onDispose { server?.stop() } }
 
+    val swapFocus = focusOnSwap(server != null)
     Section("Senderliste & YouTube am Handy/PC bearbeiten") {
         val s = server
         if (s == null) {
@@ -932,7 +959,7 @@ private fun WebEditSection(app: AppController) {
                     "Gleiches WLAN nötig; mit Code geschützt.",
                 color = Palette.TextMuted, fontSize = 13.sp,
             )
-            TvButton("Web-Bearbeitung starten", onClick = {
+            TvButton("Web-Bearbeitung starten", modifier = Modifier.focusRequester(swapFocus), onClick = {
                 val ip = PhoneInputServer.localAddress()
                 if (ip == null) {
                     app.message = "Keine WLAN-/LAN-Adresse gefunden. Ist das Gerät mit dem Heimnetz verbunden?"
@@ -972,7 +999,7 @@ private fun WebEditSection(app: AppController) {
                 }
             }
             Text("Bleibt offen, solange du bearbeitest; schließt sich 30 Minuten nach der letzten Änderung.", color = Palette.TextMuted, fontSize = 13.sp)
-            TvButton("Beenden", onClick = { s.stop() })
+            TvButton("Beenden", modifier = Modifier.focusRequester(swapFocus), onClick = { s.stop() })
         }
     }
 }

@@ -638,6 +638,25 @@ sleep 3; shot "test15-tv-einstellungen"
 for i in $(seq 1 9); do adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.6; done
 sleep 1; shot "test15-tv-aussehen"
 for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 2; done
+log "Fernseher: Handy-Eingabe mit der Fernbedienung starten – die Markierung darf nicht aus dem Bereich fallen"
+adb shell input keyevent KEYCODE_PROG_BLUE; sleep 3
+for d in 0 0 0 0; do adb shell input keyevent KEYCODE_$d; done; sleep 3
+adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.6; adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1.5
+adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+ok=0
+for i in 1 2 3 4 5 6; do
+  [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS Handy-Eingabe starten" ] && { ok=1; break; }
+  adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.8
+done
+if [ $ok = 1 ]; then
+  adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 3; shot "test15-tv-handy-eingabe"
+  pane=$(qa | grep -o "SET_PANE .*" | tail -1)
+  [ "$pane" = "SET_PANE Sender & Playlists" ] || fail "Fernseher: nach „Handy-Eingabe starten“ springt die Ansicht weg ($pane)"
+  note "Fernseher Handy-Eingabe" "Bereich danach: $pane · Markierung danach: $(qa | grep -o 'FOCUS .*' | tail -1)"
+else
+  note "Fernseher Handy-Eingabe" "Knopf mit der Fernbedienung nicht erreicht: $(qa | grep -o 'FOCUS .*' | tail -4 | tr '\n' ' ')"
+fi
+for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 2; done
 c=$(count "VOD_CAT")
 adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv --es aze_test_xtream "http://10.0.2.2:8090" --ez aze_test_vod true >/dev/null
 wait_for "VOD_CAT" $((c+1)) 40 >/dev/null; sleep 8; shot "test15-tv-filme"

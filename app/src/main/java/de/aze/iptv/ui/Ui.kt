@@ -328,6 +328,7 @@ fun Focusable(
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus?.invoke()
+                if (it.isFocused && qaName != null && de.aze.iptv.BuildConfig.TEST_HOOKS) qaLog("FOCUS $qaName")
             }
             .onPreviewKeyEvent { e ->
                 if (!isOkKey(e.key)) return@onPreviewKeyEvent false
