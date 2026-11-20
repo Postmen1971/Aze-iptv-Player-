@@ -144,6 +144,7 @@ class MainActivity : ComponentActivity() {
             }
             if (intent?.getBooleanExtra("aze_test_multiview", false) == true) app.testMultiView = true
             if (intent?.getBooleanExtra("aze_test_listeditor", false) == true) app.testListEditor = true
+            app.testOpenSettings = intent?.getBooleanExtra("aze_test_settings", false) == true
             // Test-Anbieter für Filme & Serien (Xtream) hinzufügen
             intent?.getStringExtra("aze_test_xtream")?.let { url ->
                 if (app.sources.none { it.url == url }) {
@@ -269,7 +270,7 @@ class MainActivity : ComponentActivity() {
             ) {
                 // Einstellungen sind mit PIN geschützt (Standard 0000).
                 // Erster Start ohne Playlist: direkt in die Einstellungen (ohne PIN) – die App schließt sich dabei nie von selbst
-                var screen by remember { mutableStateOf(if (!app.hasAnySource || app.testListEditor) Screen.SETTINGS else if (app.testOpenVod) Screen.VOD else Screen.PLAYER) }
+                var screen by remember { mutableStateOf(if (!app.hasAnySource || app.testListEditor || app.testOpenSettings) Screen.SETTINGS else if (app.testOpenVod) Screen.VOD else Screen.PLAYER) }
                 var vodSeries by remember { mutableStateOf(false) }
                 val openSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS }
                 // Geräteart in den Einstellungen geändert → Drehen sofort anpassen (Handy: immer quer)

@@ -1012,6 +1012,8 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
     var testListEditor = false
     /** Test-Zugang: gleich Filme öffnen (nur im QA-Build) */
     var testOpenVod = false
+    /** Test: gleich mit den Einstellungen starten (ohne PIN) */
+    var testOpenSettings = false
     /** „Fußball heute“ aus dem Menü der Filme gewählt → im Fernsehen öffnen */
     var pendingFootball by mutableStateOf(false)
     /** SkorText öffnen, sobald das Live-Bild wieder da ist (Seitenmenü in Filme/Serien) */
