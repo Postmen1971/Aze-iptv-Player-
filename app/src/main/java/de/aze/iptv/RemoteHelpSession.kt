@@ -81,6 +81,7 @@ class RemoteHelpHost(private val app: AppController, private val scope: Coroutin
     private var relay: Relay? = null
     private val sendLock = Mutex()
     private var snapshot: List<EditGroup> = emptyList()
+    private var snapHidden: Set<String> = emptySet()
     private var version = 0
     private var statePending: Job? = null
 
@@ -210,8 +211,14 @@ class RemoteHelpHost(private val app: AppController, private val scope: Coroutin
     }
 
     private fun sendState() {
-        snapshot = app.editGroups
-        version++
+        // Stand-Nummer nur erhöhen, wenn sich die Senderliste wirklich geändert hat – sonst passte eine Änderung
+        // des Helfers nicht mehr, nur weil der gleiche Stand kurz hintereinander zweimal verschickt wurde
+        val groups = app.editGroups
+        val hidden = app.hiddenChannels
+        if (groups !== snapshot || hidden != snapHidden || version == 0) {
+            snapshot = groups; snapHidden = hidden
+            version++
+        }
         val sources = JSONArray().also { a -> app.sources.forEach { a.put(sourceToJson(it)) } }
         val status = JSONObject().also { st -> app.sourceStatus.forEach { (k, v) -> st.put(k, v) } }
         val o = JSONObject()
@@ -219,7 +226,7 @@ class RemoteHelpHost(private val app: AppController, private val scope: Coroutin
             .put("left", ((expiresAt - RemoteHelpTime.now()) / 1000).coerceAtLeast(0))
             .put("device", android.os.Build.MODEL ?: "")
             .put("sources", sources).put("status", status)
-            .put("groups", ListEditCodec.encode(snapshot, app.hiddenChannels))
+            .put("groups", ListEditCodec.encode(snapshot, snapHidden))
         send(o)
     }
 
