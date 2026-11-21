@@ -212,18 +212,20 @@
 ## Offene Punkte
 1. **Bildwiederholrate (AFR) auf Fire TV:** Sobald „An Sender anpassen“ eingeschaltet wird, bleibt das Bild stehen (auch mit TextureView aus 1.0.37). Läuft erst wieder, nachdem man eine Weile im Menü war. Deshalb ab 1.0.40 standardmäßig aus. Nächste Ideen: ExoPlayer-eigene Frequenzwahl abschalten (`setVideoChangeFrameRateStrategy(OFF)`), Wiedergabe vor dem Umschalten stoppen und erst nach dem HDMI-Wechsel (ca. 3–5 s) neu starten, Bild-Wächter, der hängende Bilder erkennt und neu startet, Bildflächen-Neuaufbau/TextureView wieder entfernen. Offene Frage an Aziz: Läuft der Ton weiter, wenn das Bild steht?
 2. **SkorText-Update direkt im Player:** Beim Öffnen von SkorText prüfen, ob es auf GitHub eine neuere Version gibt, und die Seiten selbst nachladen (ohne neuen Player-Build). Der Update-Knopf in SkorText soll das auch auslösen (im Player derzeit ohne Funktion, `SkorBridge.installApk` ist leer).
-3. **Eigenen Signaturschlüssel einrichten** (siehe unten).
+3. ~~Eigenen Signaturschlüssel einrichten~~ – erledigt in 1.0.311 (siehe unten).
 4. Stalker-Portal: Filme/Serien und EPG fehlen noch; an einem echten Portal ungetestet.
 5. Simulator auf den aktuellen Stand bringen (optional).
 
 ## Signaturschlüssel
-- Zurzeit wird mit dem **öffentlichen Test-Schlüssel** `keystore/test.jks` signiert (Passwort `aze-test-key`, steht absichtlich offen im Repo). Das reicht zum Testen.
-- Für den eigenen Schlüssel werden im Repository unter *Settings → Secrets and variables → Actions* zwei Secrets angelegt:
-  - `KEYSTORE_BASE64` – die Schlüsseldatei (.jks) als Base64-Text
-  - `KEYSTORE_PASSWORD` – Passwort (gilt für Datei und Schlüssel, Alias `aze`)
-- Die Secrets muss Aziz selbst eintragen (Claude gibt keine Passwörter in Webseiten ein).
-- **Nach dem Umstieg** muss die Testversion einmal deinstalliert werden (andere Signatur), danach gehen Updates normal.
-- Ab dann den Schlüssel + Passwort **unbedingt sicher aufbewahren** (z. B. Passwort-Manager): Ohne ihn lassen sich keine Updates mehr über die installierte App spielen.
+- Seit 1.0.311 (21.11.2026): **eigener Schlüssel** (Secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, Alias `aze`, PKCS12, RSA 4096, SHA-256 beginnt mit `C3:A3:59`, endet `8C:02`). Aziz hat die Secrets selbst eingetragen und die Datei selbst aufbewahrt.
+- **Schlüsselwechsel ohne Deinstallieren:** Gradle baut weiter mit dem Test-Schlüssel `keystore/test.jks` (Passwort `aze-test-key`). Danach unterschreibt der Schritt „Schlüsselwechsel“ jede APK in `out/` mit `apksigner sign … --next-signer … --lineage … --rotation-min-sdk-version 28` (Herkunftsnachweis aus `apksigner rotate`, alter → neuer Schlüssel).
+  - Android 9+ (API 28+) prüft v3 = neuer Schlüssel, als Nachfolger des alten anerkannt.
+  - Android 6–8 (z. B. ältere Fire-TV-Sticks) prüft v1/v2 = weiter alter Schlüssel.
+  - Darum muss der Test-Schlüssel **dauerhaft** im Repo bleiben und mit unterschreiben.
+- Schritt prüft je APK: v2 + v3 gültig und der neue Fingerabdruck ist enthalten (sonst Build-Fehler, keine Veröffentlichung).
+- Emulator (Android 11): `.github/qa/update_test.sh` installiert die zuletzt veröffentlichte Version und spielt die neue darüber (muss „Success“ ergeben, App muss starten).
+- Ohne Secrets fällt der Build automatisch auf „(Testversion)“ zurück.
+- Schlüssel + Passwort **unbedingt sicher aufbewahren**: Ohne sie keine Updates mehr.
 
 ## Entscheidungen
 - Keine Senderlisten in der App; freie Listen nur auf Knopfdruck aus dem Internet
@@ -239,7 +241,6 @@
 - Fußball: nach Senderwahl bleibt rechts die Liste aller Sender des Spiels offen (MatchZapPanel), Zurück schließt.
 - Sicherheit: kein Klartext-Fallback in Secure (encfail:), HTTPS→HTTP-Umleitungen blockiert, Antworten max. 64 MB, Updater nur Repo-APK mit .part, Größen- und SHA-256-Prüfung.
 - Automatische Tests (app/src/test/LogicTest.kt) laufen bei jedem Build: M3U, Nummerierung, XXL-Filter, Tastenbelegung, liveonsat, Fußball-Zuordnung.
-- Offen: Release-Signatur nutzt weiter den Test-Schlüssel, bis KEYSTORE_BASE64/KEYSTORE_PASSWORD als GitHub-Secrets gesetzt sind.
 
 ## v1.0.70 – EPG-Zuordnung und Lippensynchron
 - EPG-Zuordnung: eigene Zuordnung → tvg-id (Groß/klein egal) → tvg-name → Sendername ohne Länder-Vorsatz/HD. tvg-name wird aus der M3U gelesen.
