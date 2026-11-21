@@ -390,12 +390,14 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
         qaLog("MV_AUDIO $index ${if (active) "an" else "aus"}")
     }
 
+    // Neuversuch je Bild: wird beim Senderwechsel abgebrochen (vorher traf ein verspäteter Neuversuch den nächsten Sender)
+    val retryJob = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
+    val retryCount = remember { intArrayOf(0) }
     DisposableEffect(player) {
-        var retries = 0
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
                 status = null
-                retries = 0
+                retryCount[0] = 0
                 qaLog("MV_FIRST_FRAME $index ${chNow.channel.name}")
             }
 
@@ -404,7 +406,8 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
                 // (prepare() allein wirkt im Zustand „Ende“ NICHT – erst stop(), dann prepare(): Ursache der Standbilder)
                 if (state == Player.STATE_ENDED) {
                     qaLog("MV_ENDED $index")
-                    scope.launch {
+                    retryJob[0]?.cancel()
+                    retryJob[0] = scope.launch {
                         delay(300)
                         viewRef[0]?.setKeepContentOnPlayerReset(true)
                         player.stop()
@@ -419,9 +422,10 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
                 status = if (http != null) "Anbieter lehnt ab (${http.responseCode}) – erlaubt er mehrere Verbindungen?"
                 else "Kein Bild – neuer Versuch …"
                 qaLog("MV_ERROR $index ${error.errorCodeName}")
-                scope.launch {
-                    delay(minOf(3_000L * (retries + 1), 15_000L))
-                    retries++
+                retryJob[0]?.cancel()
+                retryJob[0] = scope.launch {
+                    delay(minOf(3_000L * (retryCount[0] + 1), 15_000L))
+                    retryCount[0]++
                     // Portal-Sender: der Link gilt oft nur kurz – beim Neuversuch einen frischen holen
                     if (de.aze.iptv.data.StalkerClient.isStalker(chNow.channel.url)) reload++ else player.prepare()
                 }
@@ -534,8 +538,11 @@ private fun MvVideo(app: AppController, index: Int, channel: NumberedChannel, ac
     }
 
     var firstStart by remember { mutableStateOf(true) }
+    val lastKey = remember { arrayOfNulls<String>(1) }
     LaunchedEffect(channel.channel.key, reload) {
         // Senderwechsel in diesem Bild: gleicher Player, nur neue Quelle
+        retryJob[0]?.cancel()
+        if (lastKey[0] != channel.channel.key) { lastKey[0] = channel.channel.key; retryCount[0] = 0 }
         status = "Lädt …"
         viewRef[0]?.setKeepContentOnPlayerReset(false)
         player.stop()
