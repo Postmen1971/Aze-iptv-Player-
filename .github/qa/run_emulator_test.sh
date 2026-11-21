@@ -709,6 +709,42 @@ cors=$(curl -s -m 10 -o /dev/null -D - -H "Origin: https://postmen1971.github.io
 cors2=$( [ -n "$u" ] && curl -s -m 10 -o /dev/null -D - -H "Origin: https://postmen1971.github.io" "$u" | grep -i "access-control-allow-origin" | tr -d '\r')
 note "Fernhilfe ntfy.sh" "klein: $r1 · Anhang: $r2 · abholen (poll): $r3 · Strom: $r4 · Anhang geladen: $r5 Bytes · CORS: $cors / Anhang: $cors2"
 
+log "== Test 18: Einstellungen öffnen zugeklappt (nur App-Update offen) – auf-/zuklappen mit Fernbedienung und Touch"
+adb shell wm size 540x960; adb shell wm density 160; sleep 2
+p0=$(count "POS Handy-Eingabe starten|"); a0=$(count "SEC_AUF"); z0=$(count "SEC_ZU")
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv --ez aze_test_settings true --ez aze_test_sections_closed true >/dev/null; sleep 6
+adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.6; adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1.5
+shot "test18-zugeklappt"
+[ "$(count "POS Handy-Eingabe starten|")" -eq "$p0" ] || fail "Einstellungen: „Playlist vom Handy eingeben“ ist beim Öffnen schon aufgeklappt"
+adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+f1=$(qa | grep -o "FOCUS .*" | tail -1)
+case "$f1" in "FOCUS SEC "*) ;; *) fail "Fernbedienung: ▶ landet nicht auf einer Abschnitts-Überschrift ($f1)";; esac
+adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 1.5
+[ "$(count "SEC_AUF")" -gt "$a0" ] || fail "Fernbedienung: OK klappt den Abschnitt nicht auf"
+f2=$(qa | grep -o "FOCUS .*" | tail -1); [ "$f2" = "$f1" ] || fail "Fernbedienung: Markierung nach dem Aufklappen verloren ($f1 → $f2)"
+shot "test18-aufgeklappt"
+adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 1.5
+[ "$(count "SEC_ZU")" -gt "$z0" ] || fail "Fernbedienung: OK klappt den Abschnitt nicht wieder zu"
+f3=$(qa | grep -o "FOCUS .*" | tail -1); [ "$f3" = "$f1" ] || fail "Fernbedienung: Markierung nach dem Zuklappen verloren ($f1 → $f3)"
+adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1
+f4=$(qa | grep -o "FOCUS .*" | tail -1)
+case "$f4" in "FOCUS SEC "*) [ "$f4" != "$f1" ] || fail "Fernbedienung: ▼ kommt nicht zum nächsten Abschnitt";; *) fail "Fernbedienung: ▼ landet nicht auf dem nächsten Abschnitt ($f4)";; esac
+# Touch: Abschnitt „Playlists“ per Antippen auf und zu
+a1=$(count "SEC_AUF Playlists"); z1=$(count "SEC_ZU Playlists")
+tap "SEC Playlists" || fail "Touch: Abschnitt „Playlists“ nicht antippbar"
+sleep 1.5; [ "$(count "SEC_AUF Playlists")" -gt "$a1" ] || fail "Touch: Antippen klappt „Playlists“ nicht auf"
+shot "test18-touch-auf"
+tap "SEC Playlists" || true
+sleep 1.5; [ "$(count "SEC_ZU Playlists")" -gt "$z1" ] || fail "Touch: zweites Antippen klappt „Playlists“ nicht zu"
+# System: App-Update ist von selbst offen
+u0=$(count "POS Nach Update suchen|")
+tap "SET System" || fail "Touch: Bereich „System“ nicht antippbar"
+sleep 2; shot "test18-system"
+[ "$(count "POS Nach Update suchen|")" -gt "$u0" ] || fail "Einstellungen: „App-Update“ ist beim Öffnen nicht offen"
+note "Einstellungen zugeklappt" "Markierung: $f1 → nach OK $f2 → nach OK $f3 → ▼ $f4 · Abschnitte auf: $(count SEC_AUF) zu: $(count SEC_ZU)"
+alive || fail "Einstellungen zugeklappt: App nicht mehr da"
+adb shell wm size reset; adb shell wm density reset
+
 log "== Absturz-Prüfung"
 alive || fail "App ist am Ende nicht mehr da"
 if adb logcat -d -b crash | grep -q "$PKG"; then

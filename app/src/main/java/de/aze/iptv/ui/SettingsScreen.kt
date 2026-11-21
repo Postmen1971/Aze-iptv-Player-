@@ -374,10 +374,18 @@ private fun CategoryItem(
     }
 }
 
+/** Nur der automatische Test: Abschnitte offen lassen (die übrigen Tests tippen direkt auf Knöpfe darin) */
+internal var testSectionsOpen = false
+
+/**
+ * Einklappbarer Abschnitt: Überschrift antippen bzw. OK. Beim Öffnen der Einstellungen ist alles zu (Aziz: sonst eine
+ * ewig lange Liste, für Laien unübersichtlich) – nur [startOpen] (App-Update) ist offen. [keepOpen]: gerade läuft
+ * etwas darin (QR-Code, Fernhilfe-Code), dann bleibt er offen.
+ */
 @Composable
-private fun Section(title: String, startOpen: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
-    // Einklappbar: Überschrift antippen bzw. OK
-    var open by remember(title) { mutableStateOf(startOpen) }
+private fun Section(title: String, startOpen: Boolean = false, keepOpen: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    var open by remember(title) { mutableStateOf(startOpen || testSectionsOpen) }
+    val shown = open || keepOpen
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -386,7 +394,7 @@ private fun Section(title: String, startOpen: Boolean = true, content: @Composab
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Focusable(modifier = Modifier.fillMaxWidth(), onClick = { open = !open }) { focused ->
+        Focusable(modifier = Modifier.fillMaxWidth(), qaName = "SEC $title", onClick = { open = !shown; qaLog("SEC_${if (open) "AUF" else "ZU"} $title") }) { focused ->
             Row(
                 Modifier.fillMaxWidth()
                     .then(if (focused) Modifier.background(Palette.FocusBrush, RoundedCornerShape(10.dp)) else Modifier)
@@ -394,10 +402,10 @@ private fun Section(title: String, startOpen: Boolean = true, content: @Composab
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(title, color = if (focused) Palette.OnAccent else Palette.Text, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
-                Text(if (open) "▾" else "▸", color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 18.sp)
+                Text(if (shown) "▾" else "▸", color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 18.sp)
             }
         }
-        if (open) content()
+        if (shown) content()
     }
 }
 
@@ -458,7 +466,7 @@ private fun ControlsSection(app: AppController) {
 /** Erster Start (noch keine Liste): klar sagen, was die App ist – ein Player ohne eigene Inhalte. */
 @Composable
 private fun WelcomeSection() {
-    Section("Willkommen") {
+    Section("Willkommen", startOpen = true) {
         Text("Dein Player für deine eigenen Listen", color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
         Text(
             "Aze ist ein reiner Player. Die App enthält keine Sender, Filme oder Serien. Du spielst nur Inhalte ab, " +
@@ -515,7 +523,8 @@ private fun FreeListSection(app: AppController) {
 
 @Composable
 internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
-    Section(title) {
+    // erster Start ohne Playlist: gleich offen, damit man sieht, wo die Liste hinkommt
+    Section(title, startOpen = app.sources.isEmpty()) {
         if (app.sources.isEmpty()) {
             Text("Noch keine Playlist. Füge unten einen M3U-Link oder Server + Login hinzu.", color = Palette.TextMuted, fontSize = 14.sp)
         }
@@ -683,7 +692,7 @@ private fun RemoteHelpSection(app: AppController, onGive: (String) -> Unit) {
     val host = app.remoteHost
     var asking by remember { mutableStateOf(false) }
     val swapFocus = focusOnSwap(host.active)
-    Section("Fernhilfe") {
+    Section("Fernhilfe", keepOpen = host.active) {
         if (host.active) {
             val now by androidx.compose.runtime.produceState(de.aze.iptv.RemoteHelpTime.now(), host.code) {
                 while (true) { value = de.aze.iptv.RemoteHelpTime.now(); delay(1_000) }
@@ -895,7 +904,7 @@ private fun PhoneInputSection(app: AppController) {
     }
 
     val swapFocus = focusOnSwap(server != null)
-    Section("Playlist vom Handy eingeben") {
+    Section("Playlist vom Handy eingeben", keepOpen = server != null) {
         val s = server
         if (s == null) {
             Text(
@@ -951,7 +960,7 @@ private fun WebEditSection(app: AppController) {
     DisposableEffect(Unit) { onDispose { server?.stop() } }
 
     val swapFocus = focusOnSwap(server != null)
-    Section("Senderliste & YouTube am Handy/PC bearbeiten") {
+    Section("Senderliste & YouTube am Handy/PC bearbeiten", keepOpen = server != null) {
         val s = server
         if (s == null) {
             Text(
@@ -1386,7 +1395,7 @@ private fun UpdateSection() {
         onDispose { lifecycle.removeObserver(obs) }
     }
 
-    Section("App-Update") {
+    Section("App-Update", startOpen = true) {
         Text("Installiert: Version ${BuildConfig.VERSION_NAME}", color = Palette.TextSoft, fontSize = 14.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Nach Update suchen", onClick = {

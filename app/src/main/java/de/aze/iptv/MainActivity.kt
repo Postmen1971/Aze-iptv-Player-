@@ -145,6 +145,8 @@ class MainActivity : ComponentActivity() {
             if (intent?.getBooleanExtra("aze_test_multiview", false) == true) app.testMultiView = true
             if (intent?.getBooleanExtra("aze_test_listeditor", false) == true) app.testListEditor = true
             app.testOpenSettings = intent?.getBooleanExtra("aze_test_settings", false) == true
+            // Tests tippen direkt auf Knöpfe in den Abschnitten → offen lassen, außer der Test prüft das Zuklappen selbst
+            de.aze.iptv.ui.testSectionsOpen = intent?.getBooleanExtra("aze_test_sections_closed", false) != true
             // Test-Anbieter für Filme & Serien (Xtream) hinzufügen
             intent?.getStringExtra("aze_test_xtream")?.let { url ->
                 if (app.sources.none { it.url == url }) {
