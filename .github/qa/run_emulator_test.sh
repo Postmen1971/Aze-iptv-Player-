@@ -711,7 +711,7 @@ note "Fernhilfe ntfy.sh" "klein: $r1 · Anhang: $r2 · abholen (poll): $r3 · St
 
 log "== Test 18: Einstellungen öffnen zugeklappt (nur App-Update offen) – auf-/zuklappen mit Fernbedienung und Touch"
 adb shell wm size 540x960; adb shell wm density 160; sleep 2
-p0=$(count "POS Handy-Eingabe starten|"); a0=$(count "SEC_AUF"); z0=$(count "SEC_ZU")
+p0=$(count "POS Handy-Eingabe starten|"); a0=$(count "SEC_AUF"); z0=$(count "SEC_ZU"); pA0=$(count "POS Ändern|")
 adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv --ez aze_test_settings true --ez aze_test_sections_closed true >/dev/null; sleep 6
 adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.6; adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1.5
 shot "test18-zugeklappt"
@@ -730,12 +730,14 @@ adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1
 f4=$(qa | grep -o "FOCUS .*" | tail -1)
 case "$f4" in "FOCUS SEC "*) [ "$f4" != "$f1" ] || fail "Fernbedienung: ▼ kommt nicht zum nächsten Abschnitt";; *) fail "Fernbedienung: ▼ landet nicht auf dem nächsten Abschnitt ($f4)";; esac
 # Touch: Abschnitt „Playlists“ per Antippen auf und zu
-a1=$(count "SEC_AUF Playlists"); z1=$(count "SEC_ZU Playlists")
-tap "SEC Playlists" || fail "Touch: Abschnitt „Playlists“ nicht antippbar"
-sleep 1.5; [ "$(count "SEC_AUF Playlists")" -gt "$a1" ] || fail "Touch: Antippen klappt „Playlists“ nicht auf"
+T="Freie Sender (iptv-org)"
+[ "$(count "POS Ändern|")" -gt "$pA0" ] || fail "Einstellungen: „Playlists“ (grundlegend) ist beim Öffnen nicht offen"
+a1=$(count "SEC_AUF $T"); z1=$(count "SEC_ZU $T")
+tap "SEC $T" || fail "Touch: Abschnitt „$T“ nicht antippbar"
+sleep 1.5; [ "$(count "SEC_AUF $T")" -gt "$a1" ] || fail "Touch: Antippen klappt „$T“ nicht auf"
 shot "test18-touch-auf"
-tap "SEC Playlists" || true
-sleep 1.5; [ "$(count "SEC_ZU Playlists")" -gt "$z1" ] || fail "Touch: zweites Antippen klappt „Playlists“ nicht zu"
+tap "SEC $T" || true
+sleep 1.5; [ "$(count "SEC_ZU $T")" -gt "$z1" ] || fail "Touch: zweites Antippen klappt „$T“ nicht zu"
 # System: App-Update ist von selbst offen
 u0=$(count "POS Nach Update suchen|")
 tap "SET System" || fail "Touch: Bereich „System“ nicht antippbar"

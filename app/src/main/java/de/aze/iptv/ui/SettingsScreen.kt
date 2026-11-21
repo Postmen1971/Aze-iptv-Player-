@@ -267,7 +267,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                 "Bild & Ton" -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
                 "Programmzeitschrift" -> EpgSection(app)
                 "PIN & Kinderschutz" -> {
-                    Section("PIN & Kinderschutz") {
+                    Section("PIN & Kinderschutz", startOpen = true) {
                     Text(
                         if (app.pinIsDefault) "Die PIN ist noch 0000. Bitte eine eigene PIN festlegen."
                         else "Die Einstellungen sind mit deiner PIN geschützt.",
@@ -378,9 +378,10 @@ private fun CategoryItem(
 internal var testSectionsOpen = false
 
 /**
- * Einklappbarer Abschnitt: Überschrift antippen bzw. OK. Beim Öffnen der Einstellungen ist alles zu (Aziz: sonst eine
- * ewig lange Liste, für Laien unübersichtlich) – nur [startOpen] (App-Update) ist offen. [keepOpen]: gerade läuft
- * etwas darin (QR-Code, Fernhilfe-Code), dann bleibt er offen.
+ * Einklappbarer Abschnitt: Überschrift antippen bzw. OK. Aziz: Grundlegendes darf offen sein ([startOpen]: Playlists,
+ * Senderliste bearbeiten, Favoriten, Zappen, Aussehen, Wiedergabe, EPG, PIN, Sichern, App-Update …), alles, was man
+ * nur ab und zu braucht (Hilfe, YouTube, Handy-Eingabe, Fernhilfe, Tempo, Netzwerk …), ist beim Öffnen zu –
+ * sonst eine ewig lange, für Laien unübersichtliche Liste. [keepOpen]: gerade läuft etwas darin (QR-Code, Code).
  */
 @Composable
 private fun Section(title: String, startOpen: Boolean = false, keepOpen: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
@@ -412,7 +413,7 @@ private fun Section(title: String, startOpen: Boolean = false, keepOpen: Boolean
 /** Bedienung: Zappen, Sendernamen, Tastenbelegung. */
 @Composable
 private fun ControlsSection(app: AppController) {
-    Section("Zappen") {
+    Section("Zappen", startOpen = true) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("Alle Sender", selected = !app.zapInGroup, onClick = { app.updateZapInGroup(false) })
             TvButton("Nur in der Gruppe", selected = app.zapInGroup, onClick = { app.updateZapInGroup(true) })
@@ -523,8 +524,7 @@ private fun FreeListSection(app: AppController) {
 
 @Composable
 internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
-    // erster Start ohne Playlist: gleich offen, damit man sieht, wo die Liste hinkommt
-    Section(title, startOpen = app.sources.isEmpty()) {
+    Section(title, startOpen = true) {
         if (app.sources.isEmpty()) {
             Text("Noch keine Playlist. Füge unten einen M3U-Link oder Server + Login hinzu.", color = Palette.TextMuted, fontSize = 14.sp)
         }
@@ -778,7 +778,7 @@ private val epgPresets = listOf(
 @Composable
 private fun EpgSection(app: AppController) {
     var adding by remember { mutableStateOf(false) }
-    Section("Programmzeitschrift (EPG)") {
+    Section("Programmzeitschrift (EPG)", startOpen = true) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton("EPG an", selected = app.epgEnabled, onClick = { app.updateEpgEnabled(true) })
             TvButton("EPG aus", selected = !app.epgEnabled, onClick = { app.updateEpgEnabled(false) })
@@ -1067,7 +1067,7 @@ private fun YouTubeSection(app: AppController) {
 /** Aussehen (unter „Bedienung“): Farbschema und Schriftfarbe. */
 @Composable
 private fun AppearanceSection(app: AppController) {
-    Section("Aussehen") {
+    Section("Aussehen", startOpen = true) {
         // Stil: ändert Ecken, Fokus und Poster (nur Zeichnen, macht nichts langsamer) und stellt passende Farben ein
         Text("Stil", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1161,7 +1161,7 @@ private fun VodHideButtons(app: AppController) {
 /** Senderliste bearbeiten – gut sichtbar ganz oben unter „Senderliste“. */
 @Composable
 private fun ListEditSection(app: AppController, onEditList: () -> Unit) {
-    Section("Senderliste bearbeiten") {
+    Section("Senderliste bearbeiten", startOpen = true) {
         Text(
             "Gruppen und Sender sortieren, umbenennen, ein- und ausblenden – direkt hier am Fernseher.",
             color = Palette.TextMuted, fontSize = 13.sp,
@@ -1203,7 +1203,7 @@ private fun PlaybackSection(app: AppController, onEditList: () -> Unit, part: In
             }
         }
     }
-    if (part == 0 || part == 2) Section("Wiedergabe") {
+    if (part == 0 || part == 2) Section("Wiedergabe", startOpen = true) {
       // Puffer, Player, Bildqualität und Bildwiederholrate immer sichtbar (auf Wunsch von Aziz)
       run {
         Text("Puffer", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -1321,7 +1321,7 @@ private fun NetworkSection(app: AppController) {
 
 @Composable
 private fun FavoritesSection(app: AppController) {
-    Section("Favoriten (Nummer 1, 2, 3 …)") {
+    Section("Favoriten (Nummer 1, 2, 3 …)", startOpen = true) {
         val favs = app.lineup.groups.firstOrNull { it.isFavorites }?.channels.orEmpty()
         if (favs.isEmpty()) {
             Text("In der Senderliste OK lang drücken (Touch: lange tippen), um einen Favoriten hinzuzufügen.", color = Palette.TextMuted, fontSize = 14.sp)
@@ -1474,7 +1474,7 @@ private fun AboutSection(app: AppController, help: Boolean = false) {
         }
     }
     if (help) { HangLogSection(app); return }
-    Section("Über") {
+    Section("Über", startOpen = true) {
         Text(
             "Aze-IPTV-Player ist ein Player und liefert selbst keine Sender oder Inhalte. " +
                 "Bitte nur Playlists verwenden, für die du die Nutzungsrechte hast.",
@@ -1656,7 +1656,7 @@ private fun LearnedChannelsSection(app: AppController) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var link by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    Section("Gelernte Sender") {
+    Section("Gelernte Sender", startOpen = true) {
         Text(
             "Was du bei „Fußball heute → TV-Plan durchgehen“ mit OK bestätigst, merkt sich die App. " +
                 "„Teilen“ legt deine Zuordnungen als Text ab (nur liveonsat-Sendernamen und deine Sendernamen) und zeigt einen Link – " +
@@ -1779,7 +1779,7 @@ private fun BackupSection(app: AppController) {
     var entering by remember { mutableStateOf(false) }
     var done by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    Section("Sichern & Wiederherstellen") {
+    Section("Sichern & Wiederherstellen", startOpen = true) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             TvButton(if (busy == "save") "Wird gesichert …" else "Sicherung erstellen", selected = true, onClick = {
                 if (busy != null) return@TvButton
@@ -1933,7 +1933,7 @@ private val SETTINGS_INDEX = listOf(
 private fun SettingsSearch(onGo: (String) -> Unit) {
     var query by remember { mutableStateOf("") }
     var entering by remember { mutableStateOf(false) }
-    Section("Einstellung suchen") {
+    Section("Einstellung suchen", startOpen = true) {
         TvButton(if (query.isBlank()) "Stichwort eingeben …" else "Suche: $query", selected = true, onClick = { entering = true })
         val q = query.trim().lowercase()
         val hits = if (q.isEmpty()) SETTINGS_INDEX else SETTINGS_INDEX.filter { (t, k, _) -> t.lowercase().contains(q) || k.contains(q) }
