@@ -724,9 +724,6 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
                 val blocked = adultFilter && (de.aze.iptv.data.AdultFilter.isAdult(c.group) || de.aze.iptv.data.AdultFilter.isAdult(c.name))
                 if (known && !blocked) { current = last; instantStart = true }
             }
-            // Sofortstart: erst den Sender anlaufen lassen (Verbindung + Start-Vorrat), dann die große Liste lesen –
-            // sonst teilen sich beide Prozessor und Leitung genau in der ersten Sekunde
-            if (instantStart) awaitFirstPlay(3_000)
             try {
                 channels = repo.loadCached(activeSources)
                 rebuild(restoreKey = store.lastChannelKey).join()
@@ -737,8 +734,8 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
             if (epgEnabled) epg = runCatching { epgRepo.load() }.getOrDefault(Epg.EMPTY).withManual(epgMap)
             val refresh = needsRefresh() || refreshPending
             val epgStale = !refresh && activeSources.isNotEmpty() && epgRepo.isStale(12)
-            // Downloads (Liste 20–50 MB, EPG bis 100 MB) nicht in den ersten Sekunden des laufenden Senders
-            if ((refresh || epgStale) && current != null && repo.hasCache(activeSources)) { awaitFirstPlay(15_000); delay(8_000) }
+            // (Versuch 1.0.307, die Liste erst nach dem ersten Bild zu lesen und Downloads 8 s zu verschieben, machte das
+            // Umschalten in den ersten Minuten langsamer – Emulator 81 → 115 ms – zurückgenommen)
             if (refresh) {
                 refreshPending = false
                 refreshNow()
@@ -1072,10 +1069,6 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         private set
     fun notePlaying() { if (firstPlayingAt == 0L) firstPlayingAt = android.os.SystemClock.elapsedRealtime() }
 
-    private suspend fun awaitFirstPlay(maxMs: Long) {
-        val until = android.os.SystemClock.elapsedRealtime() + maxMs
-        while (firstPlayingAt == 0L && android.os.SystemClock.elapsedRealtime() < until) delay(100)
-    }
 
     /** Springt zwischen aktuellem und vorherigem Sender hin und her. */
     fun playPrevious(): Boolean {
