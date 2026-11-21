@@ -605,6 +605,8 @@ fun PlayerScreen(
             override fun onPlaybackStateChanged(state: Int) {
                 // Manche Live-Streams "enden" einfach (Verbindung vom Server getrennt): neu verbinden.
                 if (state == Player.STATE_ENDED && player.currentMediaItem != null) {
+                    // während des Umschaltens hängt noch der ALTE Sender am Player – sein Ende gehört nicht zum neuen
+                    if (zapHold[0]) { qaLog("ENDED_ALT ignoriert"); return }
                     qaLog("ENDED ${app.current?.channel?.name}")
                     retryJob?.cancel()
                     // Anbieter hat den Stream beendet: nach 0,3 s neu verbinden (stop + prepare, wie im Multi-View)
@@ -623,6 +625,9 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                // Fehler des ALTEN Senders in der kurzen Wartezeit beim Umschalten: nicht dem neuen anrechnen
+                // (sonst falsche Meldung, Neustart oder sogar Wechsel auf VLC für den neuen Sender)
+                if (zapHold[0]) { qaLog("ERROR_ALT ignoriert ${error.errorCodeName}"); return }
                 qaLog("ERROR ${error.errorCodeName} ${app.current?.channel?.name}")
                 noPicture = true
                 retryJob?.cancel()
@@ -839,6 +844,8 @@ fun PlayerScreen(
         val liveCfg = MediaItem.LiveConfiguration.Builder().setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f)
         level.liveOffsetMs?.let { liveCfg.setTargetOffsetMs(it) }
         builder.setLiveConfiguration(liveCfg.build())
+        // ein noch laufender Neuversuch gehört zum vorigen Sender bzw. Versuch
+        retryJob?.cancel()
         player.setMediaSource(live.create(builder.build()))
         // Live-TV läuft immer – auch falls der Player zuvor (z. B. vom System) pausiert wurde
         zapHold[0] = false
@@ -1132,7 +1139,9 @@ fun PlayerScreen(
                             // Portal-Link abgelaufen? Neuen anfordern.
                             if (currentKey != null && StalkerClient.isStalker(currentKey) && retries < 5) {
                                 retries++
-                                scope.launch { delay(3_000); relinkTick++ }
+                                // als retryJob: schaltet man vorher um, wird er abgebrochen (sonst traf er den neuen Sender)
+                                retryJob?.cancel()
+                                retryJob = scope.launch { delay(3_000); relinkTick++ }
                             }
                         },
                     )

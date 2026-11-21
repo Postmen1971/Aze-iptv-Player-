@@ -98,6 +98,10 @@ class LiveSource(context: Context, http: HttpDataSource.Factory) {
                 val cur = player.currentMediaItem ?: return
                 // nur für das letzte Stück der Liste (sonst würde jede Verbindung mehrfach nachgelegt)
                 if (t.windowIndex != player.mediaItemCount - 1 || !isProgressive(cur)) return
+                // Verbindung eines anderen Senders (gerade umgeschaltet) oder Player angehalten (Wartezeit beim
+                // Umschalten): keine Folge-Verbindung für den alten Sender öffnen – Anbieter mit 1 Verbindung lehnen
+                // sonst den neuen ab
+                if (info.dataSpec.uri != cur.localConfiguration?.uri || !player.playWhenReady) return
                 handler.removeCallbacksAndMessages(null)
                 generation++
                 // Bremse: Antwortet der Anbieter nur ganz kurz (fast leere Antwort, sofort wieder zu), nicht im
