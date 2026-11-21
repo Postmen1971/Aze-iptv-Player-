@@ -46,6 +46,7 @@ h2{font-size:18px;margin:22px 0 8px}
 .chs .row{background:var(--raised);margin:4px 0}
 .drag{position:fixed;z-index:20;pointer-events:none;opacity:.92;box-shadow:0 8px 24px rgba(0,0,0,.5)}
 .ph{border:2px dashed var(--acc);border-radius:10px;margin:6px 0}
+[hidden]{display:none!important}
 #bar{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;align-items:center;justify-content:center}
 #bar span{color:var(--soft);font-size:14px;flex:1;max-width:460px}
 dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:16px;width:min(560px,94vw);padding:18px}
@@ -183,16 +184,16 @@ async function listen(){
 }
 
 /* ---------- Ablauf ---------- */
-var CONNECTED=false, STATE=null, PENDING=null, expiresAt=0, lastPing=0, DATA=null, dirty=false, closed=false;
+var CONNECTED=false, STATE=null, PENDING=null, expiresAt=0, lastPing=0, DATA=null, dirty=false, ended=false;
 function setStatus(t,cls){var s=$("status");s.textContent=t;s.className="status"+(cls?" "+cls:"")}
 function show(v){["vLogin","vMain","vList"].forEach(function(x){$(x).hidden=x!==v});$("bar").hidden=v!=="vList"}
 function activity(){
-  if(!CONNECTED||closed)return;
+  if(!CONNECTED||ended)return;
   expiresAt=Math.max(expiresAt,Date.now()+60000);
   if(Date.now()-lastPing>20000){lastPing=Date.now();publish({op:"ping"})}
 }
 function order(obj,text){
-  if(!CONNECTED||closed)return;
+  if(!CONNECTED||ended)return;
   expiresAt=Math.max(expiresAt,Date.now()+60000);lastPing=Date.now();
   setStatus(text+" – wird übertragen …");
   publish(obj);
@@ -203,7 +204,7 @@ async function connect(){
   if(!window.crypto||!crypto.subtle){$("lerr").textContent="Dieser Browser kann nicht verschlüsseln – bitte Safari oder Chrome aktuell halten.";return}
   $("lerr").textContent="";
   try{sessionStorage.setItem("azeFhCode",code)}catch(e){}
-  K=await makeKeys(code);RUN=true;closed=false;
+  K=await makeKeys(code);RUN=true;ended=false;
   show("vMain");setStatus("Verbinde …");
   listen();
   for(var i=0;i<6&&!CONNECTED&&RUN;i++){
@@ -224,13 +225,13 @@ function handle(m){
   }else if(m.op==="msg"){
     setStatus(m.text||"");if(!$("vList").hidden)$("barMsg").textContent=m.text||"";
   }else if(m.op==="bye"){
-    closed=true;RUN=false;if(ctl)ctl.abort();
+    ended=true;RUN=false;if(ctl)ctl.abort();
     setStatus("Die Box hat die Fernhilfe beendet"+(m.text?" ("+m.text+")":"")+".","err");
     $("openList").disabled=true;show("vMain");
   }
 }
 setInterval(function(){
-  if(!CONNECTED||closed){$("left").textContent="";return}
+  if(!CONNECTED||ended){$("left").textContent="";return}
   var s=Math.max(0,Math.round((expiresAt-Date.now())/1000));
   $("left").textContent="Offen noch etwa "+Math.floor(s/60)+":"+("0"+s%60).slice(-2)+" min · jede Aktion verlängert um 1 Minute.";
 },1000);
@@ -300,8 +301,8 @@ $("dlgSave").onclick=function(){
 };
 $("refresh").onclick=function(){order({op:"refresh"},"Neu laden")};
 $("end").onclick=function(){
-  if(CONNECTED&&!closed)publish({op:"bye"});
-  closed=true;RUN=false;if(ctl)ctl.abort();
+  if(CONNECTED&&!ended)publish({op:"bye"});
+  ended=true;RUN=false;if(ctl)ctl.abort();
   setStatus("Fernhilfe beendet.");$("openList").disabled=true;
 };
 $("go").onclick=connect;
