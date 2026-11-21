@@ -56,15 +56,16 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
+          # Gebaut wird immer mit dem bisherigen (Test-)Schlüssel. Sind die Secrets da, werden die fertigen
+          # APKs danach im Schritt „Schlüsselwechsel“ zusätzlich mit dem neuen Schlüssel unterschrieben.
+          echo "file=$GITHUB_WORKSPACE/keystore/test.jks" >> "$GITHUB_OUTPUT"
+          echo "password=aze-test-key" >> "$GITHUB_OUTPUT"
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "file=$RUNNER_TEMP/release.jks" >> "$GITHUB_OUTPUT"
-            echo "password=$KEYSTORE_PASSWORD" >> "$GITHUB_OUTPUT"
+            echo "rotate=true" >> "$GITHUB_OUTPUT"
             echo "label=" >> "$GITHUB_OUTPUT"
           else
-            # Noch keine Secrets: mit dem öffentlichen Test-Schlüssel signieren (siehe keystore/README.md)
-            echo "file=$GITHUB_WORKSPACE/keystore/test.jks" >> "$GITHUB_OUTPUT"
-            echo "password=aze-test-key" >> "$GITHUB_OUTPUT"
+            echo "rotate=false" >> "$GITHUB_OUTPUT"
             echo "label= (Testversion)" >> "$GITHUB_OUTPUT"
             echo "::warning::Keine Secrets hinterlegt – Testversion mit öffentlichem Test-Schlüssel."
           fi
@@ -110,6 +111,38 @@ jobs:
           fi
           ls -la out
 
+      # Schlüsselwechsel (APK-Signatur v3 mit Herkunftsnachweis): Android 9+ prüft den NEUEN Schlüssel und
+      # akzeptiert ihn als Nachfolger des alten – Updates gehen ohne Deinstallieren. Ältere Geräte prüfen weiter
+      # die alte Unterschrift (v1/v2). Der alte Schlüssel muss dafür bei jeder Version mit unterschreiben.
+      - name: Schlüsselwechsel
+        if: ${{ steps.key.outputs.rotate == 'true' }}
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          set -e
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          SIGNER="$BT/apksigner"
+          echo "apksigner aus $BT"
+          OLD=(--ks "$GITHUB_WORKSPACE/keystore/test.jks" --ks-key-alias aze --ks-pass pass:aze-test-key)
+          NEW=(--ks "$RUNNER_TEMP/release.jks" --ks-key-alias aze --ks-pass env:KEYSTORE_PASSWORD --key-pass env:KEYSTORE_PASSWORD)
+          "$SIGNER" rotate --out "$RUNNER_TEMP/lineage" --old-signer "${OLD[@]}" --new-signer "${NEW[@]}"
+          NEWSHA=$(keytool -list -v -keystore "$RUNNER_TEMP/release.jks" -storepass "$KEYSTORE_PASSWORD" -alias aze | grep -m1 'SHA256:' | sed 's/.*SHA256: *//' | tr -d ':' | tr 'A-F' 'a-f')
+          for apk in out/*.apk; do
+            "$SIGNER" sign "${OLD[@]}" --next-signer "${NEW[@]}" --lineage "$RUNNER_TEMP/lineage" \
+              --rotation-min-sdk-version 28 --v3-signing-enabled true "$apk"
+            "$SIGNER" verify -v --print-certs "$apk" > verify.txt
+            grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" verify.txt
+            grep -q "Verified using v3 scheme (APK Signature Scheme v3): true" verify.txt
+            if ! grep -qi "$NEWSHA" verify.txt; then
+              "$SIGNER" lineage --in "$apk" --print-certs > lin.txt 2>&1 || true
+              cat verify.txt lin.txt
+              grep -qi "$NEWSHA" lin.txt || { echo "::error::$apk trägt den neuen Schlüssel nicht"; exit 1; }
+            fi
+            echo "ok: $(basename "$apk")"
+          done
+          rm -f out/*.idsig "$RUNNER_TEMP/release.jks"
+          ls -la out
+
       - name: APK als Artefakt ablegen
         uses: actions/upload-artifact@v4
         with:
@@ -144,6 +177,18 @@ jobs:
         with:
           name: qa-apk
           path: qa
+
+      # die echte Release-APK (für den Update-Test über die zuletzt veröffentlichte Version)
+      - uses: actions/download-artifact@v4
+        with:
+          name: Aze-IPTV-Player-1.0.${{ github.run_number }}
+          path: neu
+
+      - name: Zuletzt veröffentlichte Version holen (für den Update-Test)
+        run: |
+          mkdir -p alt
+          curl -sSfL --retry 3 -o alt/alt.apk https://github.com/${{ github.repository }}/releases/latest/download/Aze-IPTV-Player-x86_64.apk || echo "keine alte Version gefunden"
+          ls -la alt neu
 
       # Test-Videos nur einmal erzeugen und dann aus dem Zwischenspeicher nehmen (ffmpeg-Installation hing öfter)
       - name: Test-Videos aus dem Zwischenspeicher
@@ -182,7 +227,7 @@ jobs:
           ram-size: 2048M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: bash .github/qa/run_emulator_test.sh qa/aze-qa-x86_64.apk qa-out
+          script: bash .github/qa/run_emulator_test.sh qa/aze-qa-x86_64.apk qa-out && bash .github/qa/update_test.sh alt/alt.apk neu/Aze-IPTV-Player-x86_64.apk qa-out
 
       - name: Test-Bilder in Release „qa-bilder“ (zum Ansehen ohne Anmeldung)
         if: always()
