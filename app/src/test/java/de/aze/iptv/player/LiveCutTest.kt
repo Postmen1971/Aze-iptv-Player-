@@ -151,6 +151,46 @@ class LiveCutTest {
         assertEquals(0, readAll(src).size)
     }
 
+    /** Liefert bei jedem Öffnen das nächste Stück (wie ein Anbieter, der beim zweiten Versuch weiter ist). */
+    private class Seq(private val parts: List<ByteArray>) : DataSource {
+        private var i = 0
+        private var pos = 0
+        fun next() { i++; pos = 0 }
+        override fun addTransferListener(transferListener: TransferListener) {}
+        override fun open(dataSpec: DataSpec): Long = C.LENGTH_UNSET.toLong()
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+            val d = parts.getOrNull(i) ?: return C.RESULT_END_OF_INPUT
+            if (pos >= d.size) return C.RESULT_END_OF_INPUT
+            val n = minOf(length, d.size - pos, 5000)
+            System.arraycopy(d, pos, buffer, offset, n); pos += n; return n
+        }
+        override fun getUri(): Uri? = null
+        override fun close() {}
+    }
+
+    @Test fun rejoin_onlyOldData_reconnectsItself_insteadOfEmptyPiece() {
+        val track = PtsTrack()
+        EndOnDropDataSource(Fake(stream(100, 25)), track).also { it.begin(-1); readAll(it) }
+        // 1. Versuch: nur schon Gezeigtes (105–120 s); 2. Versuch: Anbieter ist weiter (120–130 s)
+        val up = Seq(listOf(stream(105, 15), stream(120, 10)))
+        val src = EndOnDropDataSource(up, track)
+        src.begin(track.last)
+        src.reopen = { up.next() }
+        val out = readAll(src)
+        assertTrue(out.isNotEmpty())
+        assertTrue(firstVideoPts(out) >= 125 * 25L * 3600)
+    }
+
+    @Test fun newChannel_oldConnectionCannotOverwriteTimestamp() {
+        val track = PtsTrack()
+        val old = EndOnDropDataSource(Fake(stream(100, 25)), track)
+        old.begin(-1)
+        // neuer Sender wird gestartet, während die alte Verbindung noch Daten liefert
+        track.gen++; track.last = -1
+        readAll(old)
+        assertEquals(-1L, track.last)
+    }
+
     @Test fun rejoin_soundContinuesAtCut_pictureAtNextKeyframe() {
         val track = PtsTrack()
         // alt: 100,00–112,96 s; neu ab 104 s, Schlüsselbild alle 2 s (104, 106 … 112, 114)

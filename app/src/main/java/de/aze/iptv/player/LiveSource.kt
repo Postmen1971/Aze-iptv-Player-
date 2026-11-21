@@ -63,8 +63,12 @@ class LiveSource(context: Context, http: HttpDataSource.Factory) {
             cfg.uri.scheme?.lowercase() in setOf("http", "https")
     }
 
-    fun create(item: MediaItem): MediaSource =
-        if (isProgressive(item)) progressive.createMediaSource(item) else adaptive.createMediaSource(item)
+    /** Neuer Sender (oder Neustart): Zeitstempel des vorigen gilt nicht mehr. */
+    fun create(item: MediaItem): MediaSource {
+        track.gen++
+        track.last = -1
+        return if (isProgressive(item)) progressive.createMediaSource(item) else adaptive.createMediaSource(item)
+    }
 
     /**
      * Folge-Verbindung: Viele Anbieter schicken bei jeder neuen Verbindung zuerst die letzten 20–30 s noch einmal
@@ -73,7 +77,9 @@ class LiveSource(context: Context, http: HttpDataSource.Factory) {
      */
     private fun createRejoin(item: MediaItem): MediaSource {
         val last = track.last
-        if (!isProgressive(item) || last < 0) return create(item)
+        // Folge-Verbindung gehört zum selben Sender: Zeitstempel-Kette NICHT zurücksetzen (anders als create)
+        if (!isProgressive(item)) return adaptive.createMediaSource(item)
+        if (last < 0) return progressive.createMediaSource(item)
         return progressiveRejoin.createMediaSource(item.buildUpon().setCustomCacheKey(CUT_PREFIX + last).build())
     }
 
@@ -204,7 +210,14 @@ class LiveSource(context: Context, http: HttpDataSource.Factory) {
  * (PlayerScreen: 20 s); eine wirklich tote Leitung bemerkt der Wächter am leeren Vorrat.
  */
 /** Neuester Bild-Zeitstempel (PTS, 90 kHz) der zuletzt gelesenen Verbindung; −1 = unbekannt. */
-internal class PtsTrack { @Volatile var last = -1L }
+internal class PtsTrack {
+    @Volatile var last = -1L
+    /**
+     * Zählt je neuem Sender hoch. Eine Verbindung schreibt ihren Zeitstempel nur, solange ihr Sender noch läuft –
+     * sonst landete der Wert eines Fernsehsenders beim nächsten (z. B. Radio ohne Bild: Neuverbinden hing dort).
+     */
+    @Volatile var gen = 0
+}
 
 /** Kleine Helfer zum Lesen von MPEG-TS-Paketen (188 Bytes). Nur Kopfzeilen, kein Umbau der Daten. */
 internal object Ts {
@@ -290,7 +303,8 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
     private var cut = -1L
     /** 0 = durchreichen, 1 = warten auf das erste Bild, 2 = Überspringen bis hinter [cut] */
     private var phase = 0
-    private var acc = ByteArray(256 * 1024)
+    // Sammelpuffer nur, wenn wirklich übersprungen wird (sonst ~600 KB Müll je Senderwechsel)
+    private var acc = EMPTY
     private var accLen = 0
     private var dropped = 0L
     private var firstPts = -1L
@@ -310,7 +324,13 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
     private val kept = java.io.ByteArrayOutputStream()
     private var out: ByteArray? = null
     private var outPos = 0
-    private val tmp = ByteArray(64 * 1024)
+    private val tmp by lazy { ByteArray(64 * 1024) }
+    /** zu welchem Sender diese Verbindung gehört (siehe PtsTrack.gen) */
+    private var myGen = track.gen
+    /** dieselbe Verbindung neu öffnen (null = geht nicht, z. B. Test ohne Adresse) */
+    internal var reopen: (() -> Unit)? = null
+    /** Folge-Verbindung brachte nur schon Gezeigtes: so oft wurde selbst neu verbunden */
+    private var retries = 0
 
     // --- Zeitstempel mitlesen (für die nächste Folge-Verbindung) ---
     private val tb = ByteArray(Ts.SIZE)
@@ -320,6 +340,9 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
     override fun addTransferListener(transferListener: TransferListener) = up.addTransferListener(transferListener)
 
     override fun open(dataSpec: DataSpec): Long {
+        myGen = track.gen
+        reopen = { up.open(dataSpec) }
+        retries = 0
         begin(dataSpec.key?.takeIf { it.startsWith(LiveSource.CUT_PREFIX) }?.removePrefix(LiveSource.CUT_PREFIX)?.toLongOrNull() ?: -1L)
         return up.open(dataSpec)
     }
@@ -328,7 +351,7 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
     internal fun begin(cutPts: Long) {
         got = 0; accLen = 0; dropped = 0; firstPts = -1; latestPts = -1; t0 = 0; relax = false
         out = null; outPos = 0; tbLen = 0; connMax = -1
-        if (acc.size < 256 * 1024) acc = ByteArray(256 * 1024)
+        if (cutPts >= 0 && acc.size < 256 * 1024) acc = ByteArray(256 * 1024)
         pmts.clear(); seenPes.clear(); started.clear(); videoPid = -1; scanPos = 0; filterPos = 0; logged = false; keptMedia = false
         kept.reset()
         cut = cutPts
@@ -375,13 +398,16 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
      */
     private fun cutting(): Boolean {
         while (phase != 0) {
+            // Senderwechsel/Abbruch: nicht weiter im Hintergrund Altes verwerfen (blockiert sonst die Leitung)
+            if (Thread.currentThread().isInterrupted) throw InterruptedIOException()
             val n = upRead(tmp, 0, tmp.size)
             if (n == C.RESULT_END_OF_INPUT) {
                 // Phase 1 ohne Bild: alles weitergeben; Phase 2: nur, was schon als neu erkannt ist
                 val rest = if (phase == 1) acc.copyOf(accLen) else ByteArray(0)
                 val last = if (phase == 2 && (videoPid < 0 || videoPid !in started)) ByteArray(0) else kept.toByteArray()
-                phase = 0; accLen = 0; kept.reset()
                 val all = last + rest
+                if (all.isEmpty() && reconnect()) continue
+                phase = 0; accLen = 0; kept.reset()
                 if (all.isEmpty()) return false
                 return emit(all)
             }
@@ -408,7 +434,10 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
                 }
                 scanPos = p
                 // noch kein Bild gefunden: nicht endlos sammeln (z. B. Radio ohne Bild) → wie bisher weitergeben
-                if (phase == 1) { if (accLen > 1024 * 1024) { phase = 0; return passRest() }; continue }
+                if (phase == 1) {
+                    if (accLen > 1024 * 1024 || android.os.SystemClock.elapsedRealtime() - t0 > 2_000) { phase = 0; return passRest() }
+                    continue
+                }
             }
 
             // Phase 2: Paket für Paket
@@ -481,6 +510,28 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
 
     private fun passBytes(): ByteArray { val r = acc.copyOf(accLen); accLen = 0; return r }
 
+    /**
+     * Folge-Verbindung brachte NUR schon Gezeigtes (alles übersprungen, nichts Neues). Ein leeres Stück erkennt der
+     * Player nicht („Format nicht erkannt“ → Fehler und Neustart des Senders, z. B. PHOENIX, beIN 19./21.11.).
+     * Stattdessen hier gleich noch einmal verbinden – das Bild läuft solange aus dem Vorrat weiter.
+     */
+    private fun reconnect(): Boolean {
+        val again = reopen ?: return false
+        if (retries >= 4) return false
+        retries++
+        runCatching { up.close() }
+        Thread.sleep(400L * retries)
+        if (Thread.currentThread().isInterrupted) throw InterruptedIOException()
+        val c = cut
+        begin(c)
+        got = 0
+        again()
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            de.aze.iptv.data.HangLog.add("NEUVERBINDUNG_LEER nur schon Gezeigtes – verbinde erneut (Versuch $retries)")
+        }
+        return true
+    }
+
     private fun passRest(): Boolean = emit(passBytes())
 
     /** Bytes als nächste Ausgabe bereitstellen (leer: einfach weiterlesen). */
@@ -521,13 +572,15 @@ internal class EndOnDropDataSource(private val up: DataSource, private val track
     private fun note(b: ByteArray, p: Int) {
         val pts = Ts.videoPts(b, p)
         if (pts < 0) return
-        if (connMax < 0 || Ts.diff(pts, connMax) > 0) { connMax = pts; track.last = pts }
+        if (connMax < 0 || Ts.diff(pts, connMax) > 0) { connMax = pts; if (myGen == track.gen) track.last = pts }
     }
 
     override fun getUri(): Uri? = up.uri
     override fun getResponseHeaders(): Map<String, List<String>> = up.responseHeaders
     override fun close() {
-        out = null; acc = ByteArray(256 * 1024); accLen = 0
+        out = null; acc = EMPTY; accLen = 0
         up.close()
     }
+
+    private companion object { val EMPTY = ByteArray(0) }
 }
