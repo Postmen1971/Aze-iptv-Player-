@@ -76,6 +76,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <button id="refresh">Liste neu laden</button>
       <button class="bad" id="end">Beenden</button>
     </div>
+    <div id="boxArea" hidden>
     <h2>Playlists der anderen Box</h2>
     <div id="sources"></div>
     <h2>Playlist hinzufügen</h2>
@@ -84,6 +85,8 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     </div>
     <div id="addForm"></div>
     <button class="pri big" id="add">Hinzufügen und laden</button>
+    </div>
+    <p id="waitHint" class="hint">Sobald die Box antwortet, erscheinen hier ihre Playlists. Auf der Box muss die App aktuell sein (Einstellungen → System → App-Update) und „Fernhilfe erlauben“ offen sein.</p>
   </section>
 
   <!-- 3. Senderliste -->
@@ -217,7 +220,7 @@ async function connect(){
     publish({op:"hello"});
     await new Promise(function(res){setTimeout(res,7000)});
   }
-  if(!CONNECTED&&RUN)setStatus("Keine Antwort. Stimmt der Code, und ist auf der Box „Fernhilfe erlauben“ noch offen?","err");
+  if(!CONNECTED&&RUN)setStatus("Keine Antwort. Stimmt der Code? Ist auf der Box „Fernhilfe erlauben“ noch offen und die App auf dem neuesten Stand?","err");
 }
 function handle(m){
   if(m.op==="state"){
@@ -226,6 +229,7 @@ function handle(m){
     $("title").textContent="Fernhilfe"+(m.device?" für "+m.device:"");
     setStatus("Verbunden – Änderungen gelten sofort auf der Box.","ok");
     $("openList").disabled=false;
+    $("boxArea").hidden=false;$("waitHint").hidden=true;
     renderSources();
     if(!$("vList").hidden&&dirty)PENDING=m; else if(!$("vList").hidden)loadList(m);
   }else if(m.op==="msg"){
