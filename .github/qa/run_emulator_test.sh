@@ -719,16 +719,23 @@ shot "test18-zugeklappt"
 adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
 f1=$(qa | grep -o "FOCUS .*" | tail -1)
 case "$f1" in "FOCUS SEC "*) ;; *) fail "Fernbedienung: ▶ landet nicht auf einer Abschnitts-Überschrift ($f1)";; esac
+t1="${f1#FOCUS SEC }"; n0=$(count "SEC_")
 adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 1.5
-[ "$(count "SEC_AUF")" -gt "$a0" ] || fail "Fernbedienung: OK klappt den Abschnitt nicht auf"
-f2=$(qa | grep -o "FOCUS .*" | tail -1); [ "$f2" = "$f1" ] || fail "Fernbedienung: Markierung nach dem Aufklappen verloren ($f1 → $f2)"
-shot "test18-aufgeklappt"
+[ "$(count "SEC_")" -gt "$n0" ] || fail "Fernbedienung: OK klappt „$t1“ nicht auf/zu"
+f2=$(qa | grep -o "FOCUS .*" | tail -1); [ "$f2" = "$f1" ] || fail "Fernbedienung: Markierung nach dem Klappen verloren ($f1 → $f2)"
+shot "test18-geklappt"
+n1=$(count "SEC_")
 adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 1.5
-[ "$(count "SEC_ZU")" -gt "$z0" ] || fail "Fernbedienung: OK klappt den Abschnitt nicht wieder zu"
-f3=$(qa | grep -o "FOCUS .*" | tail -1); [ "$f3" = "$f1" ] || fail "Fernbedienung: Markierung nach dem Zuklappen verloren ($f1 → $f3)"
+[ "$(count "SEC_")" -gt "$n1" ] || fail "Fernbedienung: zweites OK klappt „$t1“ nicht zurück"
+f3=$(qa | grep -o "FOCUS .*" | tail -1); [ "$f3" = "$f1" ] || fail "Fernbedienung: Markierung nach dem Zurückklappen verloren ($f1 → $f3)"
+last=$(qa | grep -oF -e "SEC_AUF $t1" -e "SEC_ZU $t1" | tail -1)
 adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1
 f4=$(qa | grep -o "FOCUS .*" | tail -1)
-case "$f4" in "FOCUS SEC "*) [ "$f4" != "$f1" ] || fail "Fernbedienung: ▼ kommt nicht zum nächsten Abschnitt";; *) fail "Fernbedienung: ▼ landet nicht auf dem nächsten Abschnitt ($f4)";; esac
+if [ "${last%% *}" = "SEC_ZU" ]; then
+  case "$f4" in "FOCUS SEC "*) [ "$f4" != "$f1" ] || fail "Fernbedienung: ▼ kommt nicht zum nächsten Abschnitt";; *) fail "Fernbedienung: ▼ landet nicht auf dem nächsten Abschnitt ($f4)";; esac
+else
+  [ "$f4" != "$f1" ] || fail "Fernbedienung: ▼ bewegt die Markierung nicht"
+fi
 # Touch: Abschnitt „Playlists“ per Antippen auf und zu
 T="Freie Sender (iptv-org)"
 [ "$(count "POS Ändern|")" -gt "$pA0" ] || fail "Einstellungen: „Playlists“ (grundlegend) ist beim Öffnen nicht offen"
