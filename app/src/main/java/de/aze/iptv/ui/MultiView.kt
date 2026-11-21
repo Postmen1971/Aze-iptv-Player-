@@ -626,9 +626,14 @@ private fun MvPicker(
             if (hasFocus) return@LaunchedEffect
         }
     }
-    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))) {
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))
+            // Touch: neben die Liste tippen = schließen
+            .pointerInput(Unit) { detectTapGestures { onClose() } },
+    ) {
         Column(
             Modifier
+                .pointerInput(Unit) { detectTapGestures { } } // Tippen in die Liste schließt nicht
                 .onFocusChanged { hasFocus = it.hasFocus; onFocus(it.hasFocus) }
                 .fillMaxHeight()
                 .width(340.dp)
@@ -638,6 +643,8 @@ private fun MvPicker(
         ) {
             Text(title, color = Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Medium)
             SectionLabel(if (group == null) "Gruppen" else groups.getOrNull(group!!)?.name ?: "", modifier = Modifier.padding(top = 6.dp, bottom = 4.dp))
+            // Touch: zurück zu den Gruppen ohne Zurück-Taste
+            if (group != null && Device.isTouch) PickRow(text = "‹ Gruppen", modifier = Modifier, right = "", onClick = { group = null })
             val g = group
             if (g == null) {
                 LazyColumn(state = rememberLazyListState(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -677,8 +684,8 @@ private fun PickRow(text: String, modifier: Modifier, onClick: () -> Unit, left:
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(38.dp)
-                .background(if (focused) Palette.Accent else Color.Transparent, RoundedCornerShape(10.dp))
+                .height(38.dp + Device.touchPad)
+                .background(if (focused) Palette.Accent else Color.Transparent, RoundedCornerShape(Palette.radius))
                 .padding(horizontal = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

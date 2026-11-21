@@ -34,6 +34,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun RemoteHelpGuestScreen(guest: RemoteHelpGuest, onClose: () -> Unit) {
     var editing by remember { mutableStateOf(false) }
+    // Bildschirm zu (Einstellungen verlassen): Verbindung zum Briefkasten nicht weiterlaufen lassen
+    androidx.compose.runtime.DisposableEffect(guest) { onDispose { guest.stop() } }
     val model = guest.list
     if (editing && model != null) {
         LaunchedEffect(Unit) { guest.editing = true }
@@ -48,7 +50,11 @@ fun RemoteHelpGuestScreen(guest: RemoteHelpGuest, onClose: () -> Unit) {
     BackHandler(onBack = onClose)
     val now by produceState(RemoteHelpTime.now()) { while (true) { value = RemoteHelpTime.now(); delay(1_000) } }
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    // Markierung auf den passenden Knopf, sobald die Verbindung steht bzw. endet (sonst blieb sie auf „Beenden“)
+    LaunchedEffect(guest.connected, guest.closed) {
+        androidx.compose.runtime.withFrameNanos { }
+        runCatching { first.requestFocus() }
+    }
     Column(
         Modifier.fillMaxSize().background(Palette.ScreenBrush).verticalScroll(rememberScrollState())
             .padding(horizontal = 30.dp, vertical = 24.dp),

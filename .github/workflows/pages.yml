@@ -31,7 +31,7 @@ jobs:
         run: |
           mkdir -p site
           if gh release download hilfe -p anleitung.zip -D /tmp 2>/dev/null; then unzip -q /tmp/anleitung.zip -d site; fi
-          cp web/*.html site/
+          cp web/* site/
           ls site | head -20
       - uses: actions/upload-pages-artifact@v3
         with:

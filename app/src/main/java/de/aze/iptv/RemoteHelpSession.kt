@@ -23,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -110,6 +111,8 @@ class RemoteHelpHost(private val app: AppController, private val scope: Coroutin
             // Stand neu schicken, sobald sich Playlists oder Senderliste ändern (z. B. Liste fertig geladen)
             launch {
                 snapshotFlow { Triple(app.sources, app.sourceStatus, app.editGroups) }
+                    // nur bei neuer Liste (Vergleich der Objekte, nicht Inhalt für Inhalt – große Listen!)
+                    .distinctUntilChanged { a, b -> a.first === b.first && a.second === b.second && a.third === b.third }
                     .debounce(1_500)
                     .collect { if (connected) sendState() }
             }
@@ -210,6 +213,8 @@ class RemoteHelpHost(private val app: AppController, private val scope: Coroutin
         statePending = scope.launch { delay(1_200); sendState() }
     }
 
+    private var stateSend: Job? = null
+
     private fun sendState() {
         // Stand-Nummer nur erhöhen, wenn sich die Senderliste wirklich geändert hat – sonst passte eine Änderung
         // des Helfers nicht mehr, nur weil der gleiche Stand kurz hintereinander zweimal verschickt wurde
@@ -219,15 +224,30 @@ class RemoteHelpHost(private val app: AppController, private val scope: Coroutin
             snapshot = groups; snapHidden = hidden
             version++
         }
-        val sources = JSONArray().also { a -> app.sources.forEach { a.put(sourceToJson(it)) } }
-        val status = JSONObject().also { st -> app.sourceStatus.forEach { (k, v) -> st.put(k, v) } }
-        val o = JSONObject()
-            .put("op", "state").put("v", version)
-            .put("left", ((expiresAt - RemoteHelpTime.now()) / 1000).coerceAtLeast(0))
-            .put("device", android.os.Build.MODEL ?: "")
-            .put("sources", sources).put("status", status)
-            .put("groups", ListEditCodec.encode(snapshot, snapHidden))
-        send(o)
+        val v = version
+        val sourcesNow = app.sources
+        val statusNow = app.sourceStatus
+        val left = ((expiresAt - RemoteHelpTime.now()) / 1000).coerceAtLeast(0)
+        val k = keys ?: return
+        val r = relay ?: return
+        // nur der neueste Stand zählt: ein noch nicht verschickter älterer wird verworfen
+        stateSend?.cancel()
+        stateSend = scope.launch(Dispatchers.Default) {
+            // große Senderlisten verpacken nicht im Bedien-Teil
+            val o = JSONObject()
+                .put("op", "state").put("v", v).put("left", left)
+                .put("device", android.os.Build.MODEL ?: "")
+                .put("sources", JSONArray().also { a -> sourcesNow.forEach { a.put(sourceToJson(it)) } })
+                .put("status", JSONObject().also { st -> statusNow.forEach { (key, value) -> st.put(key, value) } })
+                .put("groups", ListEditCodec.encode(groups, hidden))
+            val sealed = RemoteCrypto.seal(k, o.toString())
+            withContext(Dispatchers.IO) {
+                sendLock.withLock {
+                    runCatching { r.publish(k.toHelper, sealed) }
+                        .onFailure { e -> withContext(Dispatchers.Main) { lastAction = "Senden fehlgeschlagen: ${e.message}" } }
+                }
+            }
+        }
     }
 
     private fun send(o: JSONObject) {
@@ -293,6 +313,16 @@ class RemoteHelpGuest(private val rawCode: String, private val scope: CoroutineS
                         scope.launch { if (running) handle(o) }
                     },
                 )
+            }
+            // Box weg (ausgeschaltet, Netz weg) ohne Abschied: nach Ablauf der Zeit + 15 s selbst beenden
+            launch {
+                while (running) {
+                    delay(1_000)
+                    if (connected && closed == null && RemoteHelpTime.now() > expiresAt + 15_000) {
+                        closed = "Keine Verbindung mehr zur anderen Box (Zeit abgelaufen, oder die Box ist aus bzw. offline)."
+                        running = false
+                    }
+                }
             }
             // „Hallo“ wiederholen, bis die andere Box antwortet
             repeat(6) {

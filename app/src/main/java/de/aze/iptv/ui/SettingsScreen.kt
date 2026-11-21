@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
@@ -230,9 +231,6 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
             }
             // Seitentitel des gewählten Bereichs
             cats.getOrNull(shownCat)?.let { Text(it, color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 4.dp)) }
-            app.message?.let {
-                Text(it, color = Palette.TextSoft, fontSize = 13.sp)
-            }
             CATEGORY_HINT[cats.getOrNull(shownCat)]?.let { Text(it, color = Palette.TextMuted, fontSize = 14.sp) }
             when (cats.getOrNull(shownCat)) {
                 "Suchen" -> SettingsSearch(onGo = { name -> onTv = false; cat = cats.indexOf(name).coerceAtLeast(0) })
@@ -399,7 +397,7 @@ private fun Section(title: String, startOpen: Boolean = false, keepOpen: Boolean
             Row(
                 Modifier.fillMaxWidth()
                     .then(if (focused) Modifier.background(Palette.FocusBrush, RoundedCornerShape(10.dp)) else Modifier)
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                    .heightIn(min = if (Device.isTouch) 48.dp else 0.dp).padding(horizontal = 6.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(title, color = if (focused) Palette.OnAccent else Palette.Text, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
@@ -523,6 +521,7 @@ private fun FreeListSection(app: AppController) {
 }
 
 @Composable
+@kotlin.OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
     Section(title, startOpen = true) {
         if (app.sources.isEmpty()) {
@@ -538,8 +537,10 @@ internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
         app.sources.forEachIndexed { i, src ->
             var renaming by remember(src.id) { mutableStateOf(false) }
             var changing by remember(src.id) { mutableStateOf(false) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Column(modifier = Modifier.weight(1f)) {
+            var deleting by remember(src.id) { mutableStateOf(false) }
+            // Name/Link oben, Knöpfe darunter (umbrechend) – nebeneinander blieb am Handy kaum Platz für den Namen
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column {
                     Text(
                         if (src.enabled) src.name else "${src.name} (pausiert)",
                         color = if (src.enabled) Palette.Text else Palette.TextMuted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
@@ -557,6 +558,9 @@ internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
                         Text(st, color = if (st.startsWith("Fehler") || st.contains("keine")) Palette.Live else Palette.Accent, fontSize = 14.sp)
                     }
                 }
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                 if (app.sources.size > 1) {
                     if (i > 0) TvButton("▲", onClick = { app.moveSource(src, -1) })
                     if (i < app.sources.size - 1) TvButton("▼", onClick = { app.moveSource(src, +1) })
@@ -565,7 +569,18 @@ internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
                 TvButton(if (src.enabled) "Pausieren" else "Einschalten", selected = !src.enabled, onClick = { app.setSourceEnabled(src, !src.enabled) })
                 TvButton("Ändern", onClick = { changing = true })
                 TvButton("Umbenennen", onClick = { renaming = true })
-                TvButton("Löschen", danger = true, onClick = { app.removeSource(src) })
+                TvButton("Löschen", danger = true, onClick = { deleting = true })
+                }
+            }
+            if (deleting) {
+                ConfirmDialog(
+                    "Playlist „${src.name}“ löschen?",
+                    "Link und Zugangsdaten werden von diesem Gerät entfernt. Das lässt sich nicht rückgängig machen – " +
+                        "zum vorübergehenden Abschalten lieber „Pausieren“.",
+                    "Löschen",
+                    onYes = { deleting = false; app.removeSource(src) },
+                    onNo = { deleting = false },
+                )
             }
             if (changing) {
                 EditSourceDialog(src, onSave = { app.updateSource(it); changing = false }, onCancel = { changing = false })
@@ -717,7 +732,7 @@ private fun RemoteHelpSection(app: AppController, onGive: (String) -> Unit) {
                 color = if (host.connected) Palette.Accent else Palette.TextSoft, fontSize = 14.sp,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                QrCode("$REMOTE_HELP_URL?c=${host.code}", 120.dp)
+                QrCode("$REMOTE_HELP_URL#c=${host.code}", 120.dp)
                 Text(
                     "Steht der Helfer neben dir: diesen QR-Code mit dem Handy scannen – dann ist er sofort verbunden.",
                     color = Palette.TextMuted, fontSize = 13.sp, modifier = Modifier.weight(1f),
@@ -1550,7 +1565,10 @@ internal fun InputDialog(
             modifier = Modifier
                 .widthIn(max = 640.dp)
                 .fillMaxWidth()
+                // Handy quer mit Tastatur: Knöpfe nicht verdecken – Platz für die Tastatur lassen und scrollbar
+                .imePadding()
                 .background(Palette.Panel, RoundedCornerShape(16.dp))
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -1696,9 +1714,12 @@ private fun LearnedChannelsSection(app: AppController) {
 @Composable
 private fun VodCoverSection(app: AppController) {
     Section("Cover") {
-        var stats by remember { mutableStateOf(de.aze.iptv.CoverStats.text()) }
-        LaunchedEffect(Unit) { while (true) { stats = de.aze.iptv.CoverStats.text(); kotlinx.coroutines.delay(1_000) } }
-        Text("Messung: $stats", color = Palette.Highlight, fontSize = 13.sp)
+        // Messwerte nur für die Fehlersuche (Erweitert bzw. Fehlersuche-Anzeige) – sonst kein Neuzeichnen jede Sekunde
+        if (app.expertMode || app.showDiag) {
+            var stats by remember { mutableStateOf(de.aze.iptv.CoverStats.text()) }
+            LaunchedEffect(Unit) { while (true) { stats = de.aze.iptv.CoverStats.text(); kotlinx.coroutines.delay(1_000) } }
+            Text("Messung: $stats", color = Palette.Highlight, fontSize = 13.sp)
+        }
         Text(
             "Cover werden immer in kleiner Auflösung geladen (reicht für die Kacheln und ist viel schneller). " +
                 "Standard lädt beim Öffnen einer Kategorie die ersten 150 Cover vor und behält bis zu 250 MB. " +
@@ -1802,7 +1823,7 @@ private fun BackupSection(app: AppController) {
             })
             TvButton(if (busy == "load") "Wird eingespielt …" else "Wiederherstellen", onClick = { if (busy == null) entering = true })
         }
-        status?.let { Text(it, color = if (it.startsWith("✗")) androidx.compose.ui.graphics.Color(0xFFFF6B6B) else Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
+        status?.let { Text(it, color = if (it.startsWith("✗")) Palette.Live else Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
         code?.let {
             Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                 QrCode(it, 130.dp)

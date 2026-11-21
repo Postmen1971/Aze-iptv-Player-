@@ -100,6 +100,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private class Playing(val url: String, val title: String, val resumeKey: String, val startMs: Long)
 
@@ -251,14 +252,17 @@ private fun Browse(
         val skip = cats.orEmpty().filter {
             app.isVodHidden(sourceId, series, it.id) || (app.adultFilter && de.aze.iptv.data.AdultFilter.isAdult(it.name))
         }.map { it.id }.toSet()
-        val visible = all.filter { it.cat !in skip }
         val langOf = cats.orEmpty().associate { it.id to vodLanguage(it.name) }
         val order = if (pref == 0) listOf("de", "tr") else listOf("tr", "de")
         // Nicht die ganze Bibliothek vorladen (überlastet Leitung und Anbieter-Server):
         // nur die ersten Reihen (24 Cover) jeder Kategorie der bevorzugten Sprache, höchstens 240.
         delay(8_000)
-        val queue = order.flatMap { l -> visible.filter { langOf[it.cat] == l }.groupBy { it.cat }.values.flatMap { it.take(24) } }
-            .mapNotNull { it.poster }.distinct().take(240)
+        // Durchsuchen der ganzen Bibliothek nicht im Bedien-Teil (sonst ruckelt das Blättern genau dann)
+        val queue = withContext(kotlinx.coroutines.Dispatchers.Default) {
+            val visible = all.filter { it.cat !in skip }
+            order.flatMap { l -> visible.filter { langOf[it.cat] == l }.groupBy { it.cat }.values.flatMap { it.take(24) } }
+                .mapNotNull { it.poster }.distinct().take(240)
+        }
         qaLog("VOD_PREFETCH ${queue.size} Cover (${order.joinToString(" → ")} zuerst)")
         CoverUrls.prefetch(ctx, queue) { posterRequest(ctx, it) }
     }
@@ -274,15 +278,22 @@ private fun Browse(
     }
     LaunchedEffect(api, series, selected, cats, catList) {
         val c = catList.getOrNull(selected) ?: return@LaunchedEffect
-        items = null
-        delay(250) // erst laden, wenn man kurz auf einer Kategorie stehen bleibt
+        // Altes Raster bleibt kurz stehen: ist die Kategorie schnell da (Gesamtliste im Speicher), gibt es kein
+        // „Lade …“-Aufblitzen; erst wenn es dauert, kommt die Ladeanzeige.
+        delay(150) // erst laden, wenn man kurz auf einer Kategorie stehen bleibt
         val t0 = System.currentTimeMillis()
-        items = runCatching { if (series) api.series(c.id) else api.movies(c.id) }
+        val showLoading = launch { delay(250); items = null }
+        val adultOn = app.adultFilter
+        items = runCatching {
+            val l = if (series) api.series(c.id) else api.movies(c.id)
+            if (adultOn) withContext(kotlinx.coroutines.Dispatchers.Default) { l.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.name) } } else l
+        }
             // abgebrochen (Kategorie gewechselt): nicht als Fehler werten und die neue Liste nicht überschreiben
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             .onSuccess { error = null; qaLog("VOD_CAT ${c.name} ${it.size} in ${System.currentTimeMillis() - t0} ms") }
             .onFailure { error = "Inhalte konnten nicht geladen werden."; qaLog("VOD_CAT_ERROR ${c.name} ${it.javaClass.simpleName}") }
             .getOrDefault(emptyList())
+        showLoading.cancel()
     }
     LaunchedEffect(query, catList) {
         val q = query ?: return@LaunchedEffect
@@ -290,10 +301,17 @@ private fun Browse(
         results = null
         // Suche ohne ausgeblendete Kategorien
         val shown = catList.map { it.id }.toSet()
-        results = runCatching { api.all(series) }
+        val adultOn = app.adultFilter
+        val all = runCatching { api.all(series) }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             .getOrDefault(emptyList())
-            .filter { it.name.contains(q, ignoreCase = true) && (it.cat == null || it.cat in shown) }
+        // ganze Bibliothek durchsuchen: nicht im Bedien-Teil
+        results = withContext(kotlinx.coroutines.Dispatchers.Default) {
+            all.filter {
+                it.name.contains(q, ignoreCase = true) && (it.cat == null || it.cat in shown) &&
+                    !(adultOn && de.aze.iptv.data.AdultFilter.isAdult(it.name))
+            }
+        }
     }
     LaunchedEffect(menu) {
         if (!menu) {
@@ -411,9 +429,8 @@ private fun Browse(
             Box(Modifier.weight(1f).fillMaxHeight().padding(12.dp)) {
                 val q = query
                 val raw = if (q != null) results else items
-                val list = remember(raw, adultOff) {
-                    raw?.let { l -> if (adultOff) l.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.name) } else l }
-                }
+                // Erwachsenen-Filter läuft schon beim Laden (im Hintergrund), nicht hier beim Zeichnen
+                val list = raw
                 val title = if (q != null) "Suche: „$q“" else catList.getOrNull(selected)?.name.orEmpty()
                 // Vorschau oben (wie im Entwurf): zeigt den gewählten Film – sonst den ersten der Liste
                 val heroState = remember(list) { mutableStateOf<VodItem?>(null) }
@@ -733,7 +750,7 @@ private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boo
             Text(
                 item.name,
                 color = if (focused) Palette.Accent else Palette.Text,
-                fontSize = 11.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Normal,
+                fontSize = 12.sp, fontWeight = if (focused) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }
@@ -759,8 +776,10 @@ private fun DetailView(
     // IMDb-Bewertung (nur mit eigenem OMDb-Schlüssel in den Einstellungen)
     var imdb by remember(item.id) { mutableStateOf<de.aze.iptv.data.Omdb.Rating?>(null) }
     val playButton = remember { FocusRequester() }
+    var attempt by remember(item.id) { mutableIntStateOf(0) }
 
-    LaunchedEffect(item.id) {
+    LaunchedEffect(item.id, attempt) {
+        failed = false
         runCatching {
             if (series) {
                 val s = api.seriesDetails(item.id)
@@ -854,6 +873,11 @@ private fun DetailView(
                     }
                 }
                 if (!series && compact) movieButtons()
+                // Serie lädt nicht: sonst wäre nichts anwählbar (Sackgasse mit der Fernbedienung)
+                if (failed && series) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TvButton("Nochmal versuchen", modifier = Modifier.focusRequester(playButton), onClick = { attempt++ })
+                    TvButton("Zurück", onClick = onBack)
+                }
                 when {
                     failed -> Text("Details konnten nicht geladen werden.", color = Palette.Live, fontSize = 14.sp)
                     i == null -> Text("Lade …", color = Palette.TextMuted, fontSize = 14.sp)
@@ -1084,7 +1108,15 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
     DisposableEffect(player) {
         val l = object : Player.Listener {
             override fun onPlayerError(e: PlaybackException) {
-                error = "Wiedergabe nicht möglich (${e.errorCodeName})"
+                // verständlich statt Fehlercode (der steht klein dahinter, für Rückfragen)
+                val why = when (e.errorCode) {
+                    in 2000..2999 -> if (e.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS) "Der Anbieter lehnt den Film gerade ab."
+                        else "Keine Verbindung zum Anbieter."
+                    in 3000..3999 -> "Dieses Format kann das Gerät nicht abspielen."
+                    in 4000..4999 -> "Bild oder Ton kann das Gerät nicht entschlüsseln."
+                    else -> "Wiedergabe nicht möglich."
+                }
+                error = "$why\n(${e.errorCode})"
             }
 
             override fun onIsPlayingChanged(playing: Boolean) {
@@ -1160,6 +1192,8 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                     AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> { nudge(+1, repeat); return@onPreviewKeyEvent true }
                     AndroidKeyEvent.KEYCODE_MEDIA_REWIND -> { nudge(-1, repeat); return@onPreviewKeyEvent true }
                 }
+                // Fehlermeldung offen: Tasten gehören den Knöpfen „Nochmal versuchen“ / „Zurück“
+                if (error != null) return@onPreviewKeyEvent false
                 if (code in AndroidKeyEvent.KEYCODE_0..AndroidKeyEvent.KEYCODE_9 && picker == null) {
                     jumpPercent(code - AndroidKeyEvent.KEYCODE_0)
                     return@onPreviewKeyEvent true
@@ -1262,7 +1296,8 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
-                    .padding(start = 32.dp, end = 32.dp, top = 40.dp, bottom = 20.dp),
+                    // Handy quer: weniger Rand oben, sonst deckt die Leiste zwei Drittel des Bildes ab
+                    .padding(start = 32.dp, end = 32.dp, top = if (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 480) 12.dp else 40.dp, bottom = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1318,7 +1353,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                         })
                     }
                     Text(
-                        "◀ ▶ spulen (halten = schneller) · OK Pause · 0–9 springt auf 0–90 % · Tablet: Leiste antippen/ziehen, doppelt tippen ±10 s",
+                        Device.hint("◀ ▶ spulen (halten = schneller) · OK Pause · 0–9 springt auf 0–90 %", "Leiste antippen oder ziehen · doppelt tippen = ±10 s"),
                         color = Palette.TextMuted, fontSize = 12.sp,
                     )
                 }
@@ -1370,10 +1405,21 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
         }
 
         error?.let {
-            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(it, color = Palette.Text, fontSize = 18.sp)
-                TvButton("Zurück", onClick = { exit() })
+            val retryFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+            Column(
+                Modifier.align(Alignment.Center).background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(Palette.radius)).padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(it, color = Palette.Text, fontSize = 18.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TvButton("Nochmal versuchen", modifier = Modifier.focusRequester(retryFocus), onClick = {
+                        error = null
+                        player.prepare(); player.play()
+                    })
+                    TvButton("Zurück", onClick = { exit() })
+                }
             }
+            LaunchedEffect(it) { androidx.compose.runtime.withFrameNanos { }; runCatching { retryFocus.requestFocus() } }
         }
     }
 }
@@ -1462,7 +1508,11 @@ private suspend fun stockFetch(@Suppress("UNUSED_PARAMETER") loader: Any?, @Supp
     items.forEach { stockTried.add(stockKey(it)) }
     while (System.currentTimeMillis() - CoverUrls.lastZap < 15_000) delay(1_000)
     kotlinx.coroutines.coroutineScope {
-        items.chunked(2).forEach { pair -> pair.map { item -> async { runCatching { stockOne(item, series) } } }.forEach { it.await() } }
+        items.chunked(2).forEach { pair ->
+            // auch mitten im Block: nach einem Senderwechsel erst wieder 15 s Ruhe für den neuen Sender
+            while (System.currentTimeMillis() - CoverUrls.lastZap < 15_000) delay(1_000)
+            pair.map { item -> async { runCatching { stockOne(item, series) } } }.forEach { it.await() }
+        }
     }
 }
 

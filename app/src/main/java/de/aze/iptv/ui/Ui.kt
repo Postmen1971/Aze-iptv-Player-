@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -427,4 +430,34 @@ fun LinkOpenButton(url: String, label: String = "🔗 Im Browser öffnen") {
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
         }.onFailure { android.widget.Toast.makeText(ctx, "Kein Browser gefunden", android.widget.Toast.LENGTH_LONG).show() }
     })
+}
+
+
+/** Kurze Meldung unten in der Mitte (5 s, dann weg). Nimmt nie die Markierung. */
+@Composable
+fun MessageToast(app: de.aze.iptv.AppController) {
+    val msg = app.message
+    androidx.compose.runtime.LaunchedEffect(msg) {
+        if (msg != null) { kotlinx.coroutines.delay(5_000); if (app.message == msg) app.message = null }
+    }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = msg != null,
+        enter = androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.fadeOut(),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        var last by remember { mutableStateOf("") }
+        if (msg != null) last = msg
+        Box(Modifier.fillMaxSize().padding(bottom = 28.dp, start = 24.dp, end = 24.dp), contentAlignment = Alignment.BottomCenter) {
+            Text(
+                last,
+                color = Palette.Text, fontSize = 15.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .widthIn(max = 720.dp)
+                    .background(Palette.Panel.copy(alpha = 0.96f), RoundedCornerShape(Palette.radius))
+                    .border(1.dp, Palette.Accent.copy(alpha = 0.5f), RoundedCornerShape(Palette.radius))
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+            )
+        }
+    }
 }

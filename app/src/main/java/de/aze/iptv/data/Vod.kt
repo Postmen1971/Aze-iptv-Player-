@@ -122,11 +122,23 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
 
     /** Kategorie: sofort aus der Gesamtliste, wenn sie schon da ist – sonst nur diese Kategorie beim Anbieter holen. */
     override suspend fun movies(categoryId: String): List<VodItem> = withContext(Dispatchers.IO) {
-        cached(false)?.filter { it.cat == categoryId } ?: streamItems("get_vod_streams", "&category_id=${enc(categoryId)}", series = false)
+        cachedByCat(false)?.let { it[categoryId].orEmpty() } ?: streamItems("get_vod_streams", "&category_id=${enc(categoryId)}", series = false)
     }
 
     override suspend fun series(categoryId: String): List<VodItem> = withContext(Dispatchers.IO) {
-        cached(true)?.filter { it.cat == categoryId } ?: streamItems("get_series", "&category_id=${enc(categoryId)}", series = true)
+        cachedByCat(true)?.let { it[categoryId].orEmpty() } ?: streamItems("get_series", "&category_id=${enc(categoryId)}", series = true)
+    }
+
+    /** Gesamtliste nach Kategorie – einmal je Liste gebaut statt bei jeder Kategorie die ganze Bibliothek zu durchsuchen */
+    private val catIndex = HashMap<Boolean, Pair<List<VodItem>, Map<String?, List<VodItem>>>>()
+    private fun cachedByCat(series: Boolean): Map<String?, List<VodItem>>? {
+        val all = cached(series) ?: return null
+        synchronized(catIndex) {
+            catIndex[series]?.let { (l, m) -> if (l === all) return m }
+            val m = all.groupBy { it.cat }
+            catIndex[series] = all to m
+            return m
+        }
     }
 
     /** Gesamtliste: im Speicher, sonst sofort aus der Kopie auf dem Gerät (wie TiviMate) – alt? dann im Hintergrund neu laden */

@@ -546,7 +546,11 @@ fun PlayerScreen(
         }
     }
     // Zurück beim Fernsehen: erst die Senderliste zeigen (weiter: Gruppen, dann App beenden)
-    androidx.activity.compose.BackHandler(enabled = active && !multiView && !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) { overlay = true }
+    androidx.activity.compose.BackHandler(enabled = active && !multiView && !overlay && !quickMenu && !search && !teletext && !football && matchZap == null && tool == 0) {
+        // noch keine Sender (keine Playlist): statt leerer Favoriten-Liste gleich in die Einstellungen
+        if (app.lineup.all.isEmpty() && !app.loading) { app.message = "Noch keine Sender – bitte zuerst eine Playlist hinzufügen."; onOpenSettings() }
+        else overlay = true
+    }
     var tracksVersion by remember { mutableIntStateOf(0) }
     var digitJob by remember { mutableStateOf<Job?>(null) }
     var retryJob by remember { mutableStateOf<Job?>(null) }
@@ -590,6 +594,7 @@ fun PlayerScreen(
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) app.notePlaying()
                 // Umschaltzeit bis das Bild wirklich läuft (erstes Bild + Start-Vorrat) – fürs Hänger-Protokoll
                 if (isPlaying && zapRunAt[0] > 0) {
                     qaLog("ZAPLAUF ${android.os.SystemClock.elapsedRealtime() - zapRunAt[0]} ${app.current?.channel?.name}")
@@ -1082,7 +1087,8 @@ fun PlayerScreen(
         // Bildformat dieses Senders (im Schnellmenü gewählt) – sonst das allgemeine aus den Einstellungen
         val aspect = app.aspectFor(app.current?.channel?.key).let { if (portrait && (it == AspectMode.STRETCH || it == AspectMode.ZOOM)) AspectMode.FIT else it }
         val preview = football && footballPreview
-        val previewModifier = Modifier.align(Alignment.TopEnd).padding(top = 24.dp, end = 24.dp).width(360.dp).aspectRatio(16f / 9f)
+        val previewModifier = Modifier.align(Alignment.TopEnd).padding(top = 24.dp, end = 24.dp)
+            .width(footballPreviewWidth(androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp)).aspectRatio(16f / 9f)
         val videoModifier = if (preview) previewModifier else if (aspect.ratio != null) {
             Modifier.align(Alignment.Center).aspectRatio(aspect.ratio)
         } else {
@@ -1267,7 +1273,7 @@ fun PlayerScreen(
                     TvButton("⚙ Einstellungen", onClick = { touchBar = false; onOpenSettings() })
                     TvButton("✕ Beenden", danger = true, onClick = { activity?.finish() })
                 }
-                Text("Wischen ▲▼ = Sender wechseln · nach rechts = Senderliste · doppelt tippen = letzter Sender", color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+                Text("Wischen ▲▼ = Sender wechseln · nach rechts = Senderliste · doppelt tippen = letzter Sender", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
             }
             Column(
                 Modifier.align(Alignment.CenterEnd).padding(end = 16.dp),
@@ -1406,15 +1412,15 @@ fun PlayerScreen(
                     val all = BufferLevel.entries
                     app.updateBuffer(all[(all.indexOf(level) + 1) % all.size])
                 },
-                QuickItem("Wechseln", "Filme") {
+                QuickItem("Filme", "öffnen ›") {
                     quickMenu = false
                     onOpenVod(false)
                 },
-                QuickItem("Wechseln", "Serien") {
+                QuickItem("Serien", "öffnen ›") {
                     quickMenu = false
                     onOpenVod(true)
                 },
-                QuickItem("Wechseln", "Einstellungen") {
+                QuickItem("Einstellungen", "öffnen ›") {
                     quickMenu = false
                     onOpenSettings()
                 },

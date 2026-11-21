@@ -22,6 +22,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.asCoroutineDispatcher
 import de.aze.iptv.ui.Palette
 import de.aze.iptv.ui.PinScreen
 import de.aze.iptv.ui.VodScreen
@@ -237,7 +238,8 @@ class MainActivity : ComponentActivity() {
             .respectCacheHeaders(false)
             .build()
         // Cover-Vorrat NIE im Haupt-Thread (Listen mit zehntausenden Einträgen + Dateiprüfungen → Hänger/Abstürze)
-        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { runCatching { de.aze.iptv.ui.runCoverStock(app, applicationContext) } }
+        // Cover-Vorrat mit niedrigster Priorität: Laden/Verkleinern darf Fernsehen und Bedienung nie bremsen
+        lifecycleScope.launch(coverStockDispatcher) { runCatching { de.aze.iptv.ui.runCoverStock(app, applicationContext) } }
         coil.Coil.setImageLoader(
             coil.ImageLoader.Builder(this)
                 .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(if (vodFast) 0.25 else 0.15).build() }
@@ -341,6 +343,9 @@ class MainActivity : ComponentActivity() {
                         }
                         Screen.SETTINGS -> CoverLayer { SettingsScreen(app, onClose = { screen = Screen.PLAYER }) }
                     }
+                    // Meldungen (gespeichert, Fehler, Fernhilfe …) überall kurz unten einblenden – vorher nur oben in den
+                    // Einstellungen, und sie verschwanden nie
+                    if (!splash) de.aze.iptv.ui.MessageToast(app)
                     // Kurzer Hinweis auf ein neues Update: einmal je Start, ca. 3 s unten rechts, ohne Fenster/Tastendruck
                     var updateHint by remember { mutableStateOf<String?>(null) }
                     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -383,6 +388,24 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Android meldet knappen Speicher: Bilder im Arbeitsspeicher sofort freigeben. */
+    private val coverStockDispatcher by lazy {
+        java.util.concurrent.Executors.newFixedThreadPool(2) { r ->
+            Thread({ runCatching { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_LOWEST) }; r.run() }, "cover-vorrat")
+                .apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
+        }.asCoroutineDispatcher()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (::app.isInitialized) app.flushLast()
+    }
+
+    override fun onDestroy() {
+        // Fernhilfe nicht im Hintergrund weiterlaufen lassen (der Briefkasten-Strom hielt sonst den Prozess beschäftigt)
+        if (::app.isInitialized && isFinishing) app.remoteHost.stop(null)
+        super.onDestroy()
+    }
+
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {

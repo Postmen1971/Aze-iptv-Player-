@@ -27,10 +27,12 @@ object HangLog {
     /** Einen Eintrag anhängen (läuft im Hintergrund, blockiert nie die Wiedergabe). */
     fun add(msg: String) {
         val f = file ?: return
-        val line = "${fmt.format(Date())}  ${msg.take(400)}"
+        val now = System.currentTimeMillis()
+        val text = msg.take(400)
         io.execute {
             runCatching {
-                f.appendText(line + "\n")
+                // Zeit erst hier formatieren: SimpleDateFormat verträgt keine gleichzeitigen Aufrufe aus mehreren Threads
+                f.appendText("${fmt.format(Date(now))}  $text\n")
                 // gelegentlich kürzen: nur die letzten Einträge behalten
                 if (f.length() > 120_000) {
                     val keep = f.readLines().takeLast(MAX_LINES)
@@ -43,7 +45,7 @@ object HangLog {
     /** Sofort schreiben (nur für den Absturz-Eintrag: der Hintergrund-Eintrag ginge mit dem Prozess verloren). */
     fun addNow(msg: String) {
         val f = file ?: return
-        runCatching { f.appendText("${fmt.format(Date())}  ${msg.take(400)}\n") }
+        runCatching { f.appendText("${synchronized(fmt) { fmt.format(Date()) }}  ${msg.take(400)}\n") }
     }
 
     fun read(): String = runCatching { file?.takeIf { it.exists() }?.readText() ?: "" }.getOrDefault("")

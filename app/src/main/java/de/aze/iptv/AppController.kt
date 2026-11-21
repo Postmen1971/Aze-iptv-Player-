@@ -32,6 +32,7 @@ import de.aze.iptv.data.YtEntry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 
@@ -326,7 +327,7 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         }
         saveLayout(
             layout.copy(
-                groupOrder = edits.map { it.key },
+                groupOrder = mergeGroupOrder(layout.groupOrder, edits.map { it.key }),
                 hiddenGroups = (layout.hiddenGroups - groupKeys) + edits.filter { it.hidden }.map { it.key },
                 groupNames = names,
                 // nur Gruppen ablegen, deren Reihenfolge wirklich geändert wurde (sonst wuchsen die Einstellungen bei
@@ -347,7 +348,20 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         val j = i + delta
         if (i < 0 || j !in keys.indices) return
         keys[i] = keys[j].also { keys[j] = keys[i] }
-        saveLayout(layout.copy(groupOrder = keys))
+        saveLayout(layout.copy(groupOrder = mergeGroupOrder(layout.groupOrder, keys)))
+    }
+
+    /**
+     * Neue Reihenfolge der sichtbaren Gruppen übernehmen, ohne die Plätze der gerade nicht gezeigten Gruppen
+     * (pausierte Playlists) zu verlieren – die rutschten sonst beim Wiedereinschalten ans Ende.
+     */
+    private fun mergeGroupOrder(old: List<String>, shownNew: List<String>): List<String> {
+        val shown = shownNew.toHashSet()
+        val next = ArrayDeque(shownNew)
+        val out = ArrayList<String>(old.size + shownNew.size)
+        old.forEach { k -> if (k in shown) next.removeFirstOrNull()?.let { out += it } else out += k }
+        out.addAll(next)
+        return out
     }
 
     /**
@@ -710,6 +724,9 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
                 val blocked = adultFilter && (de.aze.iptv.data.AdultFilter.isAdult(c.group) || de.aze.iptv.data.AdultFilter.isAdult(c.name))
                 if (known && !blocked) { current = last; instantStart = true }
             }
+            // Sofortstart: erst den Sender anlaufen lassen (Verbindung + Start-Vorrat), dann die große Liste lesen –
+            // sonst teilen sich beide Prozessor und Leitung genau in der ersten Sekunde
+            if (instantStart) awaitFirstPlay(3_000)
             try {
                 channels = repo.loadCached(activeSources)
                 rebuild(restoreKey = store.lastChannelKey).join()
@@ -718,11 +735,15 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
                 loading = false
             }
             if (epgEnabled) epg = runCatching { epgRepo.load() }.getOrDefault(Epg.EMPTY).withManual(epgMap)
-            if (needsRefresh() || refreshPending) {
+            val refresh = needsRefresh() || refreshPending
+            val epgStale = !refresh && activeSources.isNotEmpty() && epgRepo.isStale(12)
+            // Downloads (Liste 20–50 MB, EPG bis 100 MB) nicht in den ersten Sekunden des laufenden Senders
+            if ((refresh || epgStale) && current != null && repo.hasCache(activeSources)) { awaitFirstPlay(15_000); delay(8_000) }
+            if (refresh) {
                 refreshPending = false
                 refreshNow()
             }
-            else if (activeSources.isNotEmpty() && epgRepo.isStale(12)) refreshEpg()
+            else if (epgStale) refreshEpg()
         }
     }
 
@@ -766,6 +787,7 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
             val errors = try {
                 val active = activeSources
                 val errs = repo.refresh(active)
+                repo.removeOrphans(sources.map { it.id }.toSet())
                 channels = repo.loadCached(activeSources)
                 val now = System.currentTimeMillis()
                 if (errs.size < active.size) {
@@ -945,8 +967,13 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         return scope.launch {
             val (lu, eg) = withContext(Dispatchers.Default) {
                 // Filter läuft im Hintergrund (bei zehntausenden Sendern sonst spürbares Stocken)
-                val all = if (filterAdult) raw.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.group) || de.aze.iptv.data.AdultFilter.isAdult(it.name) } else raw
-                Numbering.build(all, favs, named, lay) to Numbering.arrange(all, named, lay)
+                // Gruppen-Prüfung nur einmal je Gruppe (sonst je Sender – bei 50 000 Sendern spürbar)
+                val adultGroup = HashMap<String, Boolean>()
+                val all = if (filterAdult) raw.filterNot {
+                    adultGroup.getOrPut(it.group) { de.aze.iptv.data.AdultFilter.isAdult(it.group) } || de.aze.iptv.data.AdultFilter.isAdult(it.name)
+                } else raw
+                val arranged = Numbering.arrange(all, named, lay)
+                Numbering.build(all, favs, named, lay, arranged) to arranged
             }
             lineup = lu
             editGroups = eg
@@ -1024,11 +1051,30 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
     /** Der zuletzt geschaute Sender (für OK = zurückspringen). */
     private var previousKey: String? = null
 
+    private var saveLastJob: Job? = null
+
     fun play(channel: NumberedChannel) {
         val before = current?.channel?.key
         if (before != null && before != channel.channel.key) previousKey = before
         current = channel
-        store.saveLast(channel)
+        // Speichern (2× verschlüsseln + Datei) erst, wenn man auf dem Sender bleibt – nicht bei jedem Durchzappen
+        saveLastJob?.cancel()
+        saveLastJob = scope.launch { delay(2_500); store.saveLast(channel) }
+    }
+
+    /** Beim Verlassen der App sofort speichern, was gerade läuft */
+    fun flushLast() {
+        if (saveLastJob?.isActive == true) { saveLastJob?.cancel(); current?.let { store.saveLast(it) } }
+    }
+
+    /** Wiedergabe läuft (Bild + Ton) – Startarbeiten im Hintergrund warten darauf */
+    @Volatile var firstPlayingAt = 0L
+        private set
+    fun notePlaying() { if (firstPlayingAt == 0L) firstPlayingAt = android.os.SystemClock.elapsedRealtime() }
+
+    private suspend fun awaitFirstPlay(maxMs: Long) {
+        val until = android.os.SystemClock.elapsedRealtime() + maxMs
+        while (firstPlayingAt == 0L && android.os.SystemClock.elapsedRealtime() < until) delay(100)
     }
 
     /** Springt zwischen aktuellem und vorherigem Sender hin und her. */
@@ -1069,7 +1115,9 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
     fun isFavorite(channel: Channel): Boolean = channel.key in favorites
 
     fun toggleFavorite(channel: Channel) {
-        favorites = if (channel.key in favorites) favorites - channel.key else favorites + channel.key
+        val adding = channel.key !in favorites
+        favorites = if (adding) favorites + channel.key else favorites - channel.key
+        message = if (adding) "★ „${channel.name}“ zu den Favoriten hinzugefügt" else "„${channel.name}“ aus den Favoriten entfernt"
         store.saveFavorites(favorites)
         rebuild(restoreKey = current?.channel?.key)
     }

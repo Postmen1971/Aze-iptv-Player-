@@ -34,7 +34,9 @@ class PhoneInputServer(
 
     private var server: ServerSocket? = null
     private val main = Handler(Looper.getMainLooper())
-    private var wrongCodes = 0
+    private val wrongCodes = java.util.concurrent.atomic.AtomicInteger(0)
+    /** höchstens 8 Anfragen gleichzeitig (eine Flut neuer Verbindungen kann sonst die App mit zu vielen Threads abstürzen lassen) */
+    private val pool = java.util.concurrent.Executors.newFixedThreadPool(8) { r -> Thread(r, "phone-input-req").apply { isDaemon = true } }
     @Volatile private var running = false
 
     fun start(): Boolean {
@@ -56,6 +58,7 @@ class PhoneInputServer(
         if (!running) return
         running = false
         runCatching { server?.close() }
+        pool.shutdown()
         main.removeCallbacks(timeout)
         main.post { onStopped() }
     }
@@ -64,7 +67,8 @@ class PhoneInputServer(
         while (running) {
             val client = runCatching { s.accept() }.getOrNull() ?: break
             // je Anfrage ein eigener Thread: eine offene Verbindung ohne Daten hielt sonst alle anderen bis 10 s auf
-            Thread({ runCatching { handle(client) }; runCatching { client.close() } }, "phone-input-req").apply { isDaemon = true }.start()
+            runCatching { pool.execute { runCatching { handle(client) }; runCatching { client.close() } } }
+                .onFailure { runCatching { client.close() } }
         }
     }
 
@@ -72,6 +76,8 @@ class PhoneInputServer(
         addr.isSiteLocalAddress || addr.isLoopbackAddress || addr.isLinkLocalAddress
 
     private fun handle(socket: Socket) {
+        // nach „Beenden“ oder zu vielen falschen Codes nimmt auch eine schon offene Verbindung nichts mehr an
+        if (!running || wrongCodes.get() >= 5) return
         socket.soTimeout = 5_000
         val out = socket.getOutputStream()
         if (!isLocal(socket.inetAddress)) {
@@ -104,10 +110,11 @@ class PhoneInputServer(
                 read += n
             }
             val form = parseForm(String(body, 0, read, Charsets.UTF_8))
+            if (!running || wrongCodes.get() >= 5) return
             if (form["code"]?.trim() != code) {
-                wrongCodes++
+                val n = wrongCodes.incrementAndGet()
                 respond(out, 403, page("Falscher Code", "Bitte den Code vom Fernseher eingeben.", back = true))
-                if (wrongCodes >= 5) stop()
+                if (n >= 5) stop()
                 return
             }
             if (form["type"] == "youtube") {

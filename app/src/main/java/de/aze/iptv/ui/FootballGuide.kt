@@ -1,5 +1,8 @@
 package de.aze.iptv.ui
 
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
@@ -183,7 +186,7 @@ fun FootballGuide(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text("Fußball heute", color = Palette.Text, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Text("OK = TV-Plan mit Vorschau · OK lang = Übersicht · Zurück schließt", color = Palette.TextMuted, fontSize = 12.sp)
+            Text(Device.hint("OK = TV-Plan mit Vorschau · OK lang = Übersicht · Zurück schließt", "Spiel antippen = TV-Plan mit Vorschau · lange tippen = Übersicht · Zurück schließt"), color = Palette.TextMuted, fontSize = 13.sp)
             if (epg.channelCount == 0) {
                 Text(
                     "Hinweis: Noch keine Programmzeitschrift geladen – ohne sie können keine Sender gefunden werden.",
@@ -191,7 +194,7 @@ fun FootballGuide(
                 )
             }
             val d = data
-            d?.diag?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Palette.TextMuted, fontSize = 11.sp) }
+            if (app.showDiag || app.expertMode) d?.diag?.takeIf { it.isNotEmpty() }?.let { Text(it, color = Palette.TextMuted, fontSize = 12.sp) }
             when {
                 d == null -> Text("Lade Spiele …", color = Palette.TextMuted, fontSize = 15.sp)
                 d.matches.isEmpty() -> {
@@ -308,9 +311,11 @@ private fun MatchPopup(
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.5f)), contentAlignment = Alignment.Center) {
         Column(
             Modifier
-                .width(480.dp)
+                .widthIn(max = 480.dp)
                 .heightIn(max = 420.dp)
                 .background(Palette.Panel, RoundedCornerShape(12.dp))
+                // Handy quer: Inhalt kann höher sein als der Bildschirm → scrollen, damit „Schließen“ erreichbar bleibt
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -352,7 +357,7 @@ private fun MatchPopup(
                     color = Palette.TextSoft, fontSize = 14.sp,
                 )
                 if (similar.isNotEmpty()) {
-                    Text("Bei liveonsat gefunden (Name passt nicht genau): " + similar.joinToString(" · "), color = Palette.TextMuted, fontSize = 12.sp)
+                    Text("Bei liveonsat gefunden (Name passt nicht genau): " + similar.joinToString(" · "), color = Palette.TextMuted, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
                 TvButton("Schließen", modifier = Modifier.focusRequester(first), onClick = onClose)
             } else {
@@ -458,7 +463,7 @@ fun MatchZapPanel(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(title, color = Palette.Text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Text("▲▼ Sender wechseln · Zurück schließt", color = Palette.TextMuted, fontSize = 11.sp)
+        Text(Device.hint("▲▼ Sender wechseln · Zurück schließt", "Sender antippen · Zurück schließt"), color = Palette.TextMuted, fontSize = 12.sp)
         LazyColumn(
             state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (startIndex - 3).coerceAtLeast(0)),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -542,11 +547,18 @@ private fun ListingZap(
         app.learnLos(name, nc)
         app.message = "★ Gemerkt: „$name“ = ${nc.channel.name}"
     }
+    // Breiten aus der Bildschirmbreite: am Fernseher (960 dp) wie bisher, am Handy überlappten Vorschau, Hilfe und Listen
+    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+    val previewW = footballPreviewWidth(cfg.screenWidthDp)
+    val listsW = (cfg.screenWidthDp.dp - previewW - 24.dp - 24.dp - 24.dp - 12.dp).coerceAtLeast(240.dp)
+    val leftW = minOf(260.dp, listsW * 0.48f)
+    val rightW = minOf(280.dp, listsW - leftW)
+    val lowScreen = cfg.screenHeightDp < 480
     Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxHeight().padding(start = 24.dp, top = 24.dp, bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // Links: Sender laut liveonsat
             Column(
-                Modifier.fillMaxHeight().width(260.dp).background(Palette.Panel, RoundedCornerShape(12.dp)).padding(12.dp),
+                Modifier.fillMaxHeight().width(leftW).background(Palette.Panel, RoundedCornerShape(12.dp)).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Text("${match.home} – ${match.away}", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -592,11 +604,11 @@ private fun ListingZap(
             }
             // Daneben: passende Sender aus der eigenen Liste
             Column(
-                Modifier.fillMaxHeight().width(280.dp).background(Palette.Panel, RoundedCornerShape(12.dp)).padding(12.dp),
+                Modifier.fillMaxHeight().width(rightW).background(Palette.Panel, RoundedCornerShape(12.dp)).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp),
             ) {
                 Text("In deiner Liste", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("★ gemerkt · ✓ von anderen bestätigt · ◀ zurück", color = Palette.TextMuted, fontSize = 11.sp)
+                Text("★ gemerkt · ✓ von anderen bestätigt · ◀ zurück", color = Palette.TextMuted, fontSize = 12.sp)
                 val hint = remember(name, candidates) { name?.let { Football.otherCountryHint(it, candidates.firstOrNull()?.channel) } }
                 if (hint != null) Text(hint, color = Palette.Accent, fontSize = 12.sp)
                 if (candidates.isEmpty()) {
@@ -652,12 +664,13 @@ private fun ListingZap(
             }
         }
         // Bedienung gut sichtbar unter dem kleinen Bild
-        Column(Modifier.align(Alignment.TopEnd).padding(top = 236.dp, end = 24.dp).width(360.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.align(Alignment.TopEnd).padding(top = 24.dp + previewW * (9f / 16f) + 12.dp, end = 24.dp).width(previewW), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             app.current?.let { cur ->
                 Text("${cur.number}  ${cur.channel.name}", color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 app.epg.now(cur.channel)?.let { Text(it.title, color = Palette.EpgText, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
             }
-            Column(
+            // flacher Bildschirm (Handy quer): die Bedienhilfe passt nicht mehr unter das Bild
+            if (!lowScreen) Column(
                 Modifier.padding(top = 10.dp).background(Palette.Panel, RoundedCornerShape(10.dp)).padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
@@ -669,3 +682,8 @@ private fun ListingZap(
         }
     }
 }
+
+
+/** Breite der kleinen Vorschau im TV-Plan: Fernseher 360 dp, schmalere Bildschirme anteilig */
+internal fun footballPreviewWidth(screenWidthDp: Int): androidx.compose.ui.unit.Dp =
+    if (screenWidthDp >= 940) 360.dp else (screenWidthDp * 0.34f).dp

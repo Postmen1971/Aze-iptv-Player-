@@ -24,8 +24,9 @@ object Numbering {
             info.getOrPut(k) { ch.source to ch.group }
         }
 
+        val orderSet = layout.groupOrder.toHashSet()
         val orderedKeys = layout.groupOrder.filter { byGroup.containsKey(it) } +
-            byGroup.keys.filter { it !in layout.groupOrder }
+            byGroup.keys.filter { it !in orderSet }
 
         return orderedKeys.map { k ->
             val list = byGroup.getValue(k)
@@ -53,6 +54,8 @@ object Numbering {
         favoriteKeys: List<String>,
         sources: List<PlaylistSource> = emptyList(),
         layout: ListLayout = ListLayout(),
+        /** schon berechnetes arrange(...) – spart beim Neuaufbau großer Listen die doppelte Arbeit */
+        arranged: List<EditGroup>? = null,
     ): Lineup {
         val unique = HashMap<String, Channel>()
         channels.forEach { if (!unique.containsKey(it.key)) unique[it.key] = it }
@@ -67,9 +70,10 @@ object Numbering {
         all.addAll(favList)
         groups.add(ChannelGroup("Favoriten", isFavorites = true, channels = favList))
 
-        arrange(channels, sources, layout).forEach { g ->
+        val hiddenCh = layout.hiddenChannels
+        (arranged ?: arrange(channels, sources, layout)).forEach { g ->
             if (g.hidden) return@forEach
-            val visible = g.channels.filter { it.key !in favoriteSet && it.key !in layout.hiddenChannels }
+            val visible = g.channels.filter { it.key !in favoriteSet && it.key !in hiddenCh }
             if (visible.isEmpty()) return@forEach
             val numbered = visible.map { NumberedChannel(number++, it, false) }
             all.addAll(numbered)

@@ -50,8 +50,14 @@ private fun simplify(s: String): String {
     val t = s.lowercase()
         .replace('ı', 'i').replace('ç', 'c').replace('ğ', 'g')
         .replace('ö', 'o').replace('ş', 's').replace('ü', 'u')
-    return Normalizer.normalize(t, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+    return Normalizer.normalize(t, Normalizer.Form.NFD).replace(marks, "")
 }
+
+/** einmal erstellt statt je Sender (bei 50 000 Sendern sonst 50 000 Mal) */
+private val marks = Regex("\\p{M}+")
+
+/** Suchtexte je Senderliste nur einmal vorbereiten (vorher bei jedem Öffnen der Suche neu) */
+private var indexCache: Pair<Any, List<Pair<NumberedChannel, String>>>? = null
 
 /**
  * Sendersuche: Name (ohne Rücksicht auf Groß/Klein und ç, ş, ü …) oder Nummer.
@@ -68,9 +74,11 @@ fun SearchOverlay(app: AppController, onClose: () -> Unit) {
     // Suchtexte einmal vorbereiten und suchen – im Hintergrund, damit die Eingabe bei großen Listen nicht hakt.
     val lineup = app.lineup
     val index by androidx.compose.runtime.produceState<List<Pair<NumberedChannel, String>>>(emptyList(), lineup) {
+        indexCache?.let { (l, idx) -> if (l === lineup) { value = idx; return@produceState } }
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             lineup.all.map { it to simplify(it.channel.name + " " + it.channel.group) }
         }
+        indexCache = lineup to value
     }
     val q = simplify(query.trim())
     val results by androidx.compose.runtime.produceState<List<NumberedChannel>>(emptyList(), q, index) {

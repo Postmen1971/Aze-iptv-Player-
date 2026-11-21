@@ -7,7 +7,6 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.SecretKeyFactory
@@ -43,12 +42,16 @@ object RemoteCrypto {
     /** „K7M4Q2XP“ → „K7M4-Q2XP“ */
     fun pretty(code: String) = code.take(4) + "-" + code.drop(4)
 
+    /**
+     * Schlüssel UND Briefkasten-Namen aus EINER langsamen Ableitung (PBKDF2, 60 000 Runden, 512 Bit): Wer nur den
+     * Briefkasten-Namen sieht (Betreiber, Protokolle), kann den Code daraus nicht in Minuten zurückrechnen.
+     * Muss genau zur Webseite (web/fernhilfe.html) passen.
+     */
     fun keys(code: String): Keys {
         val f = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1")
-        val k = f.generateSecret(PBEKeySpec(code.toCharArray(), "aze-fernhilfe-1".toByteArray(), 20_000, 256)).encoded
-        val h = MessageDigest.getInstance("SHA-256").digest("aze-fh1|$code".toByteArray())
-            .joinToString("") { "%02x".format(it) }.take(40)
-        return Keys(SecretKeySpec(k, "AES"), "azefh$h" + "a", "azefh$h" + "b")
+        val bits = f.generateSecret(PBEKeySpec(code.toCharArray(), "aze-fernhilfe-2".toByteArray(), 60_000, 512)).encoded
+        val h = bits.copyOfRange(32, 52).joinToString("") { "%02x".format(it) }
+        return Keys(SecretKeySpec(bits.copyOfRange(0, 32), "AES"), "azefh$h" + "a", "azefh$h" + "b")
     }
 
     fun seal(keys: Keys, json: String): String {

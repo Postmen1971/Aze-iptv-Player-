@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-title" content="Fernhilfe">
 <meta name="theme-color" content="#0E1116">
 <title>Aze-IPTV Fernhilfe</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="pako.min.js"></script>
 <style>
 :root{--bg:#0E1116;--panel:#151A21;--raised:#1F2630;--line:#2A3340;--text:#EDEFF3;--soft:#B9C1CC;--muted:#7F8A99;--acc:#5AA0FF;--ok:#3EE6A1;--warn:#F07A6A}
 *{box-sizing:border-box}
@@ -119,10 +119,11 @@ function b64(u8){var s="";for(var i=0;i<u8.length;i+=0x8000)s+=String.fromCharCo
 function unb64(t){var s=atob(t),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u}
 async function makeKeys(code){
   var enc=new TextEncoder();
-  var base=await crypto.subtle.importKey("raw",enc.encode(code),"PBKDF2",false,["deriveKey"]);
-  var key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:enc.encode("aze-fernhilfe-1"),iterations:20000,hash:"SHA-1"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
-  var d=new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode("aze-fh1|"+code)));
-  var h=Array.prototype.map.call(d,function(b){return("0"+b.toString(16)).slice(-2)}).join("").slice(0,40);
+  var base=await crypto.subtle.importKey("raw",enc.encode(code),"PBKDF2",false,["deriveBits"]);
+  // Schlüssel UND Briefkasten-Namen aus einer langsamen Ableitung (wie in der App, data/RemoteHelp.kt)
+  var bits=new Uint8Array(await crypto.subtle.deriveBits({name:"PBKDF2",salt:enc.encode("aze-fernhilfe-2"),iterations:60000,hash:"SHA-1"},base,512));
+  var key=await crypto.subtle.importKey("raw",bits.slice(0,32),{name:"AES-GCM"},false,["encrypt","decrypt"]);
+  var h=Array.prototype.map.call(bits.slice(32,52),function(b){return("0"+b.toString(16)).slice(-2)}).join("");
   return {key:key,toBox:"azefh"+h+"a",toHelper:"azefh"+h+"b"};
 }
 async function seal(obj){
@@ -173,6 +174,7 @@ async function listen(){
           seen[o.id]=1;since=o.id;
           var text=o.message;
           if(o.attachment&&o.attachment.url){
+            if(o.attachment.url.indexOf(RELAY+"/")!==0)continue; // nur Anhänge vom selben Briefkasten
             try{text=await (await fetch(o.attachment.url)).text()}catch(e){continue}
           }
           var m=await unseal(text);if(m)handle(m);
@@ -198,13 +200,17 @@ function order(obj,text){
   setStatus(text+" – wird übertragen …");
   publish(obj);
 }
+var CONNECTING=false;
 async function connect(){
+  if(CONNECTING||RUN)return; // doppelt gedrückt (Enter + Knopf)
   var code=norm($("code").value);
   if(!code){$("lerr").textContent="Der Code hat 8 Zeichen (Buchstaben und Zahlen), z. B. K7M4-Q2XP.";return}
   if(!window.crypto||!crypto.subtle){$("lerr").textContent="Dieser Browser kann nicht verschlüsseln – bitte Safari oder Chrome aktuell halten.";return}
   $("lerr").textContent="";
   try{sessionStorage.setItem("azeFhCode",code)}catch(e){}
-  K=await makeKeys(code);RUN=true;ended=false;
+  CONNECTING=true;$("go").disabled=true;$("go").textContent="Verbinde …";
+  try{K=await makeKeys(code)}finally{CONNECTING=false;$("go").disabled=false;$("go").textContent="Verbinden"}
+  RUN=true;ended=false;CONNECTED=false;
   show("vMain");setStatus("Verbinde …");
   listen();
   for(var i=0;i<6&&!CONNECTED&&RUN;i++){
@@ -232,6 +238,12 @@ function handle(m){
 }
 setInterval(function(){
   if(!CONNECTED||ended){$("left").textContent="";return}
+  // Box weg (aus, offline) ohne Abschied: nach Ablauf + 15 s selbst beenden
+  if(Date.now()>expiresAt+15000){
+    ended=true;RUN=false;if(ctl)ctl.abort();$("openList").disabled=true;show("vMain");
+    setStatus("Keine Verbindung mehr zur Box (Zeit abgelaufen, oder die Box ist aus bzw. offline).","err");
+    $("left").textContent="";return;
+  }
   var s=Math.max(0,Math.round((expiresAt-Date.now())/1000));
   $("left").textContent="Offen noch etwa "+Math.floor(s/60)+":"+("0"+s%60).slice(-2)+" min · jede Aktion verlängert um 1 Minute.";
 },1000);
@@ -304,6 +316,7 @@ $("end").onclick=function(){
   if(CONNECTED&&!ended)publish({op:"bye"});
   ended=true;RUN=false;if(ctl)ctl.abort();
   setStatus("Fernhilfe beendet.");$("openList").disabled=true;
+  CONNECTED=false;show("vLogin"); // neuer Code → gleich wieder verbinden können
 };
 $("go").onclick=connect;
 $("code").onkeydown=function(e){if(e.key==="Enter")connect()};
@@ -390,7 +403,9 @@ sortable($("groups"),function(){DATA.groups=[].map.call($("groups").children,fun
 window.addEventListener("beforeunload",function(e){if(dirty){e.preventDefault();e.returnValue=""}});
 // Link/QR mit Code (…/fernhilfe.html?c=K7M4Q2XP): gleich verbinden
 try{
-  var qc=new URLSearchParams(location.search).get("c");
+  // Code im Teil nach „#“ (wird nicht an den Webserver geschickt); „?c=“ von älteren QR-Codes geht weiter
+  var qc=new URLSearchParams(location.hash.slice(1)).get("c")||new URLSearchParams(location.search).get("c");
+  if(qc&&history.replaceState)history.replaceState(null,"",location.pathname);
   if(qc&&norm(qc)){$("code").value=qc;connect()}
   else{var sc=sessionStorage.getItem("azeFhCode");if(sc)$("code").value=sc}
 }catch(e){}

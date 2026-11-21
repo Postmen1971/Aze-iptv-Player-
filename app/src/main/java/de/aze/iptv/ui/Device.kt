@@ -40,7 +40,8 @@ object Device {
     val isPhone: Boolean get() = kind == DeviceKind.PHONE
 
     /** Mehr Höhe für Zeilen und Knöpfe bei Touch (Finger brauchen mehr Platz als der Fokus der Fernbedienung) */
-    val touchPad: Dp get() = if (isTouch) 6.dp else 0.dp
+    // 10 dp: Knöpfe (38 dp) werden auf Touch-Geräten 48 dp hoch – die empfohlene Mindestgröße zum Antippen
+    val touchPad: Dp get() = if (isTouch) 10.dp else 0.dp
 
     /** Hinweistext passend zur Bedienung */
     fun hint(remote: String, touch: String): String = if (isTouch) touch else remote

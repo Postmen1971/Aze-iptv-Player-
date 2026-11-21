@@ -83,10 +83,16 @@ fun ChannelOverlay(
     var showGroups by remember { mutableStateOf(startInGroups) }
     var showMenu by remember { mutableStateOf(false) }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { qaLog("LIST_CLOSED") } }
+    // App erst beim zweiten Zurück beenden (innerhalb von 2,5 s) – ein Druck zu viel schloss sonst ohne Nachfrage
+    var exitArmedAt by remember { mutableStateOf(0L) }
     BackHandler {
         when {
             showMenu -> showMenu = false
-            showGroups -> onExitApp()
+            showGroups -> {
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (now - exitArmedAt < 2_500) onExitApp()
+                else { exitArmedAt = now; app.message = "Nochmal Zurück drücken = App beenden" }
+            }
             else -> showGroups = true
         }
     }
@@ -252,12 +258,16 @@ fun ChannelOverlay(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(34.dp)
+                        .height(if (Device.isTouch) 48.dp else 34.dp)
                         .background(if (focused) Palette.Raised else Palette.PanelDark.copy(alpha = 0f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = if (Device.isTouch) 0.dp else 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("◀", color = Palette.TextMuted, fontSize = 12.sp)
+                    if (Device.isTouch) {
+                        // Touch: eigene Flächen – ☰ Gruppen, ◀ zurück, ▶ weiter (vorher wechselte jedes Antippen nur vorwärts)
+                        TouchHeadButton("☰") { showGroups = true }
+                        TouchHeadButton("◀") { switchGroup(-1) }
+                    } else Text("◀", color = Palette.TextMuted, fontSize = 12.sp)
                     Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             (if (group.isFavorites) "★ " else "") + group.name,
@@ -265,10 +275,11 @@ fun ChannelOverlay(
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                         )
                         if (multi && filter == null && group.sourceName != null) {
-                            Text(group.sourceName, color = Palette.TextMuted, fontSize = 10.sp, maxLines = 1)
+                            Text(group.sourceName, color = Palette.TextMuted, fontSize = 12.sp, maxLines = 1)
                         }
                     }
-                    Text("▶", color = Palette.TextMuted, fontSize = 12.sp)
+                    if (Device.isTouch) TouchHeadButton("▶") { switchGroup(+1) }
+                    else Text("▶", color = Palette.TextMuted, fontSize = 12.sp)
                 }
             }
             // Punkte: wie viele Gruppen, welche ist offen
@@ -388,7 +399,7 @@ fun ChannelOverlay(
                                             Text(
                                                 prog.title,
                                                 color = if (focused) Palette.TextSoft else Palette.EpgText,
-                                                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                                fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                                             )
                                             Box(Modifier.fillMaxWidth().height(3.dp).background(Palette.Line, RoundedCornerShape(2.dp))) {
                                                 Box(
@@ -550,4 +561,14 @@ internal fun SideMenu(
         // „App beenden“ ganz unten
         if (onQuit != null) entry("App beenden", LineIcon.EXIT, onQuit, danger = true)
     }
+}
+
+
+/** Touch: Knopf im Gruppenkopf, mindestens 48 dp breit und hoch */
+@Composable
+private fun TouchHeadButton(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(48.dp).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, color = Palette.TextSoft, fontSize = 18.sp) }
 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -95,14 +96,16 @@ fun QuickMenu(items: List<QuickItem>, onClose: () -> Unit) {
                             .widthIn(min = 78.dp, max = 160.dp)
                             .background(
                                 if (focused) Palette.Accent else Palette.Raised.copy(alpha = 0.55f),
-                                RoundedCornerShape(8.dp),
+                                RoundedCornerShape(Palette.radius),
                             )
+                            .heightIn(min = if (Device.isTouch) 48.dp else 0.dp)
                             .padding(horizontal = 10.dp, vertical = 5.dp),
                     ) {
                         Text(
                             item.title,
                             color = if (focused) Palette.OnAccent else Palette.TextMuted,
-                            fontSize = 10.sp,
+                            fontSize = 12.sp,
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(

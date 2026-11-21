@@ -281,7 +281,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/qa/build_guide.py guide && ls guide/img | wc -l
-          cp web/*.html guide/  # Fernhilfe-Seite gehört mit auf die Webseite
+          cp web/* guide/  # Fernhilfe-Seite gehört mit auf die Webseite
           (cd guide && zip -qr ../anleitung.zip .) && gh release upload hilfe anleitung.zip --clobber
       - uses: actions/upload-pages-artifact@v3
         with:

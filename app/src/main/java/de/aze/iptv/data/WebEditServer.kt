@@ -55,6 +55,8 @@ class WebEditServer(
     private var server: ServerSocket? = null
     private val main = Handler(Looper.getMainLooper())
     private val wrongCodes = java.util.concurrent.atomic.AtomicInteger(0)
+    /** höchstens 8 Anfragen gleichzeitig (Schutz vor einer Flut von Verbindungen) */
+    private val pool = java.util.concurrent.Executors.newFixedThreadPool(8) { r -> Thread(r, "web-edit-req").apply { isDaemon = true } }
     @Volatile private var running = false
 
     /** Stand der Liste, den das Handy zuletzt bekommen hat (Nummern beziehen sich darauf). */
@@ -84,6 +86,7 @@ class WebEditServer(
         if (!running) return
         running = false
         runCatching { server?.close() }
+        pool.shutdown()
         main.removeCallbacks(timeout)
         main.post { onStopped() }
     }
@@ -92,10 +95,8 @@ class WebEditServer(
         while (running) {
             val client = runCatching { s.accept() }.getOrNull() ?: break
             // Jede Anfrage in eigenem Thread, damit eine große Liste die Seite nicht blockiert
-            Thread({
-                runCatching { handle(client) }
-                runCatching { client.close() }
-            }, "web-edit-req").apply { isDaemon = true }.start()
+            runCatching { pool.execute { runCatching { handle(client) }; runCatching { client.close() } } }
+                .onFailure { runCatching { client.close() } }
         }
     }
 
@@ -103,6 +104,7 @@ class WebEditServer(
         addr.isSiteLocalAddress || addr.isLoopbackAddress || addr.isLinkLocalAddress
 
     private fun handle(socket: Socket) {
+        if (!running || wrongCodes.get() >= 10) return
         socket.soTimeout = 20_000
         val out = socket.getOutputStream()
         if (!isLocal(socket.inetAddress)) {
@@ -146,6 +148,7 @@ class WebEditServer(
             respond(out, 200, "text/html; charset=utf-8", PAGE)
             return
         }
+        if (!running || wrongCodes.get() >= 10) return
         if (sentCode != code) {
             val wrong = wrongCodes.incrementAndGet()
             respond(out, 403, "application/json", """{"error":"Falscher Code"}""")

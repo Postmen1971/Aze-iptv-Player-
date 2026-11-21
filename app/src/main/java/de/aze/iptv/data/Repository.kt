@@ -229,4 +229,13 @@ class Repository(context: Context) {
     fun delete(source: PlaylistSource) {
         cacheFile(source).delete()
     }
+
+    /** Kopien von Playlists löschen, die es nicht mehr gibt (z. B. während des Aktualisierens gelöscht – bis zu 50 MB) */
+    fun removeOrphans(keepIds: Set<String>) {
+        runCatching {
+            dir.listFiles()?.forEach { f ->
+                if (f.name.endsWith(".m3u") && f.name.removeSuffix(".m3u") !in keepIds) f.delete()
+            }
+        }
+    }
 }

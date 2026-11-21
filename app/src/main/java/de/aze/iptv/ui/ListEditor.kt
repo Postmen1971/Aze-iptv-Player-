@@ -55,6 +55,7 @@ fun ListEditor(app: ListEditTarget, onClose: () -> Unit, title: String = "Sender
     var movingGroup by remember { mutableStateOf<String?>(null) }
     var movingChannel by remember { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<String?>(null) }
+    var resetting by remember { mutableStateOf<String?>(null) }
     // Sortier-Modus: OK nimmt den Eintrag auf (▲▼ verschieben, OK legt ab) – ohne langes Drücken
     var sorting by remember { mutableStateOf(false) }
     // Beim Verschieben mitscrollen und den Fokus auf dem verschobenen Eintrag halten
@@ -125,7 +126,7 @@ fun ListEditor(app: ListEditTarget, onClose: () -> Unit, title: String = "Sender
             })
             selected?.let { g ->
                 TvButton("Umbenennen", onClick = { renaming = g.key })
-                TvButton("Zurücksetzen", onClick = { app.resetGroup(g.key) })
+                TvButton("„${g.name.take(18)}“ zurücksetzen", onClick = { resetting = g.key })
             }
             TvButton("Fertig", onClick = onClose)
         }
@@ -254,6 +255,18 @@ fun ListEditor(app: ListEditTarget, onClose: () -> Unit, title: String = "Sender
                 onCancel = { renaming = null },
             )
         }
+    }
+    resetting?.let { key ->
+        val g = app.editGroups.firstOrNull { it.key == key }
+        if (g != null) {
+            ConfirmDialog(
+                "Gruppe „${g.name}“ zurücksetzen?",
+                "Name, Reihenfolge und ausgeblendete Sender dieser Gruppe kommen wieder wie in der Playlist.",
+                "Zurücksetzen",
+                onYes = { app.resetGroup(key); resetting = null },
+                onNo = { resetting = null },
+            )
+        } else resetting = null
     }
 }
 
