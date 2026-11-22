@@ -11,9 +11,22 @@ FAILS=0
 STEP=0
 
 log() { echo "[$(date +%H:%M:%S)] $*"; }
-qa() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F "AzeQA" | grep -v " TICK " | grep -v ": BEAT [0-9]*$" ; }
+# App-Protokoll: läuft ab dem Start laufend in eine Datei mit. Vorher wurde jedes Mal der Logcat-Puffer im Gerät gelesen –
+# der läuft bei diesem langen Test über, alte Zeilen fielen heraus und „warte auf das NÄCHSTE FIRST_FRAME“ zählte falsch
+# (1.0.314: Test 15 meldete „kein Bild“, obwohl es nach 0,2 s da war).
+QA_FILE="$OUT/azeqa-stream.txt"
+QA_LC=""
+qa_stream() {  # Mitschnitt starten bzw. nach einem adb-Aussetzer neu starten (-T 1: nur neue Zeilen)
+  if [ -z "$QA_LC" ] || ! kill -0 "$QA_LC" 2>/dev/null; then
+    adb logcat -T 1 -v threadtime -s AzeQA:I >> "$QA_FILE" 2>/dev/null &
+    QA_LC=$!
+  fi
+}
+logclear() { adb logcat -c; : > "$QA_FILE"; }
+qlog() { if [ -n "$QA_LC" ]; then qa_stream; cat "$QA_FILE" 2>/dev/null; else adb logcat -d -s AzeQA:I 2>/dev/null; fi; }
+qa() { qlog | grep -F "AzeQA" | grep -v " TICK " | grep -v ": BEAT [0-9]*$" ; }
 # größte Lücke im Herzschlag (Haupt-Thread) in Sekunden – je Prozess, ab Zeile „seit“ (Uhrzeit HH:MM:SS)
-beat_gap() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -E ": BEAT [0-9]+$" | awk -v since="${1:-00:00:00}" '
+beat_gap() { qlog | grep -E ": BEAT [0-9]+$" | awk -v since="${1:-00:00:00}" '
   { split($2,t,":"); s=t[1]*3600+t[2]*60+t[3]; if ($2 < since) next;
     if (($3 in last) && s-last[$3] > max) max=s-last[$3]; last[$3]=s }
   END { printf "%.1f", max+0 }'; }
@@ -21,7 +34,7 @@ beat_gap() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -E ": BEAT [0-9]+$" | a
 hang_check() { local g; g=$(beat_gap "$2"); log "Herzschlag $1: längste Lücke ${g} s (Vergleich Zappen: ${BASE_GAP:-0} s)"
   qa | grep "STALL" | tail -4 | while IFS= read -r l; do log "  $l"; done
   awk -v g="$g" -v b="${BASE_GAP:-0}" 'BEGIN{exit !(g>1.5 && g>b+0.7)}' && fail "$1: App hing ${g} s (Haupt-Thread blockiert)"; true; }
-ticks() { adb logcat -d -s AzeQA:I 2>/dev/null | grep -F " TICK " ; }
+ticks() { qlog | grep -F " TICK " ; }
 count() { qa | grep -cF -- "$1" || true; }
 shot() { STEP=$((STEP+1)); adb exec-out screencap -p > "$OUT/$(printf %02d $STEP)-$1.png" 2>/dev/null || true; }
 alive() { [ -n "$(adb shell pidof $PKG | tr -d '\r')" ]; }
@@ -126,6 +139,8 @@ log "Installiere $APK"
 adb install -r "$APK" || { echo "::error::Installation fehlgeschlagen"; exit 1; }
 adb logcat -G 16M 2>/dev/null || true
 adb logcat -c
+: > "$QA_FILE"
+qa_stream
 adb shell am start -W -n $PKG/.MainActivity --es aze_test_playlist "http://10.0.2.2:8090/list.m3u"
 
 log "== Test 1: normaler Sender startet und läuft ruhig"
@@ -289,7 +304,7 @@ shot "test7-nach-leeren"
 log "== Test 8: Multi-View mit zwei Sendern gleichzeitig"
 adb shell am force-stop $PKG
 sleep 2
-adb logcat -c
+logclear
 adb shell am start -W -n $PKG/.MainActivity --ez aze_test_multiview true
 wait_for "MV_FIRST_FRAME 0" 1 90
 wait_for "MV_FIRST_FRAME 1" 1 60
