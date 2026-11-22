@@ -804,6 +804,8 @@ fun PlayerScreen(
             lastZapAt[0] = nowZap
             zapStartedAt[0] = nowZap
             zapRunAt[0] = nowZap
+            // für den Langzeit-Test: welcher Sender wurde gewählt (auch wenn nie ein Bild kommt) – nur im Test-Build
+            qaLog("ZAP_START ${ch.name}")
         }
         // gleicher Sender (Neustart): letztes Bild halten. Neuer Sender: mit „Bild halten“ (Standard) bleibt das alte
         // Bild stehen, bis das neue da ist – kein Schwarz dazwischen, Umschalten wirkt sofort. Aus = wie früher schwarz.
@@ -1499,7 +1501,7 @@ fun PlayerScreen(
 
 
 /** Kurze Zeilen fürs Protokoll (logcat, Kennung AzeQA) – der automatische Emulator-Test liest sie mit. */
-private val qaUiNoise = arrayOf("LIST_", "ROOT_KEY", "SORT_", "SET_", "SEC_", "ARROW", "INFO_BAR", "MV_TAP", "MV_PICK", "VOD_CAT ", "OPEN_URL")
+private val qaUiNoise = arrayOf("LIST_", "ROOT_KEY", "SORT_", "SET_", "SEC_", "ARROW", "INFO_BAR", "MV_TAP", "MV_PICK", "VOD_CAT ", "OPEN_URL", "ZAP_START")
 internal fun qaLog(msg: String) {
     // Reine Bedien-Meldungen (jeder Tastendruck in der Senderliste …) braucht nur der automatische Test:
     // im normalen Build weglassen – spart bei jedem ▲▼ Arbeit und hält das Hänger-Protokoll frei für echte Hänger.
