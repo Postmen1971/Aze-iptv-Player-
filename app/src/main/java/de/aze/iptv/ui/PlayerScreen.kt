@@ -82,6 +82,7 @@ import de.aze.iptv.player.PlaybackConfig
 import de.aze.iptv.player.TrackHelper
 import de.aze.iptv.player.PlayerEngine
 import de.aze.iptv.player.VlcHandle
+import de.aze.iptv.player.SlowStall
 import de.aze.iptv.player.VlcVideo
 import de.aze.iptv.player.vlcCachingMs
 import kotlinx.coroutines.Job
@@ -150,6 +151,13 @@ fun PlayerScreen(
     val zapRunAt = remember { longArrayOf(0L) }
     /** true, solange beim Umschalten der alte Sender nur angehalten ist (Wächter soll ihn nicht wieder starten) */
     val zapHold = remember { booleanArrayOf(false) }
+    /**
+     * Anbieter lehnt den Sender ab (HTTP-Fehler wie 403), Media3 versucht still neu: [0] = letzte Ablehnung,
+     * [1] = Beginn dieser Ablehnungs-Phase, [2] = HTTP-Code (alles elapsedRealtime). Aziz' Protokoll 22.11.: PROSIEBEN FUN,
+     * RTL, PROSIEBEN MAXX wurden je 15–50 s lang abgelehnt, während andere Sender sofort liefen – ein Ausfall beim
+     * Anbieter, nicht in der App. Der Wächter griff trotzdem ein (Eingriff 2, 3 …) und brachte nichts.
+     */
+    val rejectAt = remember { longArrayOf(0L, 0L, 0L) }
     // Zeitpunkt des letzten Senderwechsels (für die kurze Wartezeit beim einzelnen Umschalten)
     val lastZapAt = remember { longArrayOf(0L) }
     /** Beim Neuverbinden das letzte Bild stehen lassen statt Schwarz (beim Senderwechsel aus) */
@@ -235,6 +243,12 @@ fun PlayerScreen(
                         if (wasCanceled) return
                         errCount++
                         val now = android.os.SystemClock.elapsedRealtime()
+                        // Ablehnung durch den Anbieter (nicht die des alten Senders in der Wartezeit beim Umschalten)
+                        if (error is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException && !zapHold[0]) {
+                            if (rejectAt[0] == 0L || now - rejectAt[0] > 4_000) rejectAt[1] = now
+                            rejectAt[0] = now
+                            rejectAt[2] = error.responseCode.toLong()
+                        }
                         if (now - errLoggedAt < 3_000) return
                         val what = when (error) {
                             is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException -> "HTTP ${error.responseCode}"
@@ -343,6 +357,12 @@ fun PlayerScreen(
     var firstFrameSeen by remember { mutableStateOf(false) }
     /** Zeitpunkt des letzten Starts (prepare) */
     var preparedAt by remember { mutableStateOf(0L) }
+    /** Hinweis in der Ecke, solange der Anbieter den Sender ablehnt */
+    var rejectHint by remember { mutableStateOf<String?>(null) }
+    /** Sender, bei denen Neuverbinden das Bild schnell (≤ 3 s) zurückgebracht hat – dort greift der Wächter früher */
+    val reconnectProven = remember { HashSet<String>() }
+    /** Sender, bei denen Neuverbinden bei zähem Nachschub nichts gebracht hat → so lange keine weiteren Versuche */
+    val slowBlockedUntil = remember { HashMap<String, Long>() }
     LaunchedEffect(player) {
         var lastFrames = -1L
         var lastPos = -1L
@@ -362,9 +382,21 @@ fun PlayerScreen(
         var gapInfo = ""
         var gapLast = ""
         var gapKey: String? = null
+        // zäher Nachschub (siehe SlowStall): Sekunden im Hänger, Vorrat zu Beginn, letzter Versuch
+        var stallSec = 0
+        var stallAhead0 = 0L
+        /** letzter Neustart (Wächter oder zäher Nachschub) – dazwischen mindestens 10 s Ruhe */
+        var lastRestartEr = 0L
+        // Neustart abwarten: hat er das Bild schnell zurückgebracht? (Art: LANGSAM oder WAECHTER)
+        var verdictAt = 0L
+        var verdictKind = ""
+        var verdictKey: String? = null
+        // Ablehnungs-Phase schon gemeldet (Beginn für die Dauer im Protokoll)
+        var rejectLoggedSince = 0L
         while (true) {
             delay(1_000)
             val now = System.currentTimeMillis()
+            val nowEr = android.os.SystemClock.elapsedRealtime()
             val f = probe.frames
             val pos = player.currentPosition
             val buffered = player.bufferedPosition
@@ -424,6 +456,51 @@ fun PlayerScreen(
                 // Neuer Sender: Sperrzeit und Zähler gehören zum alten – sonst griff der Wächter nach dem Umschalten
                 // bis zu 60 s lang nicht ein
                 nextAllowed = 0; frozen = 0; starved = 0; jump = 0; noFirst = 0; noFirstTries = 0
+                if (rejectLoggedSince > 0) qaLog("ABGELEHNT_ENDE weggeschaltet nach ${(nowEr - rejectLoggedSince) / 1000} s")
+                rejectLoggedSince = 0; stallSec = 0; verdictAt = 0
+            }
+            // Bild läuft wirklich wieder (nach probe.restart() beim vollen Neustart springt der Zähler auf 0 – das ist
+            // keine Bewegung)
+            val moved = firstFrameSeen && pictureMoving && (app.tunneling || f > lastFrames)
+            // Anbieter lehnt gerade ab (letzte Ablehnung < 3,5 s her; Media3 versucht alle 0,3–1,5 s neu): der Wächter
+            // wartet – ein Neustart brächte nur eine weitere abgelehnte Verbindung und zählte als Eingriff, sodass nach
+            // dem Ende der Sperre gleich der volle Neustart kam. Nach 2 s sagt die Ecke, woran es liegt.
+            val rejecting = !switching && rejectAt[0] > 0 && nowEr - rejectAt[0] < 3_500
+            if (rejecting) {
+                starved = 0
+                val secs = (nowEr - rejectAt[1]) / 1000
+                if (secs >= 2 && (buffering || !firstFrameSeen || !pictureMoving)) {
+                    if (rejectLoggedSince == 0L) {
+                        rejectLoggedSince = rejectAt[1]
+                        qaLog("ABGELEHNT HTTP ${rejectAt[2]} ${app.current?.channel?.name} – Anbieter lässt den Sender gerade nicht zu, Wächter wartet")
+                    }
+                    rejectHint = "Anbieter lässt den Sender gerade nicht zu (Fehler ${rejectAt[2]}) – neuer Versuch läuft · $secs s"
+                }
+            } else {
+                if (rejectHint != null) rejectHint = null
+                if (rejectLoggedSince > 0 && moved) {
+                    qaLog("ABGELEHNT_ENDE nach ${(nowEr - rejectLoggedSince) / 1000} s ${app.current?.channel?.name}")
+                    rejectLoggedSince = 0
+                }
+            }
+            // Ergebnis eines Neustarts: Bild nach ≤ 3 s wieder da → Neuverbinden hilft bei diesem Sender
+            if (verdictAt > 0) {
+                val k = verdictKey
+                val waited = nowEr - verdictAt
+                if (k == null || key != k) verdictAt = 0
+                else if (moved) {
+                    if (waited <= SlowStall.HELPED_SEC * 1_000L + 500) {
+                        if (reconnectProven.add(k) || verdictKind == "LANGSAM") qaLog("NEUVERBINDEN_HILFT nach $waited ms ($verdictKind) ${app.current?.channel?.name}")
+                    }
+                    verdictAt = 0
+                } else if (rejecting || waited > SlowStall.HELPED_SEC * 1_000L + 500) {
+                    reconnectProven.remove(k)
+                    if (verdictKind == "LANGSAM") {
+                        slowBlockedUntil[k] = nowEr + SlowStall.BLOCK_MS
+                        qaLog("LANGSAM_NUTZLOS ${app.current?.channel?.name} – Neuverbinden brachte keinen Schwung, 10 min aus")
+                    }
+                    verdictAt = 0
+                }
             }
             if (!switching && firstFrameSeen && player.playWhenReady && !pictureMoving &&
                 player.playbackState != Player.STATE_IDLE
@@ -463,8 +540,37 @@ fun PlayerScreen(
             lastFrames = f
             lastPos = pos
             lastBuffered = buffered
-            // Läuft schon (erstes Bild war da) und puffert 5 s ohne neue Daten → neu. Beim Start weiterhin 8 s Geduld.
-            val starvedLimit = if (firstFrameSeen) 5 else 8
+            // Läuft schon (erstes Bild war da) und puffert 5 s ohne neue Daten → neu (3 s, wo Neuverbinden bewährt ist).
+            // Beim Start weiterhin 8 s Geduld.
+            val proven = key != null && key in reconnectProven
+            val starvedLimit = SlowStall.starvedLimit(firstFrameSeen, proven)
+            // Zäher Nachschub (siehe SlowStall): Bild steht, es kommt nur tröpfchenweise etwas nach
+            val ahead = player.totalBufferedDuration
+            if (!switching && !rejecting && buffering && firstFrameSeen) {
+                if (stallSec == 0) stallAhead0 = ahead
+                stallSec++
+            } else stallSec = 0
+            if (stallSec > 0 && key != null && verdictAt == 0L && nowEr - lastRestartEr >= 10_000 &&
+                (slowBlockedUntil[key] ?: 0L) <= nowEr
+            ) {
+                val resumeAt = (loadCtlRef[0]?.resumeAtMs() ?: 4_000).toLong()
+                val gained = ahead - stallAhead0
+                val window = (stallSec - 1) * 1_000L
+                if (SlowStall.shouldReconnect(stallSec, ahead, resumeAt, gained, window, proven)) {
+                    qaLog(
+                        "LANGSAM_NEU ${app.current?.channel?.name} | Vorrat %.1f s von %.1f s, Nachschub %.2f-fach – verbindet neu".format(
+                            java.util.Locale.GERMANY, ahead / 1000f, resumeAt / 1000f, if (window > 0) gained.toFloat() / window else 0f,
+                        ),
+                    )
+                    lastRestartEr = nowEr
+                    verdictAt = nowEr; verdictKind = "LANGSAM"; verdictKey = key
+                    stallSec = 0; starved = 0; frozen = 0
+                    keepFrame(true)
+                    player.stop()
+                    preparedAt = System.currentTimeMillis()
+                    player.prepare()
+                }
+            }
             // Stehendes Bild bei laufendem Player: 6 s (bewährt) oder 4 s (Schalter unter Einstellungen → System)
             val frozenLimit = if (app.freezeFast) 4 else 6
             // 10 s „läuft“ ohne je ein Bild: Sender komplett neu starten – höchstens 2× je Sender (kann das Gerät das
@@ -485,6 +591,9 @@ fun PlayerScreen(
                 val pause = longArrayOf(5_000, 15_000, 30_000, 60_000)
                 nextAllowed = now + pause[minOf(watchdogRestarts, pause.size - 1)]
                 watchdogRestarts++
+                stallSec = 0
+                lastRestartEr = nowEr
+                if (key != null && !blind) { verdictAt = nowEr; verdictKind = "WAECHTER"; verdictKey = key }
                 if (!light) qaLog("WATCHDOG voll (Eingriff $watchdogRestarts) ${app.current?.channel?.name}")
                 if (light) {
                     // Verbindung ist da, nur das Bild hängt: direkt neu synchronisieren – ohne Senderwechsel-Ablauf,
@@ -627,6 +736,7 @@ fun PlayerScreen(
                 }
                 noPicture = false
                 if (ytError?.startsWith("Anbieter antwortet") == true) ytError = null
+                rejectHint = null
                 retries = 0
             }
 
@@ -671,15 +781,16 @@ fun PlayerScreen(
                 // Fehler des ALTEN Senders in der kurzen Wartezeit beim Umschalten: nicht dem neuen anrechnen
                 // (sonst falsche Meldung, Neustart oder sogar Wechsel auf VLC für den neuen Sender)
                 if (zapHold[0]) { qaLog("ERROR_ALT ignoriert ${error.errorCodeName}"); return }
-                qaLog("ERROR ${error.errorCodeName} ${app.current?.channel?.name}")
+                val http = generateSequence<Throwable>(error) { it.cause }
+                    .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()
+                // mit HTTP-Code: 404 (Sender gibt es beim Anbieter nicht) ist etwas anderes als 403 (gerade gesperrt)
+                qaLog("ERROR ${error.errorCodeName}${http?.let { " HTTP ${it.responseCode}" } ?: ""} ${app.current?.channel?.name}")
                 noPicture = true
                 retryJob?.cancel()
                 // Automatisch: Format-/Decoder-Fehler (erst beim ZWEITEN ohne Bild dazwischen – ein einzelner ist oft nur
                 // ein kaputtes Stück im Stream) oder wiederholte Abbrüche → diesen Sender mit VLC abspielen.
                 val key = app.current?.channel?.key
                 val group = error.errorCode / 1000
-                val http = generateSequence<Throwable>(error) { it.cause }
-                    .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()
                 // Media3 meldet seit 1.9 selbst „Player steckt fest“ – das ist ein Hänger, kein Format-Problem: normal neu
                 // verbinden, aber nicht als Grund für den Ersatz-Player zählen
                 val stuck = generateSequence<Throwable>(error) { it.cause }.any { it.javaClass.simpleName == "StuckPlayerException" } // (gibt es erst ab Media3 1.9 – Name statt Klasse, damit auch „Aze alt“ baut)
@@ -710,8 +821,10 @@ fun PlayerScreen(
                         player.seekToDefaultPosition()
                     } else {
                         // Neu verbinden: erst schnell (0,7 · 1 · 1,5 · 2 · 3 s), dann seltener bis 15 s.
-                        // Abgelehnte Verbindung: etwas schneller; sonst ruhiger, damit der Anbieter nicht überrannt wird
-                        val steps = if (http != null) longArrayOf(1_500, 2_500, 4_000, 8_000, 15_000)
+                        // Abgelehnte Verbindung: höchstens 5 s Pause – Sperren beim Anbieter dauerten 15–50 s (Protokoll
+                        // 22.11.); mit 8/15 s Pause kam das Bild bis zu 15 s nach dem Ende der Sperre. Media3 selbst
+                        // versucht dazwischen nur alle 1,5 s, das überrennt keinen Anbieter.
+                        val steps = if (http != null) longArrayOf(1_500, 2_500, 4_000, 5_000)
                         else longArrayOf(2_000, 4_000, 8_000, 15_000)
                         delay(steps[minOf(retries, steps.size - 1)])
                         retries++
@@ -799,6 +912,9 @@ fun PlayerScreen(
             retries = 0
             // Hänger des vorigen Senders zählen nicht für den neuen (erster Hänger → schneller Wiederanlauf)
             loadCtlRef[0]?.newChannel()
+            // Ablehnung durch den Anbieter gehört zum vorigen Sender
+            rejectAt[0] = 0; rejectAt[1] = 0
+            rejectHint = null
             val nowZap = android.os.SystemClock.elapsedRealtime()
             if (app.zapFast && nowZap - lastZapAt[0] > 700) settleMs = 60L
             lastZapAt[0] = nowZap
@@ -1239,6 +1355,17 @@ fun PlayerScreen(
         val corner: (@Composable () -> Unit)? = when {
             digits.isNotEmpty() -> { { Text(digits, color = Palette.Highlight, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
             notFound != null -> { { Text(notFound ?: "", color = Palette.Live, fontSize = 30.sp, fontWeight = FontWeight.Bold) } }
+            rejectHint != null && cur != null && !overlay && !search && !teletext && !football && matchZap == null && tool == 0 -> {
+                {
+                    Column {
+                        Row {
+                            Text("${cur.number}", color = Palette.Highlight, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                            Text("  ${cur.channel.name}", color = Palette.Text, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        Text(rejectHint ?: "", color = Palette.Live, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
             ytError != null && !overlay && !search -> { { Text(ytError ?: "", color = Palette.Live, fontSize = 22.sp, fontWeight = FontWeight.Bold) } }
             cur != null && !overlay && !search && !teletext && !football && matchZap == null && tool == 0 &&
                 when (app.nameDisplay) { 0 -> noPicture; 1 -> zapInfo || noPicture; 3 -> noPicture && !zapInfo; else -> false } -> {

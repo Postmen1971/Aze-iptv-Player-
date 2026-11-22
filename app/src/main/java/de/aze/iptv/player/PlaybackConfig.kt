@@ -101,7 +101,7 @@ object PlaybackConfig {
         // „Ton später“: so viel Bild muss mindestens vorausliegen (gleicher Abstand wie beim Start-Vorrat), sonst bliebe
         // das Bild gleich wieder stehen
         val quick = level.quickMs?.let { q -> minOf(rebuffer, if (lead > 0) maxOf(q, lead + 2_000) else q) }
-        return LiveLoadControl(loadControl(context, level, audioLeadMs), quick)
+        return LiveLoadControl(loadControl(context, level, audioLeadMs), quick, rebuffer)
     }
 }
 
@@ -143,7 +143,7 @@ internal class RebufferPolicy(private val windowMs: Long = 180_000L) {
  * getAllocator unterscheidet sich und steht je Version in [AllocatorForwarding] (src/media3new bzw. src/media3old).
  */
 @OptIn(UnstableApi::class)
-class LiveLoadControl(base: LoadControl, quickMs: Int?) : AllocatorForwarding(base) {
+class LiveLoadControl(base: LoadControl, private val quickMs: Int?, private val rebufferMs: Int) : AllocatorForwarding(base) {
     private val quickUs = quickMs?.let { it * 1_000L }
     private val policy = RebufferPolicy()
     /** gerade in einem Hänger (vom Abspiel-Thread gesetzt, vom App-Thread bei „läuft wieder“ beendet) */
@@ -156,6 +156,9 @@ class LiveLoadControl(base: LoadControl, quickMs: Int?) : AllocatorForwarding(ba
     /** Player meldet „bereit“ (App-Thread): ein Hänger ist auf jeden Fall vorbei – auch wenn Media3 ihn ohne
      * Rückfrage beendet hat (z. B. Verbindung zu Ende, alles Geladene abspielbar). */
     fun stallOver() { inStall = false }
+
+    /** Ab wie viel Vorrat es im laufenden Hänger weitergeht (für den Wächter: lohnt sich Neuverbinden?) */
+    fun resumeAtMs(): Int = quickMs?.takeIf { inStall && quick } ?: rebufferMs
 
     override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
         // Start nach Umschalten/Neustart: unverändert (Start-Vorrat der Puffer-Stufe)

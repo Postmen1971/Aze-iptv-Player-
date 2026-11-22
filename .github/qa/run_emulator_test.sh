@@ -236,6 +236,37 @@ note "Test 4c Dauerlauf" "nahtlose Übergänge: $t · längste Lücke ohne Bild:
 [ "$(count "ENDED")" -eq "$e" ] || fail "Dauerlauf: Notlösung mit Neustart gebraucht"
 shot "test4c-dauerlauf"
 
+log "== Test 4d: zäher Nachschub (nach 12 s nur noch 0,25-fach) – neu verbinden statt lange auf Tröpfchen warten"
+ln=$(count "LANGSAM_NEU")
+channel 8
+wait_for "FIRST_FRAME Test 8" 1 60
+sleep 2
+tb=$(ticks | wc -l)
+sleep 55
+g=$(max_gap "$tb")
+l=$(( $(count "LANGSAM_NEU") - ln ))
+moving=$(ticks | tail -15 | grep -cE 'img=([5-9]|[1-9][0-9])' || true)
+note "Test 4d Zäher Nachschub" "neu verbunden: ${l}× · längste Lücke ohne Bild: ${g} s (ohne Neuverbinden 8–16 s) · Bild am Ende: ${moving}/15 s · $(qa | grep -E 'LANGSAM|NEUVERBINDEN|WATCHDOG .*Test 8' | tail -4)"
+[ "$l" -ge 1 ] || fail "Zäher Nachschub: nicht neu verbunden"
+[ "$g" -le 9 ] || fail "Zäher Nachschub: ${g} s ohne Bild"
+[ "$moving" -ge 12 ] || fail "Zäher Nachschub: Bild läuft am Ende nicht flüssig ($moving von 15 s)"
+shot "test4d-zaeher-nachschub"
+
+log "== Test 4e: Anbieter sperrt den Sender 20 s lang (HTTP 403) – Wächter wartet, Hinweis in der Ecke, Bild kommt gleich danach"
+w=$(count "WATCHDOG")
+channel 9
+wait_for "ABGELEHNT HTTP 403 Test 9" 1 25 && shot "test4e-gesperrt-hinweis"
+wait_for "FIRST_FRAME Test 9" 1 45
+zt=$(qa | grep -o "ZAPTIME [0-9]* Test 9" | tail -1 | awk '{print $2}')
+sleep 3
+note "Test 4e Gesperrt" "Bild nach ${zt:-?} ms (Sperre 20 s) · Anfragen beim Server: $(grep -c 'reject: abgelehnt' qa-server.log 2>/dev/null || echo ?) · $(qa | grep -E 'ABGELEHNT|ERROR .*Test 9' | tail -3)"
+[ "$(count "WATCHDOG")" -eq "$w" ] || fail "Gesperrter Sender: Wächter griff trotzdem ein"
+[ "${zt:-99999}" -le 26000 ] || fail "Gesperrter Sender: Bild erst nach ${zt:-?} ms (Sperre endete nach 20 s)"
+[ "$(count "ABGELEHNT_ENDE")" -ge 1 ] || fail "Gesperrter Sender: Ende der Sperre nicht erkannt"
+# Test 5 beginnt wie bisher bei Sender 6
+channel 6
+sleep 3
+
 log "== Test 5: schnelles Zappen (20× hoch/runter), danach muss Test 1 laufen"
 T5=$(adb shell date +%H:%M:%S | tr -d '\r')
 for i in $(seq 1 10); do adb shell input keyevent KEYCODE_DPAD_UP; adb shell input keyevent KEYCODE_DPAD_DOWN; done

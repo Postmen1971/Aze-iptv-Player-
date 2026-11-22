@@ -6,6 +6,10 @@
   /drop.ts    wie ein echter Anbieter 3× schneller als Echtzeit (großer Vorrat), nach 15 s trennt der Server
   /one.ts     „Anbieter mit nur 1 Verbindung“: 2× schneller, trennt alle 20 s; eine neue Verbindung wird abgelehnt (403),
               solange die alte läuft und noch 2 s danach (Anbieter gibt den Platz verzögert frei)
+  /slow.ts    zäher Nachschub: erste Verbindung 12 s Echtzeit, danach nur noch 0,25-fach (Bild steht immer wieder);
+              jede weitere Verbindung bekommt wie bei echten Anbietern erst einen Schwung (6 s lang 3-fach), dann Echtzeit
+  /reject.ts  Anbieter sperrt den Sender: ab der ersten Anfrage 20 s lang HTTP 403, danach normal (Aziz 22.11.: RTL,
+              PROSIEBEN MAXX je ~30 s)
 """
 import os, sys, time, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -31,6 +35,10 @@ http://10.0.2.2:{p}/jump.ts
 http://10.0.2.2:{p}/one.ts
 #EXTINF:-1 group-title="QA",Test 7 Normal B
 http://10.0.2.2:{p}/ok2.ts
+#EXTINF:-1 group-title="QA",Test 8 Langsam
+http://10.0.2.2:{p}/slow.ts
+#EXTINF:-1 group-title="QA",Test 9 Gesperrt
+http://10.0.2.2:{p}/reject.ts
 """.format(p=PORT) + "".join(
     # 25 weitere Gruppen (je 1 Sender) – damit „Senderliste verwalten“ scrollen muss (Sortier-Test)
     '#EXTINF:-1 group-title="Gruppe {n:02d}",Extra {n:02d}\nhttp://10.0.2.2:{p}/ok2.ts?g={n}\n'.format(n=n, p=PORT) for n in range(1, 26)
@@ -47,6 +55,8 @@ def log(msg):
 ONE_LOCK = threading.Lock()
 ONE_BUSY = False
 ONE_FREE_AT = 0.0
+SLOW_CONNS = [0]
+REJECT_UNTIL = [0.0]
 
 
 DEMO_GROUPS = [
@@ -175,12 +185,35 @@ class Handler(BaseHTTPRequestHandler):
             return
         mode = {"ok.ts": ("ok.ts", None), "stall.ts": ("ok.ts", "stall"),
                 "vstop.ts": ("vstop.ts", None), "drop.ts": ("ok.ts", "drop"), "jump.ts": ("jump.ts", None),
-                "one.ts": ("ok.ts", "one"), "ok2.ts": ("ok.ts", None), "dolby.ts": ("dolby.ts", None)}.get(path)
+                "one.ts": ("ok.ts", "one"), "ok2.ts": ("ok.ts", None), "dolby.ts": ("dolby.ts", None),
+                "slow.ts": ("ok.ts", "slow"), "reject.ts": ("ok.ts", "reject")}.get(path)
         if mode is None:
             self.send_error(404)
             return
         name, behaviour = mode
         global ONE_BUSY, ONE_FREE_AT
+        if behaviour == "reject":
+            now = time.time()
+            if REJECT_UNTIL[0] == 0.0:
+                REJECT_UNTIL[0] = now + 20.0
+            if now < REJECT_UNTIL[0]:
+                log("reject: abgelehnt (403) – Sender gesperrt")
+                self.send_error(403)
+                return
+            self.stream(name, None, speed=1.0, cut=0)
+            return
+        if behaviour == "slow":
+            SLOW_CONNS[0] += 1
+            n = SLOW_CONNS[0]
+            log(f"slow: Verbindung {n}")
+            if n == 1:
+                # 12 s Echtzeit, danach 0,25-fach: geliefert bis t = 12 + 0,25·(t − 12) Sekunden Bild
+                prof = lambda t: t if t < 12 else 12 + 0.25 * (t - 12)
+            else:
+                # Schwung: 6 s lang 3-fach, dann Echtzeit
+                prof = lambda t: 3 * t if t < 6 else 18 + (t - 6)
+            self.stream(name, None, speed=1.0, cut=0, profile=prof)
+            return
         if behaviour == "one":
             with ONE_LOCK:
                 if ONE_BUSY or time.time() < ONE_FREE_AT:
@@ -236,7 +269,7 @@ class Handler(BaseHTTPRequestHandler):
             data = []
         return self.send_body(json.dumps(data).encode(), "application/json")
 
-    def stream(self, name, behaviour, speed, cut):
+    def stream(self, name, behaviour, speed, cut, profile=None):
         path = name
         f = os.path.join(FIXED, name) if os.path.exists(os.path.join(FIXED, name)) else os.path.join(MEDIA, name)
         size = os.path.getsize(f)
@@ -261,7 +294,8 @@ class Handler(BaseHTTPRequestHandler):
                         else:
                             log(f"{behaviour}: Verbindung getrennt")
                         return
-                    allowed = burst + rate * elapsed
+                    # profile(t) = bis zur Zeit t gelieferte Sekunden Bild (für wechselnde Liefergeschwindigkeit)
+                    allowed = burst + rate * (profile(elapsed) if profile else elapsed)
                     if sent >= allowed:
                         time.sleep(0.05)
                         continue

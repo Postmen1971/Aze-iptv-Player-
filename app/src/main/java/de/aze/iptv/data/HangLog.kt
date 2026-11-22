@@ -63,7 +63,10 @@ object HangLog {
         val dog = lines.count { "WATCHDOG" in it }
         val err = lines.count { "ERROR" in it }
         val rejoin = lines.count { "TRANSITION" in it }
-        return "$gaps Bildlücken · $dog Wächter-Eingriffe · $err Fehler · $rejoin nahtlose Neuverbindungen"
+        // Sperren beim Anbieter (Sender lehnt ab) – liegen nicht an der App, darum eigens gezählt
+        val blocked = lines.count { "  ABGELEHNT HTTP" in it }
+        return "$gaps Bildlücken · $dog Wächter-Eingriffe · $err Fehler · $rejoin nahtlose Neuverbindungen" +
+            if (blocked > 0) " · $blocked× Sender vom Anbieter gesperrt" else ""
     }
 
     /**

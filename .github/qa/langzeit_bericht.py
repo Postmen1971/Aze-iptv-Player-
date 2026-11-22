@@ -154,6 +154,10 @@ def main():
             if cur:
                 ch[cur]["quick"] += 1
             continue
+        # Neuverbinden bei zähem Nachschub / Anbieter lehnt ab (seit 1.0.318) – kommen unter AUFFÄLLIG
+        if msg.startswith(("LANGSAM_NEU", "LANGSAM_NUTZLOS", "NEUVERBINDEN_HILFT", "ABGELEHNT")):
+            events.append((hms, msg[:140]))
+            continue
         if msg.startswith("REJOIN ") or msg == "REJOIN":
             if cur:
                 ch[cur]["rejoin"] += 1
