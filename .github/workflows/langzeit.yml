@@ -3,6 +3,11 @@ name: Langzeit-Test (echte freie Sender)
 # Ergänzt den Emulator-Test im Build: echte, frei empfangbare Sender aus der öffentlichen iptv-org-Liste,
 # lange Laufzeiten und viel Zappen. Blockiert keine Veröffentlichung (eigener Ablauf).
 on:
+  # nach jeder erfolgreich gebauten App-Version (jede Änderung bekommt einen Langzeit-Lauf, Claude wertet ihn aus)
+  workflow_run:
+    workflows: ["APK bauen"]
+    types: [completed]
+    branches: [main]
   schedule:
     - cron: "41 1 * * *"   # jede Nacht (ca. 2:41 Uhr deutscher Zeit)
   workflow_dispatch:
@@ -34,10 +39,14 @@ concurrency:
 
 jobs:
   langzeit:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
+        with:
+          # nach einem Build genau den gebauten Stand testen
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-java@v4
         with:
@@ -52,7 +61,7 @@ jobs:
         run: |
           set -o pipefail
           TAG=$(curl -sS https://api.github.com/repos/${{ github.repository }}/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin).get('tag_name',''))" || true)
-          echo "LZ_LABEL=Code-Stand ${GITHUB_SHA::7} (zuletzt veröffentlicht: ${TAG:-?}), $(date -u +%d.%m.%Y)" >> "$GITHUB_ENV"
+          echo "LZ_LABEL=Code-Stand $(git rev-parse --short HEAD) (zuletzt veröffentlicht: ${TAG:-?}, Anlass: ${{ github.event_name }}), $(date -u +%d.%m.%Y)" >> "$GITHUB_ENV"
           # Versionsnummer wie die zuletzt veröffentlichte App (sonst hielte sich die Test-App für uralt)
           NUM="${TAG##*.}"; case "$NUM" in ''|*[!0-9]*) NUM=1 ;; esac
           GITHUB_RUN_NUMBER="$NUM" gradle :app:assembleQa --stacktrace 2>&1 | tee build.log || {
