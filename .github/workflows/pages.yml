@@ -33,9 +33,9 @@ jobs:
           if gh release download hilfe -p anleitung.zip -D /tmp 2>/dev/null; then unzip -q /tmp/anleitung.zip -d site; fi
           cp web/* site/
           ls site | head -20
-      # v4: mit v3 fand die Bereitstellung am 21./22.11. das Paket nicht („No artifacts named github-pages“)
-      - uses: actions/upload-pages-artifact@v4
+      # v5 (Node 24): seit GitHub Node 24 erzwingt, fand deploy-pages v4 das Paket nicht mehr (21./22.11.)
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

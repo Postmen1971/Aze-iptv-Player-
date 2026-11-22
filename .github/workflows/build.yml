@@ -328,7 +328,7 @@ jobs:
           python3 .github/qa/build_guide.py guide && ls guide/img | wc -l
           cp web/* guide/  # Fernhilfe-Seite gehört mit auf die Webseite
           (cd guide && zip -qr ../anleitung.zip .) && gh release upload hilfe anleitung.zip --clobber
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: guide
   guide-page:
@@ -344,4 +344,4 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

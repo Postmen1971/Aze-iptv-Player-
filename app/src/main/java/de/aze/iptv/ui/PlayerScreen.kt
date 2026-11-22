@@ -736,7 +736,9 @@ fun PlayerScreen(
                 }
                 noPicture = false
                 if (ytError?.startsWith("Anbieter antwortet") == true) ytError = null
+                // ein Bild heißt: eine Verbindung ging durch – die Sperre ist vorbei (nicht erst 3,5 s nach der letzten Ablehnung)
                 rejectHint = null
+                rejectAt[0] = 0
                 retries = 0
             }
 

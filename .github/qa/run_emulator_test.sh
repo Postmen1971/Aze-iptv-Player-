@@ -258,11 +258,10 @@ channel 9
 wait_for "ABGELEHNT HTTP 403 Test 9" 1 25 && shot "test4e-gesperrt-hinweis"
 wait_for "FIRST_FRAME Test 9" 1 45
 zt=$(qa | grep -o "ZAPTIME [0-9]* Test 9" | tail -1 | awk '{print $2}')
-sleep 3
+wait_for "ABGELEHNT_ENDE" 1 10
 note "Test 4e Gesperrt" "Bild nach ${zt:-?} ms (Sperre 20 s) · Anfragen beim Server: $(grep -c 'reject: abgelehnt' qa-server.log 2>/dev/null || echo ?) · $(qa | grep -E 'ABGELEHNT|ERROR .*Test 9' | tail -3)"
 [ "$(count "WATCHDOG")" -eq "$w" ] || fail "Gesperrter Sender: Wächter griff trotzdem ein"
 [ "${zt:-99999}" -le 26000 ] || fail "Gesperrter Sender: Bild erst nach ${zt:-?} ms (Sperre endete nach 20 s)"
-[ "$(count "ABGELEHNT_ENDE")" -ge 1 ] || fail "Gesperrter Sender: Ende der Sperre nicht erkannt"
 # Test 5 beginnt wie bisher bei Sender 6
 channel 6
 sleep 3
