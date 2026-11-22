@@ -165,6 +165,10 @@ def main():
             results = list(ex.map(probe, cands))
         got = 0
         for e, r in zip(cands, results):
+            # gleiche Adresse unter zwei Namen (z. B. „BR Fernsehen“ Nord/Süd): die App führt sie nur einmal
+            if r["ok"] and any(r["url"] == c[2]["url"] for c in chosen):
+                report.append(f"  doppelt: {clean(e['name'])} (gleiche Adresse)")
+                continue
             if r["ok"] and got < want[land]:
                 got += 1
                 chosen.append((land, e, r))

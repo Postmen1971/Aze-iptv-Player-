@@ -64,6 +64,7 @@ def main():
     events = []  # Auffälliges mit Uhrzeit
     stalls = []
     crash_marks = []
+    test_err = []
     other_away = 0
 
     def close_zap(t_end):
@@ -83,6 +84,13 @@ def main():
             phase = msg.split(" ", 1)[1].strip()
             phase_order.append(phase)
             ph[phase]["start"] = t
+            continue
+        if msg.startswith("LZ_FEHLER"):
+            test_err.append(f"{hms} {msg[len('LZ_FEHLER '):]}")
+            events.append((hms, msg))
+            continue
+        if msg.startswith("SPEICHER_FREI"):
+            events.append((hms, msg))
             continue
         if msg.startswith("LZ_ABSTURZ") or msg.startswith("LZ_NEUSTART"):
             crash_marks.append(f"{hms} {msg}")
@@ -187,7 +195,9 @@ def main():
 
     total_s = (lines[-1][0] - lines[0][0]) if lines else 0
     all_zt = [v for c in ch.values() for v in c["zt"]]
-    all_gaps = [g for c in ch.values() for g in c["gaps"]]
+    # Abschnitt G stört die Leitung absichtlich – dort sind Lücken erwartet und werden getrennt bewertet
+    all_gaps = [g for n, q in ph.items() if not n.startswith("G_") for g in q["gaps"]]
+    g_ph = [q for n, q in ph.items() if n.startswith("G_")]
     all_wd = sum(sum(c["wd"].values()) for c in ch.values())
     all_nopic = sum(c["nopic"] for c in ch.values())
     n_zaps = sum(c["zaps"] for c in ch.values())
@@ -202,6 +212,8 @@ def main():
         R.append(f"✘ Abstürze/Neustarts: {len(crash_marks)} · Absturzmeldungen: {len(crash_lines)} · „App reagiert nicht“: {len(anr)}")
     else:
         R.append("✔ keine Abstürze, kein „App reagiert nicht“")
+    if test_err:
+        R.append("✘ " + " · ".join(test_err[:5]))
     if killed:
         R.append(f"⚠ vom System beendet (Speicher): {len(killed)}×")
     if mem:
@@ -214,8 +226,14 @@ def main():
         R.append(f"⚠ App-Oberfläche blockiert: {len(stalls)}× (längste {de(max(stalls) / 1000)} s)")
     else:
         R.append("✔ Oberfläche nie blockiert")
-    R.append(f"{'✔' if not all_gaps else '⚠'} Bildlücken: {len(all_gaps)} (zusammen {sum(all_gaps)} s) · Wächter-Eingriffe: {all_wd}"
+    wd_norm = sum(q["wd"] for n, q in ph.items() if not n.startswith("G_"))
+    R.append(f"{'✔' if not all_gaps else '⚠'} Bildlücken: {len(all_gaps)} (zusammen {sum(all_gaps)} s) · Wächter-Eingriffe: {wd_norm}"
              f" · Umschalten ohne Bild: {all_nopic}")
+    if g_ph:
+        gg = [x for q in g_ph for x in q["gaps"]]
+        quick = sum(1 for t, hms, msg in lines if msg.startswith("PUFFER_SCHNELL") and any(q["start"] and q["end"] and q["start"] <= t <= q["end"] for q in g_ph))
+        R.append(f"Gestörte Leitung (G, absichtlich): {len(gg)} Lücken, zusammen {sum(gg)} s, längste {max(gg) if gg else 0} s"
+                 f" · schneller Wiederanlauf {quick}× · Wächter {sum(q['wd'] for q in g_ph)}× · ohne Bild {sum(q['nopic'] for q in g_ph)}")
     if all_zt:
         slow = max(((v, k) for k, c in ch.items() for v in c["zt"]), default=(0, ""))
         R.append(f"Umschalten bis Bild: Median {de(med(all_zt) / 1000, 2)} s · langsamster {de(slow[0] / 1000)} s ({slow[1]})")

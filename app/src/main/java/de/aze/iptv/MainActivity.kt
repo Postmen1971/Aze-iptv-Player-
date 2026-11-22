@@ -411,6 +411,11 @@ class MainActivity : ComponentActivity() {
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
             runCatching { coil.Coil.imageLoader(this).memoryCache?.clear() }
         }
+        // App nicht mehr sichtbar: große Film-/Serienlisten freigeben (liegen als Kopie auf dem Gerät)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) {
+            val n = runCatching { de.aze.iptv.data.XtreamVod.trimMemory() }.getOrDefault(0)
+            if (n > 0) de.aze.iptv.ui.qaLog("SPEICHER_FREI im Hintergrund: $n Film-/Serienlisten freigegeben")
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

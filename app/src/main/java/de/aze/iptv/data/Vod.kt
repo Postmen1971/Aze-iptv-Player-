@@ -130,13 +130,13 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
     }
 
     /** Gesamtliste nach Kategorie – einmal je Liste gebaut statt bei jeder Kategorie die ganze Bibliothek zu durchsuchen */
-    private val catIndex = HashMap<Boolean, Pair<List<VodItem>, Map<String?, List<VodItem>>>>()
     private fun cachedByCat(series: Boolean): Map<String?, List<VodItem>>? {
         val all = cached(series) ?: return null
+        val key = api to series
         synchronized(catIndex) {
-            catIndex[series]?.let { (l, m) -> if (l === all) return m }
+            catIndex[key]?.let { (l, m) -> if (l === all) return m }
             val m = all.groupBy { it.cat }
-            catIndex[series] = all to m
+            catIndex[key] = all to m
             return m
         }
     }
@@ -213,11 +213,25 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
         }
     }
 
-    private companion object {
-        val WANTED = setOf("stream_id", "series_id", "name", "stream_icon", "cover", "rating", "rating_5based", "year", "releaseDate", "container_extension", "category_id")
-        /** Gesamtlisten je Anbieter-Zugang (bleiben, solange die App läuft – auch nach Verlassen von Filme/Serien) */
-        val allCache = HashMap<Pair<String, Boolean>, List<VodItem>>()
-        val locks = HashMap<Pair<String, Boolean>, Any>()
+    companion object {
+        private val WANTED = setOf("stream_id", "series_id", "name", "stream_icon", "cover", "rating", "rating_5based", "year", "releaseDate", "container_extension", "category_id")
+        /** Gesamtlisten je Anbieter-Zugang (bleiben, solange die App sichtbar ist – auch nach Verlassen von Filme/Serien) */
+        private val allCache = HashMap<Pair<String, Boolean>, List<VodItem>>()
+        /** dieselben Listen nach Kategorie sortiert (je Anbieter-Zugang und Filme/Serien) */
+        private val catIndex = HashMap<Pair<String, Boolean>, Pair<List<VodItem>, Map<String?, List<VodItem>>>>()
+        private val locks = HashMap<Pair<String, Boolean>, Any>()
+
+        /**
+         * App nicht mehr sichtbar (Home-Taste, andere App): die großen Gesamtlisten freigeben (bei Aziz über 23.000 Filme).
+         * Sie liegen als Kopie auf dem Gerät (VodDisk) und sind beim nächsten Öffnen von „Filme & Serien“ schnell wieder da.
+         * Weniger Speicher im Hintergrund = Android beendet die App seltener (Protokoll 22.11.: 11:21 mit 289 MB beendet).
+         * Rückgabe: Anzahl freigegebener Listen (fürs Protokoll).
+         */
+        fun trimMemory(): Int {
+            val n = synchronized(allCache) { allCache.size.also { allCache.clear() } }
+            synchronized(catIndex) { catIndex.clear() }
+            return n
+        }
     }
 
     override suspend fun movieDetails(id: String): VodDetails = withContext(Dispatchers.IO) {

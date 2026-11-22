@@ -10,6 +10,11 @@
 #   D  Sender länger: 4 Sender je 8 min
 #   E  Zappen im 10-s-Takt: 2 Runden durch alle Sender
 #   F  Schlusslauf: 10 min
+#   G  Wackelige Leitung: 10 Runden – 30 s volles Netz, 15 s gedrosselt (300 kbit/s, weniger als der Sender braucht),
+#      jede dritte Runde stattdessen 8 s fast kein Netz. So entstehen echte Bildlücken wie bei schwachem WLAN/Anbieter:
+#      zeigt, wie lang die Lücken sind, ob der schnelle Wiederanlauf greift und ob der Wächter unnötig eingreift.
+#   H  Erholung: 3 min volles Netz – Bild muss normal weiterlaufen
+#   I  Hintergrund: 3× Home-Taste, 60 s warten, zurück – das Bild muss wiederkommen (App räumt im Hintergrund auf)
 # Es werden KEINE Bildschirmfotos gemacht (fremde Sendungen), nur Text-Protokolle.
 #
 # Aufruf: run_langzeit_test.sh <qa.apk> <Ausgabeordner> [Faktor] [Anzahl Sender]
@@ -116,6 +121,30 @@ done
 phase "F_Schlusslauf"
 zap
 dwell "$(secs 600)"
+
+# Netz des Emulators (Konsole): Geschwindigkeit in kbit/s, „full“ = ungebremst
+net() { local r; r=$(adb emu network speed "$1" 2>&1 | tr -d '\r' | head -2 | tr '\n' ' '); mark "LZ_NETZ $1"; log "Netz $1: $r"; }
+trap 'adb emu network speed full >/dev/null 2>&1' EXIT
+
+phase "G_Wackelige_Leitung"
+for r in $(seq 1 10); do
+  dwell 30
+  if [ $((r % 3)) -eq 0 ]; then net 1; sleep 8; else net 300; sleep 15; fi
+  net full
+done
+
+phase "H_Erholung"
+dwell "$(secs 180)"
+
+phase "I_Hintergrund"
+for r in 1 2 3; do
+  ff=$(grep -c " FIRST_FRAME " "$OUT/azeqa.log")
+  adb shell input keyevent KEYCODE_HOME; dwell 60
+  adb shell am start -n $PKG/.MainActivity >/dev/null 2>&1
+  ok=0; for i in $(seq 1 30); do [ "$(grep -c " FIRST_FRAME " "$OUT/azeqa.log")" -gt "$ff" ] && { ok=1; break; }; sleep 1; done
+  [ $ok -eq 1 ] && log "zurück aus dem Hintergrund: Bild nach ${i} s" || mark "LZ_FEHLER kein Bild 30 s nach Rückkehr aus dem Hintergrund (Runde $r)"
+  dwell 30
+done
 
 phase "ENDE"
 sleep 3
