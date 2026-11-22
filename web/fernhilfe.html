@@ -294,7 +294,8 @@ function read(box,type,base){
   if(type==="STALKER")s.user=s.user.toUpperCase();
   if(!s.url)return "Link bzw. Adresse fehlt.";
   if(type==="XTREAM"&&(!s.user||!s.pass))return "Benutzer und Passwort fehlen.";
-  if(type==="STALKER"&&!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(s.user))return "MAC-Adresse bitte vollständig (00:1A:79:XX:XX:XX).";
+  // gekürzte MAC (Rest als ••••••) heißt: unverändert lassen – die App setzt die gespeicherte wieder ein
+  if(type==="STALKER"&&!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(s.user)&&!/^([0-9A-F]{2}:){3}\u2022{6}$/.test(s.user))return "MAC-Adresse bitte vollständig (00:1A:79:XX:XX:XX).";
   return s;
 }
 var addType="M3U";

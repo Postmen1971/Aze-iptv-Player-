@@ -16,6 +16,7 @@ import de.aze.iptv.data.PlaylistSource
 import de.aze.iptv.data.PlaylistTarget
 import de.aze.iptv.data.Relay
 import de.aze.iptv.data.RemoteCrypto
+import de.aze.iptv.data.RemoteMask
 import de.aze.iptv.data.SourceType
 import de.aze.iptv.ui.qaLog
 import kotlinx.coroutines.CoroutineScope
@@ -167,14 +168,21 @@ class RemoteHelpHost(private val app: AppController, private val scope: Coroutin
             "ping" -> return
             "state?" -> { sendState(); return }
             "bye" -> { stop("Helfer hat beendet"); return }
-            "add" -> sourceFromJson(o.getJSONObject("s"))?.let { s ->
+            "add" -> sourceFromJson(o.getJSONObject("s"))?.let { raw ->
+                val s = RemoteMask.fromHelper(raw, null) ?: return@let
                 if (s.url.isBlank()) return@let
                 val n = s.copy(id = java.util.UUID.randomUUID().toString(), enabled = true, name = s.name.ifBlank { "Playlist" })
                 app.addSource(n)
                 did("Playlist „${n.name}“ hinzugefügt – wird geladen")
             }
-            "update" -> sourceFromJson(o.getJSONObject("s"))?.let { s ->
-                if (app.sources.none { it.id == s.id } || s.url.isBlank()) return@let
+            "update" -> sourceFromJson(o.getJSONObject("s"))?.let { raw ->
+                val old = app.sources.firstOrNull { it.id == raw.id } ?: return@let
+                // Passwort & Co. hat der Helfer nur als Platzhalter gesehen: unverändert → bisheriger Wert
+                val s = RemoteMask.fromHelper(raw, old) ?: run {
+                    send(JSONObject().put("op", "msg").put("text", "Nicht geändert: Passwort bzw. Zugang bitte vollständig neu eingeben."))
+                    return@let
+                }
+                if (s.url.isBlank()) return@let
                 app.updateSource(s)
                 did("Playlist „${s.name}“ geändert")
             }
@@ -237,7 +245,8 @@ class RemoteHelpHost(private val app: AppController, private val scope: Coroutin
             val o = JSONObject()
                 .put("op", "state").put("v", v).put("left", left)
                 .put("device", android.os.Build.MODEL ?: "")
-                .put("sources", JSONArray().also { a -> sourcesNow.forEach { a.put(sourceToJson(it)) } })
+                // ohne Passwort, Passwort im Link und volle MAC – der Helfer sieht nur Platzhalter (RemoteMask)
+                .put("sources", JSONArray().also { a -> sourcesNow.forEach { a.put(sourceToJson(RemoteMask.forHelper(it))) } })
                 .put("status", JSONObject().also { st -> statusNow.forEach { (key, value) -> st.put(key, value) } })
                 .put("groups", ListEditCodec.encode(groups, hidden))
             val sealed = RemoteCrypto.seal(k, o.toString())
