@@ -11,3 +11,4 @@ local.properties
 
 # Emulator-Test: erzeugte Test-Videos
 .github/qa/media/
+__pycache__/
