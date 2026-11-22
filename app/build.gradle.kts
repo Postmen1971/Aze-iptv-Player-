@@ -92,6 +92,12 @@ android {
         checkReleaseBuilds = false
         abortOnError = false
     }
+    // Kleine Stellen, an denen sich Media3 1.11 und 1.5.1 (Vergleichs-App) im Aufbau unterscheiden – je eine Datei
+    sourceSets {
+        getByName("main") {
+            java.srcDir(if (alt) "src/media3old/java" else "src/media3new/java")
+        }
+    }
     buildFeatures {
         compose = true
         buildConfig = true

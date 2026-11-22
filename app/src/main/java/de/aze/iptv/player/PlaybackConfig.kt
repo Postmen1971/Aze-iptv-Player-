@@ -139,10 +139,11 @@ internal class RebufferPolicy(private val windowMs: Long = 180_000L) {
  *
  * Alles andere (wann geladen wird, Speichergrenze, Start-Vorrat beim Umschalten) macht unverändert [DefaultLoadControl].
  * Bewusst eine Hülle statt einer Unterklasse: der Konstruktor von DefaultLoadControl ist in jeder Media3-Version anders
- * (normale App 1.11, Vergleichs-App 1.5.1) – die hier weitergereichten Methoden gibt es in beiden gleich.
+ * (normale App 1.11, Vergleichs-App 1.5.1) – die hier weitergereichten Methoden gibt es in beiden gleich; nur
+ * getAllocator unterscheidet sich und steht je Version in [AllocatorForwarding] (src/media3new bzw. src/media3old).
  */
 @OptIn(UnstableApi::class)
-class LiveLoadControl(private val base: LoadControl, quickMs: Int?) : LoadControl {
+class LiveLoadControl(base: LoadControl, quickMs: Int?) : AllocatorForwarding(base) {
     private val quickUs = quickMs?.let { it * 1_000L }
     private val policy = RebufferPolicy()
     /** gerade in einem Hänger (vom Abspiel-Thread gesetzt, vom App-Thread bei „läuft wieder“ beendet) */
@@ -180,8 +181,6 @@ class LiveLoadControl(private val base: LoadControl, quickMs: Int?) : LoadContro
     override fun onPrepared(playerId: androidx.media3.exoplayer.analytics.PlayerId) = base.onPrepared(playerId)
     override fun onStopped(playerId: androidx.media3.exoplayer.analytics.PlayerId) = base.onStopped(playerId)
     override fun onReleased(playerId: androidx.media3.exoplayer.analytics.PlayerId) = base.onReleased(playerId)
-    override fun getAllocator(playerId: androidx.media3.exoplayer.analytics.PlayerId): androidx.media3.exoplayer.upstream.Allocator =
-        base.getAllocator(playerId)
     override fun getBackBufferDurationUs(playerId: androidx.media3.exoplayer.analytics.PlayerId): Long = base.getBackBufferDurationUs(playerId)
     override fun retainBackBufferFromKeyframe(playerId: androidx.media3.exoplayer.analytics.PlayerId): Boolean =
         base.retainBackBufferFromKeyframe(playerId)
