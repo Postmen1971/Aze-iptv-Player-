@@ -1,7 +1,7 @@
 /* SkorText für Android TV / NVIDIA Shield – Portierung des Enigma2-Plugins */
 (function () {
 "use strict";
-var VERSION = "3.15";
+var VERSION = "3.18";
 
 /* ================= Texte ================= */
 var TXT = {
@@ -19,6 +19,7 @@ var TXT = {
   noMore:"Kein weiterer Spieltag",newsHint:"▲▼ wählen · OK lesen · ◄► Rubrik",articleHint:"▲▼ / ◄► nächste Meldung · OK / ZURÜCK",
   resHint:"◄► Liga · OK Tabelle",tabHint:"◄► Liga · OK Ergebnisse",
   cNAT:"LÄNDERSPIELE",cRANK:"RANGLISTEN",cMORE:"WEITERES",more:"▼ mehr: Länderspiele, Ranglisten",t_more:"wischen ▲ = mehr: Länderspiele, Ranglisten",
+  ardRow:"ARD Text (Videotext online)",ardHint:"▲▼ Seitenzahl wählen · OK öffnen · ◄► blättern · ZURÜCK",t_ardHint:"Seitenzahl antippen = öffnen · ZURÜCK = vorige Seite",ardLoad:"ARD Text wird geladen …",ardErr:"ARD-Seite %d nicht erreichbar",
   fav:"Mein Verein",today:"Heute",tv:"Heute im TV",tvHint:"▲▼ Spiel · OK Sender · ZURÜCK zu",tvNone:"keine Sender bekannt",yesterday:"Gestern",tomorrow:"Morgen",dayHint:"◄► Tag wechseln",t_dayHint:"wischen ◄► = Tag wechseln",
   last:"Letzte Spiele",next:"Nächste Spiele",noFav:"Kein Lieblingsverein gewählt.",noFav2:"Unter Einstellungen (900) auswählen.",place:"Platz",
   scorers:"Torschützen",detHint:"OK = Tabelle · ▲▼ blättern",t_detHint:"Titel antippen = Tabelle · wischen ▲▼",pen:"E",og:"ET",
@@ -47,6 +48,7 @@ var TXT = {
   noMore:"Başka hafta yok",newsHint:"▲▼ seç · OK oku · ◄► kategori",articleHint:"▲▼ / ◄► sonraki haber · OK / GERİ",
   resHint:"◄► Lig · OK Puan",tabHint:"◄► Lig · OK Sonuçlar",
   cNAT:"MİLLİ MAÇLAR",cRANK:"SIRALAMALAR",cMORE:"DİĞER",more:"▼ devamı: Milli maçlar, sıralamalar",t_more:"kaydır ▲ = devamı: Milli maçlar, sıralamalar",
+  ardRow:"ARD Text (Almanca teletext)",ardHint:"▲▼ sayfa no. seç · OK aç · ◄► sayfa çevir · GERİ",t_ardHint:"Sayfa numarasına dokun = aç · GERİ = önceki sayfa",ardLoad:"ARD Text yükleniyor …",ardErr:"ARD sayfası %d açılamadı",
   fav:"Takımım",today:"Bugün",tv:"Bugün TV'de",tvHint:"▲▼ maç · OK kanallar · GERİ kapat",tvNone:"kanal bilgisi yok",yesterday:"Dün",tomorrow:"Yarın",dayHint:"◄► gün değiştir",t_dayHint:"kaydır ◄► = gün değiştir",
   last:"Son maçlar",next:"Sıradaki maçlar",noFav:"Favori takım seçilmedi.",noFav2:"Ayarlar (900) altından seç.",place:"Sıra",
   scorers:"Goller",detHint:"OK = Puan durumu · ▲▼ sayfa",t_detHint:"başlığa dokun = Puan · kaydır ▲▼",pen:"P",og:"KK",
@@ -78,6 +80,28 @@ var SETTINGS = [
 ];
 var DL_CODE = "5694507";  // Downloader-Code für die Android-App (aftv.news/5694507)
 
+/* ================= weitere Sprachen (sprachen.js) =================
+   Englisch, Französisch, Spanisch, Italienisch, Schwedisch, Dänisch, Norwegisch – gemeinsam mit dem GigaBlue-Plugin.
+   Fehlt ein Text: Englisch, sonst Deutsch. Wochentage stehen dort ab Montag, hier ab Sonntag. */
+var XS = window.SKOR_SPRACHEN || {order: [], names: {}};
+(XS.order || []).forEach(function (l) {
+  var src = (XS[l] || {}).txt || {}, t = {};
+  Object.keys(src).forEach(function (k) { if (k.indexOf("e2_") !== 0) t[k] = src[k]; });
+  if (t.days && t.days.length === 7) t.days = [t.days[6]].concat(t.days.slice(0, 6));
+  TXT[l] = t;
+  SETTINGS.forEach(function (s) { if (s[0] === "lang") s[2].push([l, XS.names[l] || l, XS.names[l] || l]); });
+});
+// Text nach dem deutschen Original (Einstellungen, Runden, Meldungen, Ligen) in Sprache l; tr = türkische Fassung daneben
+function txIn(l, de, tr) {
+  if (l === "tr") return tr === undefined ? de : tr;
+  if (l === "de" || !XS[l]) return de;
+  var d = XS[l].tx || {}, e = (XS.en || {}).tx || {};
+  return d[de] !== undefined ? d[de] : e[de] !== undefined ? e[de] : de;
+}
+function tx(de, tr) { return txIn(cfg("lang"), de, tr); }
+// Spielminute „Verl“ (Verlängerung) / „Elf“ (Elfmeterschießen) in der eingestellten Sprache
+function minTxt(m) { return m === "Verl" ? tx("Verl", "Uz.") : m === "Elf" ? tx("Elf", "Pen.") : (m || ""); }
+
 /* ================= Einstellungen (dauerhaft) ================= */
 var CFG = {};
 function prefGet(k, d) {
@@ -92,7 +116,8 @@ SETTINGS.forEach(function (s) { CFG[s[0]] = prefGet(s[0], s[2][0][0]); });
 function cfg(k) { return CFG[k]; }
 function setCfg(k, v) { CFG[k] = v; prefSet(k, v); if (k === "news" && typeof setNews === "function") setNews(v); }
 var TOUCH = false;
-function T(k) { var t = TXT[cfg("lang")]; return (TOUCH && t["t_" + k] !== undefined) ? t["t_" + k] : t[k]; }
+function langText(l, k) { var t = TXT[l]; if (!t) return undefined; return (TOUCH && t["t_" + k] !== undefined) ? t["t_" + k] : t[k]; }
+function T(k) { var l = cfg("lang"), v = langText(l, k); if (v === undefined && l !== "en") v = langText("en", k); if (v === undefined) v = langText("de", k); return v; }
 function fmt(s, n) { return s.replace("%d", n); }
 
 /* ================= HTTP ================= */
@@ -128,10 +153,12 @@ function getJSON(url) {
 var BASE = "https://prod-public-api.livescore.com/v1/api/app";
 function niceError(e) {
   var s = String(e && e.message || e);
-  if (s.indexOf("403") >= 0) return cfg("lang") === "tr" ? "Engellendi (HTTP 403) – 5 dk sonra tekrar" : "Gesperrt (HTTP 403) – neuer Versuch in 5 Min.";
-  if (s.indexOf("404") >= 0 || s.indexOf("410") >= 0) return "Liga bei der Datenquelle nicht gefunden";
-  if (/timeout|timed out/i.test(s)) return "Zeitüberschreitung – Internet langsam oder weg";
-  if (/unknownhost|unable to resolve|dns/i.test(s)) return "Keine Internetverbindung";
+  if (s.indexOf("403") >= 0) return tx("Gesperrt (HTTP 403) – neuer Versuch in 5 Min.", "Engellendi (HTTP 403) – 5 dk sonra tekrar");
+  if (s.indexOf("404") >= 0 || s.indexOf("410") >= 0) return tx("Liga bei der Datenquelle nicht gefunden", "Lig veri kaynağında bulunamadı");
+  if (/timeout|timed out/i.test(s)) return tx("Zeitüberschreitung – Internet langsam oder weg", "Zaman aşımı – internet yavaş veya yok");
+  if (/unknownhost|unable to resolve|dns/i.test(s)) return tx("Keine Internetverbindung", "İnternet bağlantısı yok");
+  if (/keine Länderspiele/i.test(s)) return tx("Keine Länderspiele gefunden", "Milli maç bulunamadı");
+  if (/keine Daten/i.test(s)) return T("noData");
   return s.slice(0, 80);
 }
 
@@ -175,7 +202,11 @@ function fixName(n) {
   return n;
 }
 var NATIONS = {"Germany":["Deutschland","Almanya"],"Türkiye":["Türkei","Türkiye"],"Turkey":["Türkei","Türkiye"],"Netherlands":["Niederlande","Hollanda"],"Greece":["Griechenland","Yunanistan"],"Serbia":["Serbien","Sırbistan"],"France":["Frankreich","Fransa"],"Italy":["Italien","İtalya"],"Belgium":["Belgien","Belçika"],"Spain":["Spanien","İspanya"],"England":["England","İngiltere"],"Portugal":["Portugal","Portekiz"],"Croatia":["Kroatien","Hırvatistan"],"Czechia":["Tschechien","Çekya"],"Czech Republic":["Tschechien","Çekya"],"Denmark":["Dänemark","Danimarka"],"Norway":["Norwegen","Norveç"],"Wales":["Wales","Galler"],"Scotland":["Schottland","İskoçya"],"Switzerland":["Schweiz","İsviçre"],"Slovenia":["Slowenien","Slovenya"],"North Macedonia":["Nordmazedonien","Kuzey Makedonya"],"Georgia":["Georgien","Gürcistan"],"Hungary":["Ungarn","Macaristan"],"Northern Ireland":["Nordirland","Kuzey İrlanda"],"Ukraine":["Ukraine","Ukrayna"],"Austria":["Österreich","Avusturya"],"Ireland":["Irland","İrlanda"],"Republic of Ireland":["Irland","İrlanda"],"Israel":["Israel","İsrail"],"Kosovo":["Kosovo","Kosova"],"Bosnia and Herzegovina":["Bosnien-Herzegowina","Bosna-Hersek"],"Poland":["Polen","Polonya"],"Romania":["Rumänien","Romanya"],"Sweden":["Schweden","İsveç"],"Albania":["Albanien","Arnavutluk"],"Belarus":["Belarus","Belarus"],"Finland":["Finnland","Finlandiya"],"San Marino":["San Marino","San Marino"],"Armenia":["Armenien","Ermenistan"],"Cyprus":["Zypern","Kıbrıs Rum Kesimi"],"Latvia":["Lettland","Letonya"],"Montenegro":["Montenegro","Karadağ"],"Faroe Islands":["Färöer","Faroe Adaları"],"Kazakhstan":["Kasachstan","Kazakistan"],"Moldova":["Moldau","Moldova"],"Slovakia":["Slowakei","Slovakya"],"Bulgaria":["Bulgarien","Bulgaristan"],"Estonia":["Estland","Estonya"],"Iceland":["Island","İzlanda"],"Luxembourg":["Luxemburg","Lüksemburg"],"Lithuania":["Litauen","Litvanya"],"Azerbaijan":["Aserbaidschan","Azerbaycan"],"Malta":["Malta","Malta"],"Andorra":["Andorra","Andorra"],"Liechtenstein":["Liechtenstein","Lihtenştayn"],"Gibraltar":["Gibraltar","Cebelitarık"],"Russia":["Russland","Rusya"],"Argentina":["Argentinien","Arjantin"],"Brazil":["Brasilien","Brezilya"],"Uruguay":["Uruguay","Uruguay"],"Colombia":["Kolumbien","Kolombiya"],"Ecuador":["Ecuador","Ekvador"],"Paraguay":["Paraguay","Paraguay"],"Peru":["Peru","Peru"],"Chile":["Chile","Şili"],"Venezuela":["Venezuela","Venezuela"],"Bolivia":["Bolivien","Bolivya"],"USA":["USA","ABD"],"United States":["USA","ABD"],"Mexico":["Mexiko","Meksika"],"Canada":["Kanada","Kanada"],"Panama":["Panama","Panama"],"Costa Rica":["Costa Rica","Kosta Rika"],"Jamaica":["Jamaika","Jamaika"],"Morocco":["Marokko","Fas"],"Senegal":["Senegal","Senegal"],"Egypt":["Ägypten","Mısır"],"Algeria":["Algerien","Cezayir"],"Tunisia":["Tunesien","Tunus"],"Nigeria":["Nigeria","Nijerya"],"Cameroon":["Kamerun","Kamerun"],"Ghana":["Ghana","Gana"],"Ivory Coast":["Elfenbeinküste","Fildişi Sahili"],"Côte d'Ivoire":["Elfenbeinküste","Fildişi Sahili"],"Mali":["Mali","Mali"],"South Africa":["Südafrika","Güney Afrika"],"DR Congo":["DR Kongo","DK Kongo"],"Congo DR":["DR Kongo","DK Kongo"],"Burkina Faso":["Burkina Faso","Burkina Faso"],"Cape Verde":["Kap Verde","Yeşil Burun Adaları"],"Cabo Verde":["Kap Verde","Yeşil Burun Adaları"],"Japan":["Japan","Japonya"],"South Korea":["Südkorea","Güney Kore"],"Korea Republic":["Südkorea","Güney Kore"],"IR Iran":["Iran","İran"],"Iran":["Iran","İran"],"Australia":["Australien","Avustralya"],"Saudi Arabia":["Saudi-Arabien","Suudi Arabistan"],"Qatar":["Katar","Katar"],"Iraq":["Irak","Irak"],"Uzbekistan":["Usbekistan","Özbekistan"],"Jordan":["Jordanien","Ürdün"],"United Arab Emirates":["VAE","BAE"],"China PR":["China","Çin"],"China":["China","Çin"],"New Zealand":["Neuseeland","Yeni Zelanda"]};
-function dn(name) { var t = NATIONS[name]; return t ? t[cfg("lang") === "tr" ? 1 : 0] : name; }
+function dn(name) {
+  var l = cfg("lang"), t = NATIONS[name];
+  if (l === "de" || l === "tr" || !XS[l]) return t ? t[l === "tr" ? 1 : 0] : name;
+  var n = XS[l].nations || {}; return n[name] || name;
+}
 var FAV_LEAGUES = {"VfB Stuttgart": [200, 295, 440, 450, 460], "Bayern München": [200, 295, 440, 450, 460], "Dortmund": [200, 295, 440, 450, 460],
   "Stuttgarter Kickers": [230, 280, 295], "Großaspach": [230, 280, 295], "Göppinger": [290],
   "Galatasaray": [300, 305, 440, 450, 460], "Fenerbahçe": [300, 305, 440, 450, 460], "Beşiktaş": [300, 305, 440, 450, 460],
@@ -252,7 +283,15 @@ function League(d) {
   this.events = []; this.prevEvents = []; this.prevRound = null; this.rcache = {}; this.rloading = {};
   this.tables = []; this.tLoad = 0; this.loading = false; this.error = null; this.gdefs = [];
 }
-League.prototype.name = function (lang) { return lang === "tr" ? this.nameTr : this.nameDe; };
+League.prototype.name = function (lang) {
+  if (lang === "tr") return this.nameTr;
+  if (lang === "de" || !XS[lang]) return this.nameDe;
+  // weitere Sprachen: Übersetzung, wo der deutsche Name nicht passt; türkische Ligen mit ihrem offiziellen Namen
+  var d = XS[lang].tx || {}, e = (XS.en || {}).tx || {};
+  if (d[this.nameDe] !== undefined) return d[this.nameDe];
+  if (e[this.nameDe] !== undefined) return e[this.nameDe];
+  return this.c === "tr" ? this.nameTr : this.nameDe;
+};
 League.prototype.views = function () { return this.c === "nlg" ? [] : [[this.page, null]]; };
 League.prototype.groups = function () { return [""]; };
 League.prototype.groupIndex = function () { return null; };
@@ -428,7 +467,7 @@ function roundText(key, lang) {
   if (k.indexOf("|") >= 0) { sub = k.split("|")[1]; k = k.split("|")[0]; }
   for (var i = 0; i < ROUND_NAMES.length; i++) {
     var m = ROUND_NAMES[i][0].exec(k);
-    if (m) { var t = ROUND_NAMES[i][1][lang === "tr" ? 1 : 0]; if (t.indexOf("%s") >= 0) t = t.replace("%s", m[1]); if (sub) t += " · " + (lang === "tr" ? sub + ". Tur" : sub + ". Runde"); return t; }
+    if (m) { var t = txIn(lang, ROUND_NAMES[i][1][0], ROUND_NAMES[i][1][1]); if (t.indexOf("%s") >= 0) t = t.replace("%s", m[1]); if (sub) t += " · " + txIn(lang, "%s. Runde", "%s. Tur").replace("%s", sub); return t; }
   }
   return key;
 }
@@ -445,7 +484,7 @@ League.prototype.loadCup = function () {
       var evs = (st.Events || []).map(function (e) { return parseEvent(e, self.ut); }).filter(function (e) { return e.ts >= start; });
       if (!evs.length) return;
       var raw = String(st.Snm || "").replace(/;/g, ":"), name = raw.split(":").pop().trim() || raw;
-      if (/^group/i.test(name)) { parseTable(st).forEach(function (tb) { tables.push(["Gruppe " + name.split(" ").pop(), tb[1]]); }); name = "Group"; }
+      if (/^group/i.test(name)) { parseTable(st).forEach(function (tb) { tables.push([tx("Gruppe %s", "Grup %s").replace("%s", name.split(" ").pop()), tb[1]]); }); name = "Group"; }
       var nums = {}; evs.forEach(function (e) { if (e.round !== null) nums[e.round] = 1; });
       evs.forEach(function (e) {
         var k = name;
@@ -644,18 +683,18 @@ function natStageName(snm, lang) {
   var out = [];
   String(snm || "").replace(/;/g, ":").split(":").map(function (x) { return x.trim(); }).filter(function (x) { return x; }).forEach(function (p) {
     var m = /^league ([a-d])$/i.exec(p);
-    if (m) { out.push(lang === "tr" ? m[1].toUpperCase() + " Ligi" : "Liga " + m[1].toUpperCase()); return; }
+    if (m) { out.push(txIn(lang, "Liga %s", "%s Ligi").replace("%s", m[1].toUpperCase())); return; }
     m = /^group ([a-z0-9]+)/i.exec(p);
-    if (m) { var g = m[1].toUpperCase(); out.push(lang === "tr" ? (/^\d+$/.test(g) ? g + ". Grup" : "Grup " + g) : "Gruppe " + g); return; }
+    if (m) { var g = m[1].toUpperCase(); out.push(lang === "tr" && /^\d+$/.test(g) ? g + ". Grup" : txIn(lang, "Gruppe %s", "Grup %s").replace("%s", g)); return; }
     if (/play-?off/i.test(p)) out.push("Play-off");
-    else if (/final/i.test(p)) out.push(lang === "tr" ? "Final" : "Finale");
-    else if (/semi/i.test(p)) out.push(lang === "tr" ? "Yarı Final" : "Halbfinale");
-    else if (/quarter/i.test(p)) out.push(lang === "tr" ? "Çeyrek Final" : "Viertelfinale");
+    else if (/final/i.test(p)) out.push(txIn(lang, "Finale", "Final"));
+    else if (/semi/i.test(p)) out.push(txIn(lang, "Halbfinale", "Yarı Final"));
+    else if (/quarter/i.test(p)) out.push(txIn(lang, "Viertelfinale", "Çeyrek Final"));
   });
   return out.join(" · ") || snm;
 }
 var NAT = {kind: "nl", groups: [], tDisc: 0, tLoad: 0, loading: false, error: null,
-  title: function (lang) { return NAT_TITLES[this.kind][lang === "tr" ? 1 : 0]; }};
+  title: function (lang) { return txIn(lang, NAT_TITLES[this.kind][0], NAT_TITLES[this.kind][1]); }};
 function natCandidates() {
   var y = new Date().getFullYear(), out = [];
   for (var yy = y; yy < y + 6; yy++) if (yy % 4 === 0) out.push(["euro", "euro-" + yy + "-qualification"]);
@@ -686,7 +725,7 @@ function natDiscover() {
     NAT.kind = f[1];
     NAT.groups = f[3].map(function (x) {
       var lg = new League([470, "nlg", f[2], x[0], "", "", ""]); lg.snm = x[1]; lg.kind = f[1];
-      lg.name = function (lang) { return NAT_TITLES[this.kind][lang === "tr" ? 1 : 0] + " · " + natStageName(this.snm, lang); };
+      lg.name = function (lang) { return txIn(lang, NAT_TITLES[this.kind][0], NAT_TITLES[this.kind][1]) + " · " + natStageName(this.snm, lang); };
       return lg;
     });
     NAT.tDisc = Date.now() / 1000;
@@ -740,7 +779,7 @@ function natDiscoverUefa() {
         var lg = new League([470, "nlg", "uefa-" + c[1], "g" + grp.id, "", "", ""]);
         lg.snm = uefaStageName(grp); lg.kind = c[0]; lg.source = "uefa"; lg.gid = String(grp.id);
         lg.order = [toInt((grp.league || {}).order) || 0, toInt(grp.order) || 0];
-        lg.name = function (lang) { return NAT_TITLES[this.kind][lang === "tr" ? 1 : 0] + " · " + natStageName(this.snm, lang); };
+        lg.name = function (lang) { return txIn(lang, NAT_TITLES[this.kind][0], NAT_TITLES[this.kind][1]) + " · " + natStageName(this.snm, lang); };
         lg.load = function () { return natLoadUefa(); };
         groups.push(lg);
       });
@@ -1065,7 +1104,108 @@ window.skorAlive = function () {
 };
 window.addEventListener("resize", function () { layout(); draw(); });
 
+/* ---- ARD Text (Seite 990): Online-Videotext von ard-text.de ---- */
+var ARD_PAGE = 990, ARD_COLS = 40;
+var ARD = {page: 100, sub: 1, data: null, loading: false, error: null, tLoad: 0, want: 100, cache: {}, sel: 0, hist: []};
+// Seitennummern 100–899 auf der Tafel – zum Ansteuern ohne Zifferntasten (SHIELD)
+function ardLinks(rows) {
+  var out = [];
+  rows.forEach(function (r, ri) {
+    var line = r.map(function (s) { return s[2]; }).join(""), re = /(\d*)([1-8]\d\d)(?!\d)/g, m;
+    while ((m = re.exec(line))) if (!m[1]) out.push([ri, m.index, +m[2]]);
+  });
+  return out;
+}
+var ARD_COL = {w: "w", g: "g", bl: "b", c: "c", y: "y", r: "r", m: "m", b: "k"};
+function ardMosaic(code) {
+  var b = code & 0x5f, tl = b & 1, tr = b & 2, ml = b & 4, mr = b & 8, bl = b & 16, br = b & 64;
+  var n = [tl, tr, ml, mr, bl, br].filter(function (x) { return x; }).length;
+  if (!n) return " "; if (n >= 5) return "\u2588";
+  var top = !!(tl || tr), bot = !!(bl || br);
+  if (!(tr || mr || br)) return "\u258c"; if (!(tl || ml || bl)) return "\u2590";
+  if (top && !bot) return "\u2580"; if (bot && !top) return "\u2584";
+  return n >= 3 ? "\u2588" : ((tl || tr) ? "\u2580" : "\u2584");
+}
+var ardDec = document.createElement("textarea");
+function ardText(inner) {
+  inner = inner.replace(/<img src='[^']*?g\d[a-z]+([0-9a-f]{2})\.gif'>/g, function (m, h) { return "\ue000" + h + "\ue000"; });
+  inner = inner.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ");
+  ardDec.innerHTML = inner; inner = ardDec.value;
+  return inner.replace(/\ue000([0-9a-f]{2})\ue000/g, function (m, h) { return ardMosaic(parseInt(h, 16)); }).replace(/\u00a0/g, " ");
+}
+function ardParse(html) {
+  var out = {page: null, sub: 1, nsub: 1, rows: [], fast: {}}, m;
+  if ((m = /class="hiddenpagenumber"[^>]*>(\d{3})</.exec(html))) out.page = +m[1];
+  if ((m = /subpageCounter">\s*(\d+)\s*\/\s*(\d+)\s*</.exec(html))) { out.sub = +m[1]; out.nsub = Math.max(1, +m[2]); }
+  ["red", "green", "yellow", "blue"].forEach(function (c) { var mm = new RegExp('class="field ' + c + '"[^>]*href="[^"]*page=(\\d{3})').exec(html); if (mm) out.fast[c] = +mm[1]; });
+  var i = html.indexOf("<div id='page_1'>"); if (i < 0) return out;
+  var j = html.indexOf('<div class="row', i), chunk = html.slice(i, j > i ? j : i + 200000);
+  var rowRe = /<div>(<span[\s\S]*?)<\/div>/g, rm;
+  while ((rm = rowRe.exec(chunk)) && out.rows.length < 23) {
+    var segs = [], col = 0, spRe = /<span class='fg(\w+) bg(\w+)' style='width:(\d+)px;'><nobr>([\s\S]*?)<\/nobr><\/span>/g, sm;
+    while ((sm = spRe.exec(rm[1]))) {
+      var w = Math.floor(+sm[3] / 10); if (w <= 0) continue;
+      var txt = (ardText(sm[4]) + new Array(w + 1).join(" ")).slice(0, w);
+      segs.push([col, w, txt, ARD_COL[sm[1]] || "w", ARD_COL[sm[2]] || "k"]); col += w;
+    }
+    out.rows.push(segs);
+  }
+  out.links = ardLinks(out.rows);
+  return out;
+}
+function needArd(page, sub, dir) {
+  if (ARD.loading) return;
+  sub = sub || 1; ARD.loading = true; ARD.want = page;
+  var key = page + "/" + sub + "/" + (dir || ""), hit = ARD.cache[key];
+  var p = (hit && Date.now() - hit[0] < 60000) ? Promise.resolve(hit[1])
+    : httpGet("https://www.ard-text.de/index.php?page=" + page + (sub > 1 ? "&sub=" + sub : "") + (dir ? "&dir=" + dir : "")).then(function (html) {
+        var d = ardParse(html); if (!d.rows.length) throw new Error("Seite " + page + " nicht gefunden");
+        ARD.cache[key] = [Date.now(), d]; return d;
+      });
+  p.then(function (d) {
+    var np = d.page || page; if (!ARD.data || np !== ARD.page || d.sub !== ARD.sub) ARD.sel = 0;  // neue Tafel: erste Seitenzahl markieren
+    ARD.loading = false; ARD.data = d; ARD.page = np; ARD.sub = d.sub; ARD.tLoad = Date.now() / 1000; ARD.error = null; draw(); },
+    function (e) { ARD.loading = false; ARD.error = niceError(e); ARD.tLoad = Date.now() / 1000 - 45; message(fmt(T("ardErr"), page), 3); draw(); });
+}
+function ardOpen(page, sub, dir) {
+  if (ARD.data && (!ARD.hist.length || ARD.hist[ARD.hist.length - 1] !== ARD.page)) { ARD.hist.push(ARD.page); if (ARD.hist.length > 30) ARD.hist.shift(); }
+  needArd(page, sub || 1, dir);
+}
+/* Bedienung ohne Zifferntasten: ▲▼ Seitenzahl markieren, OK öffnen, ◄► Unterseite bzw. vorige/nächste Tafel, ZURÜCK = zuletzt angesehene Tafel */
+function ardKey(k) {
+  var d = ARD.data || {}, fast = d.fast || {}, links = d.links || [], n = d.nsub || 1;
+  if (k === "back") { if (ARD.hist.length) needArd(ARD.hist.pop(), 1); else go(100); }
+  else if (k === "up" || k === "down") {
+    if (links.length) ARD.sel = ((ARD.sel + (k === "down" ? 1 : -1)) % links.length + links.length) % links.length;
+    else ardOpen(fast[k === "up" ? "green" : "red"] || ARD.page + (k === "up" ? 1 : -1), 1, k === "up" ? "fwd" : "bck");
+  }
+  else if (k === "ok") { if (links.length) ardOpen(links[Math.min(ARD.sel, links.length - 1)][2]); else { ARD.cache = {}; needArd(ARD.page, ARD.sub); } }
+  else if (k === "right" && n > 1 && ARD.sub < n) needArd(ARD.page, ARD.sub + 1);
+  else if (k === "left" && n > 1 && ARD.sub > 1) needArd(ARD.page, ARD.sub - 1);
+  else if (k === "right" || k === "green" || k === "chup") ardOpen(fast.green || ARD.page + 1, 1, "fwd");
+  else if (k === "left" || k === "red" || k === "chdn") ardOpen(fast.red || ARD.page - 1, 1, "bck");
+  else if (k === "yellow" || k === "blue") { if (fast[k]) ardOpen(fast[k], 1); }
+}
+function ardRows() {
+  var C = G.cols, now = new Date(), d = ARD.data;
+  var pg = S.entry ? "P" + (S.entry + "---").slice(0, 3) : "P" + (d ? ARD.page : ARD_PAGE);
+  var date = T("days")[now.getDay()] + " " + two(now.getDate()) + "." + two(now.getMonth() + 1) + ".  " + two(now.getHours()) + ":" + two(now.getMinutes()) + ":" + two(now.getSeconds());
+  var info = "ARD Text" + (d && d.nsub > 1 ? "  " + d.sub + "/" + d.nsub : "") + (ARD.loading ? "  …" : "");
+  var rows = [[null, [seg(0, 5, pg, S.entry ? "y" : "w", null, "l", !!S.entry), seg(6, 9, "SkorText", "y"), seg(16, C - 39, info, "c"), seg(C - 22, 22, date, "y", null, "r")]]];
+  var off = 0, body = d ? d.rows : [[], [], [[0, ARD_COLS, ARD.error ? fmt(T("ardErr"), ARD.want) : T("ardLoad"), "c", "k"]]];
+  if (Date.now() < S.msgUntil) { rows.push([COL.w, [seg(1, C - 2, S.msg, "k")]]); body = body.slice(1); }
+  S.ardOff = off;
+  var links = d && d.links || [], mark = links.length ? links[Math.min(ARD.sel, links.length - 1)] : null, skip = rows.length - 1;
+  body.slice(0, 24 - rows.length).forEach(function (r, ri) {
+    var segs = r.map(function (s) { return seg(off + s[0], s[1], s[2].replace(/ /g, "\u00a0"), s[3], s[4] === "k" ? null : s[4]); });
+    if (mark && mark[0] === ri + skip) segs.push(seg(off + mark[1], 3, String(mark[2]), "k", "y"));  // markierte Seitenzahl
+    rows.push([COL.k, segs, "ard"]);
+  });
+  while (rows.length < 24) rows.push([COL.k, []]);
+  return rows;
+}
 function pageType(p) {
+  if (p === ARD_PAGE) return "ard";
   if (p === 100) return "idx"; if (p === 190) return "help"; if (p === 500) return "live"; if (p === 900) return "set"; if (p === 910) return "lsel";
   if (p === 110) return "fav"; if (p === 470) return "nl"; if (p === 510) return "day"; if (p === 520) return "tv"; if (rankingByPage(p)) return "rank";
   if (feedByPage(p)) return "news";
@@ -1073,7 +1213,7 @@ function pageType(p) {
 }
 function allPages() {
   var pages = [100, 110, 190, 470]; STORE.allViews().forEach(function (v) { pages.push(v[1], v[1] + 1); });
-  return pages.concat([500, 510, 520]).concat(RANKINGS.map(function (r) { return r.page; })).concat(FEEDS.map(function (f) { return f.page; })).concat([900, 910]).sort(function (a, b) { return a - b; });
+  return pages.concat([500, 510, 520]).concat(RANKINGS.map(function (r) { return r.page; })).concat(FEEDS.map(function (f) { return f.page; })).concat([900, 910, ARD_PAGE]).sort(function (a, b) { return a - b; });
 }
 function up(s, country) {
   if (country === "tr" || cfg("lang") === "tr") { var u = trUpper(s); if (cfg("lang") !== "tr") u = u.replace(/LİGA/g, "LIGA"); return u; }
@@ -1170,12 +1310,13 @@ function shownRound(lg) {
 function keyNumber(n) {
   if (!S.entry && n === 0) { go(100); return; }
   S.entry += String(n); S.entryAt = Date.now();
-  if (S.entry.length === 3) { var p = +S.entry; S.entry = ""; go(p); }
+  if (S.entry.length === 3) { var p = +S.entry; S.entry = ""; if (pageType(S.page) === "ard" && p !== ARD_PAGE) ardOpen(p, 1); else go(p); }
 }
 function key(k) {
   if (/^[0-9]$/.test(k)) { keyNumber(+k); draw(); return; }
   S.entry = "";
   var t = pageType(S.page);
+  if (t === "ard" && ["up", "down", "left", "right", "ok", "red", "green", "yellow", "blue", "chup", "chdn", "back"].indexOf(k) >= 0) { ardKey(k); draw(); return; }
   if (t === "news" && ["back", "ok", "up", "down", "left", "right"].indexOf(k) >= 0) { newsKey(k); draw(); return; }
   if (t === "tv" && ["ok", "up", "down"].indexOf(k) >= 0 || (t === "tv" && k === "back" && S.tvOpen !== null)) { tvKey(k); draw(); return; }
   if (k === "back" && t === "lsel") { go(900); draw(); return; }
@@ -1251,7 +1392,7 @@ function lselItems() {
   });
   out.push([null, T("cNAT"), "nat"], [470, NAT.groups.length ? NAT.title(lang) : T("natEU"), "nat"]);
   out.push([null, T("cRANK"), "rk"], [480, T("rkFifa"), "rk"], [482, T("rkUefa"), "rk"], [484, T("rkClub"), "rk"]);
-  out.push([null, T("cMORE"), "more"], [110, T("fav"), "more"], [510, T("today"), "more"], [520, T("tv"), "more"], [500, T("allLive"), "more"], [600, "Nachrichten / Haberler", "more"]);
+  out.push([null, T("cMORE"), "more"], [110, T("fav"), "more"], [510, T("today"), "more"], [520, T("tv"), "more"], [ARD_PAGE, T("ardRow"), "more"], [500, T("allLive"), "more"], [600, "Nachrichten / Haberler", "more"]);
   return out;
 }
 function lselToggle() { if (S.lsSel === null || S.lsSel === undefined) return; togglePage(S.lsSel); message(pageOn(S.lsSel) ? T("lselOn") : T("lselOff"), 1.2); }
@@ -1299,10 +1440,10 @@ function idxCols() {
   var fav = cfg("fav");
   function sec(hdr, items) { items = items.filter(function (it) { return it.page === 900 || pageOn(it.page); }); return items.length ? [hdr].concat(items) : []; }
   var more = sec({hdr: T("cMORE"), bg: "m", fg: "k"}, [
-    {page: 110, lbl: T("fav") + (fav ? " · " + fav : "")}, {page: 510, lbl: T("today")}, {page: 520, lbl: T("tv")}, {page: 500, lbl: T("allLive"), live: true},
+    {page: 110, lbl: T("fav") + (fav ? " · " + fav : "")}, {page: 510, lbl: T("today")}, {page: 520, lbl: T("tv")}, {page: ARD_PAGE, lbl: T("ardRow")}, {page: 500, lbl: T("allLive"), live: true},
     {page: 600, lbl: newsLabel()}, {page: 900, lbl: T("settings")}]);
   var dep = sec({hdr: T("cDE"), bg: "r", fg: "w"}, views("de"));
-  var left = dep.concat(dep.length ? [null] : []).concat(more);
+  var left = dep.concat(dep.length && dep.length + 1 + more.length <= IDX_ROWS ? [null] : []).concat(more);  // Leerzeile nur, wenn Platz ist
   var right = sec({hdr: T("cTR"), bg: "g", fg: "k"}, views("tr")).concat(sec({hdr: T("cEU"), bg: "y", fg: "k"}, views("eu")))
     .concat(sec({hdr: T("cNAT"), bg: "c", fg: "k"}, [{page: 470, lbl: NAT.groups.length ? NAT.title(lang) : T("natEU")}]))
     .concat(sec({hdr: T("cRANK"), bg: "b", fg: "w"}, [{page: 480, lbl: T("rkFifa")}, {page: 482, lbl: T("rkUefa")}, {page: 484, lbl: T("rkClub")}]));
@@ -1335,7 +1476,7 @@ function statusSegs(e) {
   if (e.state === "post") return [seg(0, 6, T("ft"), "d")];
   if (e.state === "pp") return [seg(0, 6, T("pp"), "r")];
   if (e.state === "ht") return [seg(0, 6, T("ht"), "g")];
-  return [seg(0, 6, (e.min || "") + (/^\d/.test(e.min || "") ? "'" : ""), "g")];
+  return [seg(0, 6, minTxt(e.min) + (/^\d/.test(e.min || "") ? "'" : ""), "g")];
 }
 function resRow(e) {
   var C = G.cols, W = Math.floor((C - 17) / 2), fresh = Date.now() / 1000 - (e.goal_at || 0) < 30;
@@ -1500,16 +1641,16 @@ function subpages() {
   else if (t === "set") {
     lines = [blank()]; var half2 = Math.floor(C / 2);
     SETTINGS.forEach(function (st, i) {
-      var sel = i === S.setSel, cur = st[2].filter(function (o) { return o[0] === cfg(st[0]); })[0] || st[2][0], val = lang === "tr" ? cur[2] : cur[1];
-      lines.push([sel ? COL.sel : null, [seg(1, half2 - 2, lang === "tr" ? st[1][1] : st[1][0], sel ? "y" : "w"), seg(half2, half2, (sel ? "◄ " : "  ") + val + (sel ? " ►" : ""), sel ? "y" : "c")]]);
+      var sel = i === S.setSel, cur = st[2].filter(function (o) { return o[0] === cfg(st[0]); })[0] || st[2][0], val = tx(cur[1], cur[2]);
+      lines.push([sel ? COL.sel : null, [seg(1, half2 - 2, tx(st[1][0], st[1][1]), sel ? "y" : "w"), seg(half2, half2, (sel ? "◄ " : "  ") + val + (sel ? " ►" : ""), sel ? "y" : "c")]]);
     });
     var ls = S.setSel === SETTINGS.length, hs = S.setSel === SETTINGS.length + 1, us = S.setSel > SETTINGS.length + 1;
     var non = lselItems().filter(function (x) { return x[0] !== null && pageOn(x[0]); }).length;
     lines.push([ls ? COL.sel : null, [seg(1, half2 - 2, T("lselRow"), ls ? "y" : "w"), seg(half2, half2, (ls ? "► " : "  ") + fmt(T("lselOpen"), non), ls ? "y" : "c")]]);
     lines.push([hs ? COL.sel : null, [seg(1, half2 - 2, T("help"), hs ? "y" : "w"), seg(half2, half2, (hs ? "► " : "  ") + T("helpOpen"), hs ? "y" : "c")]]);
     lines.push([us ? COL.sel : null, [seg(1, half2 - 2, T("updRow"), us ? "y" : "w"), seg(half2, half2, (us ? "► " : "  ") + (UPD.msg || T("updOpen")), us ? "y" : "c")]]);
-    lines.push(blank()); lines.push(text(" " + (ls ? T("lselInfo") : hs ? T("helpInfo") : (us ? T("updInfo") + " " + VERSION : SETTINGS[S.setSel][3][lang === "tr" ? 1 : 0])), "g"));
-    lines.push(blank()); lines.push(text(" " + (lang === "tr" ? "Android uygulaması: Downloader kodu " : "Android-App laden: Downloader-Code ") + DL_CODE + "  (aftv.news/" + DL_CODE + ")", "y"));
+    lines.push(blank()); lines.push(text(" " + (ls ? T("lselInfo") : hs ? T("helpInfo") : (us ? T("updInfo") + " " + VERSION : tx(SETTINGS[S.setSel][3][0], SETTINGS[S.setSel][3][1]))), "g"));
+    lines.push(blank()); lines.push(text(" " + tx("Android-App laden: Downloader-Code ", "Android uygulaması: Downloader kodu ") + DL_CODE + "  (aftv.news/" + DL_CODE + ")", "y"));
     while (lines.length < 19) lines.push(blank());
     lines.push(text(T("setHint"), "c"));
     subs = [{ban: [up(T("settings")), "SkorText"], bg: ["b", "w"], head: text("MENU", "d"), lines: lines}];
@@ -1521,7 +1662,7 @@ function detItems(inc, side) {
   var out = [];
   inc.forEach(function (x) {
     if (x.side !== side) return;
-    var m = x.min + ".";
+    var m = minTxt(x.min) + ".";
     if (x.type === "goal" || x.type === "pen" || x.type === "og") out.push([m + " " + x.name + (x.type === "pen" ? " (" + T("pen") + ")" : (x.type === "og" ? " (" + T("og") + ")" : "")), "c"]);
     else if (x.type === "red") out.push(["■ " + m + " " + x.name, "r"]);
     else if (x.type === "yr") out.push(["■ " + m + " " + x.name, "y"]);
@@ -1764,7 +1905,7 @@ function rankSubpages() {
 }
 function wrap(s, w) { var out = [], line = ""; (s || "").split(/\s+/).forEach(function (word) { if (!line) line = word; else if ((line + " " + word).length <= w) line += " " + word; else { out.push(line); line = word; } }); if (line) out.push(line); return out; }
 function newsSubpages() {
-  var C = G.cols, f = feedByPage(S.page), title = NEWS_LANG === "de" ? ("NACHRICHTEN · " + f.name).toUpperCase() : trUpper(T("cNEWS") + " · " + f.name), lt = new Date((f.tLoad || Date.now() / 1000) * 1000);
+  var C = G.cols, f = feedByPage(S.page), title = NEWS_LANG === "de" ? (tx("NACHRICHTEN") + " · " + f.name).toUpperCase() : trUpper(T("cNEWS") + " · " + f.name), lt = new Date((f.tLoad || Date.now() / 1000) * 1000);
   var head = [null, [seg(0, C - 18, f.source, "c"), seg(C - 17, 17, T("stand") + " " + two(lt.getHours()) + ":" + two(lt.getMinutes()), "c", null, "r")]];
   var lines;
   if (!f.items.length) {
@@ -1799,6 +1940,7 @@ function newsSubpages() {
   return subs;
 }
 function buildRows() {
+  if (pageType(S.page) === "ard") return ardRows();
   var C = G.cols, subs = subpages(); if (S.sub >= subs.length) S.sub = 0;
   var sp = subs[S.sub], now = new Date(), rows = [];
   var pg = S.entry ? "P" + (S.entry + "---").slice(0, 3) : "P" + S.page;
@@ -1811,7 +1953,7 @@ function buildRows() {
   for (var i = STORE.goals.length - 1; i >= 0; i--) if (ns - STORE.goals[i][0] < 8 && STORE.goals[i][0] > S.openedAt) { goal = STORE.goals[i][1]; break; }
   if (Date.now() < S.msgUntil) rows.push([COL.w, [seg(1, C - 2, S.msg, "k")]]);
   else if (goal) {
-    var lg = STORE.byUt[goal.ut], m = goal.min + (/^\d/.test(goal.min || "") ? "'" : "");
+    var lg = STORE.byUt[goal.ut], m = minTxt(goal.min) + (/^\d/.test(goal.min || "") ? "'" : "");
     var txt = T("goal") + "  " + m + "  " + goal.h + " " + (goal.hs || 0) + ":" + (goal.as || 0) + " " + goal.a;
     rows.push([S.blinkOn ? COL.y : COL.k, [seg(1, C - 22, fit(txt, C - 22), S.blinkOn ? "k" : "y"), seg(C - 21, 20, fit(lg ? lg.name(cfg("lang")) : "", 20), S.blinkOn ? "k" : "y", null, "r")]]);
   } else {
@@ -1847,6 +1989,17 @@ function draw() {
     el.style.background = bgc; el.style.borderRadius = rounded ? Math.max(3, Math.floor(G.rowH / 4)) + "px" : "0";
     el.style.boxShadow = (mod && rbg === COL.sel) ? "inset " + Math.max(4, Math.floor(G.cw * 0.45)) + "px 0 0 " + COL.y : "none";
     var html = "";
+    if (r[2] === "ard") {
+      // ARD-Tafel (40 Zeichen) auf die volle Bildbreite strecken – wie Videotext auf einem 16:9-Fernseher
+      var sx = G.pw / (ARD_COLS * G.cw);
+      segs.forEach(function (s) {
+        html += '<div class="sg" style="left:' + Math.floor(s[0] * G.cw) + "px;width:" + (Math.ceil(s[1] * G.cw) + 1) + "px;color:" + COL[s[3]] +
+          (s[4] ? ";background:" + COL[s[4]] : "") + '">' + esc(s[2]) + "</div>";
+      });
+      el.innerHTML = '<div style="position:absolute;left:0;top:0;height:100%;width:' + Math.ceil(ARD_COLS * G.cw) + "px;transform:scaleX(" + sx +
+        ');transform-origin:0 0;font-family:SkorMono,\'DejaVu Sans Mono\',monospace">' + html + "</div>";
+      continue;
+    }
     segs.forEach(function (s) {
       var x = Math.floor(s[0] * G.cw), w = Math.floor(s[1] * G.cw) + 2, txt = (s[6] && !S.blinkOn) ? "" : s[2];
       if (x >= G.pw) return; w = Math.min(w, G.pw - x);
@@ -1864,7 +2017,7 @@ function draw() {
     else {
       rateEl.firstChild.textContent = "1 € = " + RATE.value.toFixed(2).replace(".", ",") + " ₺";
       var dd = RATE.date.length >= 10 ? RATE.date.slice(8, 10) + "." + RATE.date.slice(5, 7) + "." : "";
-      rateEl.lastChild.textContent = (RATE.src === "ezb" ? (cfg("lang") === "tr" ? "AMB" : "EZB") : "Kurs") + " " + dd;
+      rateEl.lastChild.textContent = (RATE.src === "ezb" ? tx("EZB", "AMB") : tx("Kurs", "Kur")) + " " + dd;
     }
   } else rateEl.style.display = "none";
 }
@@ -1909,6 +2062,7 @@ function tick() {
   else if (tt === "nl") needNat();
   else if (tt === "day") needDay();
   else if (tt === "tv") { needDay(); needTv(); }
+  else if (tt === "ard" && !ARD.loading && (!ARD.data || now - ARD.tLoad > 60)) needArd(ARD.page, ARD.sub);
   else if (tt === "rank") needRank(rankingByPage(S.page));
   var f = feedByPage(S.page); if (f) needFeed(f);
   if (cfg("rotate") === "10" && !f && !(tt === "res" && !S.det) && Date.now() - S.lastRot > 10000) {
@@ -1931,6 +2085,16 @@ function touchTap(x, y) {
   var r = scr.getBoundingClientRect(), row = Math.floor((y - r.top) / G.rowH), col = (x - r.left) / G.cw, t = pageType(S.page), C = G.cols;
   if (row < 0 || row > 23) return;
   if (row === 0) { if (S.page !== 100) key("back"); else draw(); return; }
+  if (t === "ard") {
+    var ar = ARD.data && ARD.data.rows[row - 1], ac = (x - r.left) / (G.pw / ARD_COLS);  // Tafel ist auf volle Breite gestreckt
+    if (ar) {
+      var line = ar.map(function (s) { return s[2]; }).join(""), best = null, mm, re3 = /\b([1-8]\d\d)\b/g;
+      while ((mm = re3.exec(line))) { var dist = Math.abs(mm.index + 1 - ac); if (dist <= 6 && (!best || dist < best[1])) best = [+mm[1], dist]; }
+      if (best) { ardOpen(best[0], 1); return; }
+    }
+    if (row >= 20) key(col < C / 2 ? "down" : "up");
+    return;
+  }
   if (row === 23) { var q = Math.floor(C / 4); key(["red", "green", "yellow", "blue"][Math.max(0, Math.min(3, Math.floor(col / q)))]); return; }
   var bi = row - 3;
   if (row === 1) {
