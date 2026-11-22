@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.LoadControl
  *  minMs/maxMs  = so viel Vorrat baut der Player im Hintergrund auf
  *  startMs      = so viel muss da sein, bevor das Bild startet (kleiner = schnelleres Umschalten)
  *  rebufferMs   = so viel wird nach einem Hänger gesammelt, bevor es weitergeht
+ *  quickMs      = beim ERSTEN Hänger (seit 3 Minuten) reicht schon so viel – siehe [LiveLoadControl]; null = immer rebufferMs
  *  liveOffsetMs = wie weit hinter "live" abgespielt wird (größer = mehr Verzögerung, aber stabiler)
  */
 enum class BufferLevel(
@@ -22,12 +23,14 @@ enum class BufferLevel(
     val startMs: Int,
     val rebufferMs: Int,
     val liveOffsetMs: Long?,
+    val quickMs: Int?,
 ) {
     // Start-Puffer klein halten: Live-Sender (TS) kommen vom Server nur in Echtzeit – 2 s Start-Puffer hieß
     // 2 s stehendes erstes Bild bei jedem Umschalten. Den großen Vorrat baut der Player danach im Laufen auf.
-    SMALL("Klein", "Schnelles Umschalten, für gute Verbindungen", 10_000, 30_000, 500, 2_000, null),
-    MEDIUM("Mittel", "Ausgewogen (empfohlen)", 20_000, 50_000, 1_500, 4_000, null),
-    LARGE("Groß", "Sehr stabil, dafür etwas später als live", 40_000, 90_000, 2_500, 6_000, 30_000L);
+    SMALL("Klein", "Schnelles Umschalten, für gute Verbindungen", 10_000, 30_000, 500, 2_000, null, 1_000),
+    MEDIUM("Mittel", "Ausgewogen (empfohlen)", 20_000, 50_000, 1_500, 4_000, null, 2_000),
+    // Groß: wer das wählt, will lieber einmal länger warten und danach mehr Vorrat – bleibt wie bisher
+    LARGE("Groß", "Sehr stabil, dafür etwas später als live", 40_000, 90_000, 2_500, 6_000, 30_000L, null);
 
     companion object {
         fun of(name: String?): BufferLevel = entries.firstOrNull { it.name == name } ?: MEDIUM
@@ -86,4 +89,106 @@ object PlaybackConfig {
             .setPrioritizeTimeOverSizeThresholds(false)
             .build()
     }
+
+    /**
+     * Wie [loadControl], aber mit schnellem Wiederanlauf nach einer Bildlücke (siehe [LiveLoadControl]).
+     * Für den Haupt-Player (Live-TV). Je Player eine eigene Instanz – sie merkt sich die Hänger dieses Players.
+     */
+    @OptIn(UnstableApi::class)
+    fun liveLoadControl(context: Context, level: BufferLevel, audioLeadMs: Int = 0): LiveLoadControl {
+        val lead = audioLeadMs.coerceIn(0, 5_000)
+        val rebuffer = if (lead > 0) maxOf(level.rebufferMs, lead + 3_000) else level.rebufferMs
+        // „Ton später“: so viel Bild muss mindestens vorausliegen (gleicher Abstand wie beim Start-Vorrat), sonst bliebe
+        // das Bild gleich wieder stehen
+        val quick = level.quickMs?.let { q -> minOf(rebuffer, if (lead > 0) maxOf(q, lead + 2_000) else q) }
+        return LiveLoadControl(loadControl(context, level, audioLeadMs), quick)
+    }
+}
+
+/**
+ * Wann darf es nach einem Hänger weitergehen: beim ersten Hänger seit [windowMs] schon mit dem kleinen Vorrat,
+ * kommt innerhalb dieser Zeit ein weiterer, wieder erst mit dem vollen. Reine Rechenregel (ohne Android), damit sie
+ * im Unit-Test geprüft werden kann.
+ */
+internal class RebufferPolicy(private val windowMs: Long = 180_000L) {
+    private var lastStallAt = Long.MIN_VALUE
+
+    /** Ein neuer Hänger beginnt um [nowMs]. true = schneller Wiederanlauf erlaubt. */
+    @Synchronized
+    fun onStall(nowMs: Long): Boolean {
+        val quick = lastStallAt == Long.MIN_VALUE || nowMs - lastStallAt > windowMs
+        lastStallAt = nowMs
+        return quick
+    }
+
+    /** Neuer Sender: frühere Hänger gehören zum alten. */
+    @Synchronized
+    fun reset() { lastStallAt = Long.MIN_VALUE }
+}
+
+/**
+ * Schneller Wiederanlauf nach einer Bildlücke mitten im Programm.
+ *
+ * Bisher wartete Media3 nach jedem Hänger, bis wieder der volle Nachlade-Vorrat da war (Mittel: 4 s). Live-Sender
+ * kommen aber nur in Echtzeit nach: 4 s sammeln hieß 4 s stehendes Bild – auch wenn schon 1–2 s im Vorrat lagen
+ * (Aziz' Protokoll 22.11.: DAS ERSTE 3 s Lücke bei 1,8 s Vorrat, 4 s bei leerem Vorrat; SIXX 5 s bei 1,0 s).
+ *
+ * Jetzt: Beim ersten Hänger seit 3 Minuten geht es schon mit [quickMs] weiter (Mittel: 2 s). Kommt innerhalb von
+ * 3 Minuten noch einer, ist die Leitung wirklich wackelig – dann gilt wieder der volle Wert, damit der größere Vorrat
+ * vor dem nächsten schützt. Kürzer als bisher wird also nur gewartet, nie länger.
+ *
+ * Alles andere (wann geladen wird, Speichergrenze, Start-Vorrat beim Umschalten) macht unverändert [DefaultLoadControl].
+ * Bewusst eine Hülle statt einer Unterklasse: der Konstruktor von DefaultLoadControl ist in jeder Media3-Version anders
+ * (normale App 1.11, Vergleichs-App 1.5.1) – die hier weitergereichten Methoden gibt es in beiden gleich.
+ */
+@OptIn(UnstableApi::class)
+class LiveLoadControl(private val base: LoadControl, quickMs: Int?) : LoadControl {
+    private val quickUs = quickMs?.let { it * 1_000L }
+    private val policy = RebufferPolicy()
+    /** gerade in einem Hänger (vom Abspiel-Thread gesetzt, vom App-Thread bei „läuft wieder“ beendet) */
+    @Volatile private var inStall = false
+    @Volatile private var quick = false
+
+    /** Neuer Sender gewählt (App-Thread). */
+    fun newChannel() { policy.reset(); inStall = false }
+
+    /** Player meldet „bereit“ (App-Thread): ein Hänger ist auf jeden Fall vorbei – auch wenn Media3 ihn ohne
+     * Rückfrage beendet hat (z. B. Verbindung zu Ende, alles Geladene abspielbar). */
+    fun stallOver() { inStall = false }
+
+    override fun shouldStartPlayback(parameters: LoadControl.Parameters): Boolean {
+        // Start nach Umschalten/Neustart: unverändert (Start-Vorrat der Puffer-Stufe)
+        if (!parameters.rebuffering) { inStall = false; return base.shouldStartPlayback(parameters) }
+        if (!inStall) {
+            inStall = true
+            quick = quickUs != null && policy.onStall(android.os.SystemClock.elapsedRealtime())
+        }
+        if (base.shouldStartPlayback(parameters)) { inStall = false; return true }
+        val q = quickUs
+        if (quick && q != null && parameters.bufferedDurationUs >= q) {
+            inStall = false
+            val msg = "PUFFER_SCHNELL weiter nach Hänger mit %.1f s Vorrat (erster Hänger seit 3 min)"
+                .format(java.util.Locale.GERMANY, parameters.bufferedDurationUs / 1_000_000.0)
+            // wie die übrigen Einträge aus dem Abspiel-Thread über den App-Thread ins Protokoll
+            android.os.Handler(android.os.Looper.getMainLooper()).post { de.aze.iptv.data.HangLog.add(msg) }
+            return true
+        }
+        return false
+    }
+
+    // --- alles andere unverändert an den normalen LoadControl ---
+    override fun onPrepared(playerId: androidx.media3.exoplayer.analytics.PlayerId) = base.onPrepared(playerId)
+    override fun onStopped(playerId: androidx.media3.exoplayer.analytics.PlayerId) = base.onStopped(playerId)
+    override fun onReleased(playerId: androidx.media3.exoplayer.analytics.PlayerId) = base.onReleased(playerId)
+    override fun getAllocator(playerId: androidx.media3.exoplayer.analytics.PlayerId): androidx.media3.exoplayer.upstream.Allocator =
+        base.getAllocator(playerId)
+    override fun getBackBufferDurationUs(playerId: androidx.media3.exoplayer.analytics.PlayerId): Long = base.getBackBufferDurationUs(playerId)
+    override fun retainBackBufferFromKeyframe(playerId: androidx.media3.exoplayer.analytics.PlayerId): Boolean =
+        base.retainBackBufferFromKeyframe(playerId)
+    override fun shouldContinueLoading(parameters: LoadControl.Parameters): Boolean = base.shouldContinueLoading(parameters)
+    override fun onTracksSelected(
+        parameters: LoadControl.Parameters,
+        trackGroups: androidx.media3.exoplayer.source.TrackGroupArray,
+        trackSelections: Array<out androidx.media3.exoplayer.trackselection.ExoTrackSelection?>,
+    ) = base.onTracksSelected(parameters, trackGroups, trackSelections)
 }

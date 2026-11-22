@@ -156,7 +156,11 @@ fun PlayerScreen(
     val playerViewRef = remember { arrayOfNulls<PlayerView>(1) }
     // muss VOR player.stop() gesetzt sein – darum direkt an der Bildfläche, nicht über den Compose-Zustand
     fun keepFrame(on: Boolean) { playerViewRef[0]?.setKeepContentOnPlayerReset(on) }
+    /** Puffer-Steuerung des aktuellen Players (schneller Wiederanlauf nach Bildlücken, siehe LiveLoadControl) */
+    val loadCtlRef = remember { arrayOfNulls<de.aze.iptv.player.LiveLoadControl>(1) }
     val player = remember(level, tunnel, syncUsed, audioLeadMs) {
+        // je Player eine eigene Instanz (merkt sich die Hänger genau dieses Players)
+        val loadCtl = PlaybackConfig.liveLoadControl(context, level, audioLeadMs).also { loadCtlRef[0] = it }
         ExoPlayer.Builder(context)
             .setRenderersFactory(
                 (if (syncUsed) de.aze.iptv.player.SyncRenderersFactory(context) else DefaultRenderersFactory(context))
@@ -174,7 +178,7 @@ fun PlayerScreen(
             // wenn HDMI beim Umschalten der Bildwiederholrate kurz den Ton trennt – dann blieb das Bild stehen.
             .setHandleAudioBecomingNoisy(!de.aze.iptv.player.FrameRate.isTv(context))
             .setMediaSourceFactory(DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http)))
-            .setLoadControl(PlaybackConfig.loadControl(context, level, audioLeadMs))
+            .setLoadControl(loadCtl)
             // Leitung von Anfang an gut einschätzen: schneller Start, aber gleich mit hoher Qualitätsstufe
             .setBandwidthMeter(
                 androidx.media3.exoplayer.upstream.DefaultBandwidthMeter.Builder(context)
@@ -212,6 +216,37 @@ fun PlayerScreen(
                         if (decoderName.contains("ffmpeg", ignoreCase = true)) {
                             de.aze.iptv.data.HangLog.add("TON_UMGEWANDELT ${app.current?.channel?.name} ($decoderName)")
                         }
+                    }
+
+                    // Abgelehnte/abgebrochene Verbindungsversuche: Media3 versucht sie still neu (LiveSource.livePolicy:
+                    // bis zu 20×), im Protokoll stand davon bisher nichts. Langsames Umschalten (Aziz 21./22.11.:
+                    // Ballermann TV 3,3 s, DAZN 2 BAR 7 s) und „keine Daten mehr“ (Magenta TV Info) ließen sich so nicht
+                    // erklären. Jetzt: Art des Fehlers (z. B. HTTP 403, Zeitüberschreitung) gebündelt höchstens alle 3 s.
+                    // Nur Fehlerart und Sendername – keine Adresse.
+                    private var errCount = 0
+                    private var errLoggedAt = 0L
+                    override fun onLoadError(
+                        eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                        loadEventInfo: androidx.media3.exoplayer.source.LoadEventInfo,
+                        mediaLoadData: androidx.media3.exoplayer.source.MediaLoadData,
+                        error: java.io.IOException,
+                        wasCanceled: Boolean,
+                    ) {
+                        if (wasCanceled) return
+                        errCount++
+                        val now = android.os.SystemClock.elapsedRealtime()
+                        if (now - errLoggedAt < 3_000) return
+                        val what = when (error) {
+                            is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException -> "HTTP ${error.responseCode}"
+                            is androidx.media3.datasource.DataSourceException ->
+                                PlaybackException.getErrorCodeName(error.reason).removePrefix("ERROR_CODE_") +
+                                    (error.cause?.let { " (${it.javaClass.simpleName})" } ?: "")
+                            else -> error.cause?.javaClass?.simpleName ?: error.javaClass.simpleName
+                        }
+                        val zap = zapStartedAt[0].takeIf { it > 0 }?.let { " · beim Umschalten nach ${now - it} ms" } ?: ""
+                        qaLog("LADEFEHLER $what ×$errCount ${app.current?.channel?.name}$zap")
+                        errLoggedAt = now
+                        errCount = 0
                     }
                 })
             }
@@ -577,6 +612,12 @@ fun PlayerScreen(
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
+                // Bild des ALTEN Senders, das in der kurzen Wartezeit beim Umschalten noch fertig wurde (Aziz' Protokoll
+                // 22.11.: „ZAPTIME 2“, „ZAPTIME 10“, „ZAPTIME 36“ beim schnellen Zappen). Bisher zählte es als erstes Bild
+                // des NEUEN Senders: Wächter ohne Start-Geduld (griff schon nach 5 s statt 18 s ein und unterbrach einen
+                // noch verbindenden Sender), Nummer/Name in der Ecke verschwand zu früh, echte Umschaltzeit fehlte.
+                // Gleiche Regel wie bei ERROR_ALT/ENDED_ALT.
+                if (zapHold[0]) { qaLog("BILD_ALT ignoriert"); return }
                 firstFrameSeen = true
                 qaLog("FIRST_FRAME ${app.current?.channel?.name}")
                 // Umschaltzeit: vom Senderwechsel bis zum ersten Bild (für Emulator-Messung und Hänger-Protokoll)
@@ -603,6 +644,8 @@ fun PlayerScreen(
             }
 
             override fun onPlaybackStateChanged(state: Int) {
+                // läuft wieder: ein Hänger ist vorbei (auch wenn Media3 ihn ohne Rückfrage an die Puffer-Steuerung beendet hat)
+                if (state == Player.STATE_READY) loadCtlRef[0]?.stallOver()
                 // Manche Live-Streams "enden" einfach (Verbindung vom Server getrennt): neu verbinden.
                 if (state == Player.STATE_ENDED && player.currentMediaItem != null) {
                     // während des Umschaltens hängt noch der ALTE Sender am Player – sein Ende gehört nicht zum neuen
@@ -754,6 +797,8 @@ fun PlayerScreen(
         val newChannel = startedKey != ch.key
         if (newChannel) {
             retries = 0
+            // Hänger des vorigen Senders zählen nicht für den neuen (erster Hänger → schneller Wiederanlauf)
+            loadCtlRef[0]?.newChannel()
             val nowZap = android.os.SystemClock.elapsedRealtime()
             if (app.zapFast && nowZap - lastZapAt[0] > 700) settleMs = 60L
             lastZapAt[0] = nowZap
