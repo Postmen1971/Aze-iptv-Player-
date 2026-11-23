@@ -289,6 +289,12 @@ class Store(context: Context) {
         prefs.edit().putString("chAspects", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
     }
 
+    /** In der Gruppenübersicht zugeklappte Playlists (Playlist-IDs, „*“ = Alle Playlists) */
+    fun collapsedPlaylists(): Set<String> = prefs.getStringSet("collapsedPl", null)?.toSet() ?: emptySet()
+    fun saveCollapsedPlaylists(s: Set<String>) {
+        prefs.edit().putStringSet("collapsedPl", HashSet(s)).apply()
+    }
+
     /** Sender, bei denen Dolby-Ton immer in der App umgewandelt wird (Schnellmenü „Dolby-Ton umwandeln“). */
     fun dolbyChannels(): Set<String> = jsonMap(Secure.decrypt(prefs.getString("chDolby", "")) ?: "") { o, k -> o.getInt(k) }.keys
     fun saveDolbyChannels(s: Set<String>) {

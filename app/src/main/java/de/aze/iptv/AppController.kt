@@ -1154,6 +1154,15 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         playlistFilter = ids[(ids.indexOf(playlistFilter) + 1) % ids.size]
     }
 
+    /** Gruppenübersicht: zugeklappte Playlists (nur ihr Name ist zu sehen, siehe GroupSections) */
+    var collapsedPlaylists by mutableStateOf(runCatching { store.collapsedPlaylists() }.getOrDefault(emptySet()))
+        private set
+
+    fun togglePlaylistCollapsed(id: String) {
+        collapsedPlaylists = if (id in collapsedPlaylists) collapsedPlaylists - id else collapsedPlaylists + id
+        store.saveCollapsedPlaylists(collapsedPlaylists)
+    }
+
     fun playlistName(id: String?): String =
         if (id == null) "Alle" else sources.firstOrNull { it.id == id }?.name ?: "Playlist"
 

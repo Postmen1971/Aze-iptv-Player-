@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.aze.iptv.AppController
+import de.aze.iptv.data.GroupSections
 
 /**
  * Schmale Senderliste am linken Rand – das Bild bleibt groß sichtbar.
@@ -113,14 +114,16 @@ fun ChannelOverlay(
     }
     var firstOpen by remember { mutableIntStateOf(1) }
     val headFocus = remember { FocusRequester() }
+    // Gruppenübersicht wie bei TiviMate: Playlist-Name als farbige Kopfzeile, zum Auf-/Zuklappen
+    val sections = remember(groups, multi, filter, app.sources) {
+        val one = filter ?: app.activeSources.singleOrNull()?.id
+        GroupSections.build(groups, multi && filter == null, one, app.playlistName(one).let { if (one == null) "Meine Sender" else it })
+    }
+    val collapsed = app.collapsedPlaylists
 
     fun switchGroup(delta: Int) {
-        var g = groupIndex
-        for (t in groups.indices) {
-            g = Math.floorMod(g + delta, groups.size)
-            if (groups[g].channels.isNotEmpty()) break
-        }
-        groupIndex = g
+        // Gruppen zugeklappter Playlists überspringen (außer alles ist zu)
+        groupIndex = GroupSections.next(sections, collapsed, groups.size, groupIndex, delta) { groups[it].channels.isNotEmpty() }
     }
 
     val group = groups[groupIndex.coerceIn(0, groups.lastIndex)]
@@ -179,12 +182,17 @@ fun ChannelOverlay(
         ) {
             if (showGroups) {
                 SectionLabel("Gruppen", modifier = Modifier.padding(start = 10.dp, top = 14.dp, bottom = 10.dp))
-                val gState = rememberLazyListState(initialFirstVisibleItemIndex = (groupIndex - 5).coerceAtLeast(0))
+                val rows = GroupSections.rows(sections, collapsed)
+                // Ziel für den Fokus: die gewählte Gruppe – ist ihre Playlist zugeklappt, deren Kopfzeile
+                val groupSection = GroupSections.sectionOf(sections, groupIndex)?.id
+                val targetRow = rows.indexOfFirst { it is GroupSections.Row.Item && it.index == groupIndex }.takeIf { it >= 0 }
+                    ?: rows.indexOfFirst { it is GroupSections.Row.Header && it.section.id == groupSection }.coerceAtLeast(0)
+                val gState = rememberLazyListState(initialFirstVisibleItemIndex = (targetRow - 5).coerceAtLeast(0))
                 val gFirst = remember { FocusRequester() }
                 LaunchedEffect(focusKick) {
                     if (focusKick > 0) {
                         // gewählte Gruppe erst ins Bild holen – außerhalb des Bildes lässt sie sich nicht markieren
-                        if (gState.layoutInfo.visibleItemsInfo.none { it.index == groupIndex }) gState.scrollToItem((groupIndex - 5).coerceAtLeast(0))
+                        if (gState.layoutInfo.visibleItemsInfo.none { it.index == targetRow }) gState.scrollToItem((targetRow - 5).coerceAtLeast(0))
                         withFrameNanos { }
                         withFrameNanos { }
                         runCatching { gFirst.requestFocus() }
@@ -198,11 +206,32 @@ fun ChannelOverlay(
                         if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft) { showMenu = true; true } else false
                     },
                 ) {
-                    itemsIndexed(groups) { i, g ->
+                    itemsIndexed(rows, key = { _, r ->
+                        when (r) {
+                            is GroupSections.Row.Header -> "h:" + r.section.id
+                            is GroupSections.Row.Item -> "g:" + r.index
+                        }
+                    }) { ri, r ->
+                        if (r is GroupSections.Row.Header) {
+                            PlaylistHeader(
+                                title = r.section.title,
+                                collapsed = r.collapsed,
+                                groupCount = r.section.groups.size,
+                                first = ri == 0,
+                                modifier = if (ri == targetRow) Modifier.focusRequester(gFirst) else Modifier,
+                                onClick = {
+                                    app.togglePlaylistCollapsed(r.section.id)
+                                    qaLog("PLAYLIST_${if (r.collapsed) "AUF" else "ZU"} ${r.section.title}")
+                                },
+                            )
+                            return@itemsIndexed
+                        }
+                        val i = (r as GroupSections.Row.Item).index
+                        val g = groups[i]
                         Focusable(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .then(if (i == groupIndex) Modifier.focusRequester(gFirst) else Modifier)
+                                .then(if (ri == targetRow) Modifier.focusRequester(gFirst) else Modifier)
                                 .onPreviewKeyEvent { e ->
                                     if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight) {
                                         groupIndex = i; showGroups = false; true
@@ -225,7 +254,7 @@ fun ChannelOverlay(
                                     .padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                                     Text(
                                         (if (g.isFavorites) "★ " else "") + g.name,
                                         color = if (focused) Palette.OnAccent else Palette.TextSoft,
@@ -451,6 +480,56 @@ fun ChannelOverlay(
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                 )
             }
+        }
+    }
+}
+
+/**
+ * Kopfzeile einer Playlist in der Gruppenübersicht (wie TiviMate): Name farbig, rechts ▲ (offen) / ▼ (zu).
+ * OK bzw. Antippen klappt die Gruppen darunter zu oder wieder auf.
+ */
+@Composable
+private fun PlaylistHeader(
+    title: String,
+    collapsed: Boolean,
+    groupCount: Int,
+    first: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Focusable(
+        modifier = modifier.fillMaxWidth().padding(top = if (first) 0.dp else 10.dp),
+        qaName = "P " + title,
+        onClick = onClick,
+    ) { focused ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(40.dp + Device.touchPad)
+                .background(
+                    if (focused) Palette.GroupSelect else Palette.Highlight.copy(alpha = 0.10f),
+                    RoundedCornerShape(Palette.radius),
+                )
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                title,
+                color = if (focused) Palette.OnAccent else Palette.Highlight,
+                fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (collapsed) {
+                Text(
+                    "$groupCount ${if (groupCount == 1) "Gruppe" else "Gruppen"}  ",
+                    color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 12.sp,
+                )
+            }
+            Text(
+                if (collapsed) "▼" else "▲",
+                color = if (focused) Palette.OnAccent else Palette.Highlight, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+            )
         }
     }
 }
