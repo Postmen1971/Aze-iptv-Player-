@@ -367,6 +367,7 @@ fun PlayerScreen(
         var lastFrames = -1L
         var lastPos = -1L
         var lastBuffered = -1L
+        var lastAhead = -1L
         var frozen = 0
         var starved = 0
         var jump = 0
@@ -434,7 +435,13 @@ fun PlayerScreen(
             jump = if (!switching && !app.tunneling && !afterSwitch && player.isPlaying && hasVideo && firstFrameSeen &&
                 lastFrames >= 0 && f == lastFrames && lastPos >= 0 && pos != lastPos && buffered - pos > 1_000
             ) jump + 1 else 0
-            starved = if (!switching && buffering && buffered == lastBuffered && (firstFrameSeen || sinceStart >= 10_000)) starved + 1 else 0
+            // Kein Nachschub = Vorrat vor der Uhr wächst nicht. Bisher: Vorratsende unverändert – bei HLS-Live rückt aber das
+            // Fenster beim Nachladen der Liste um ein Stück weiter (Position UND Vorratsende springen gemeinsam z. B. 6 s
+            // zurück). Das setzte den Zähler alle 5–6 s auf 0, der Wächter griff nie ein (Langzeit-Test 23.11., Abschnitt G:
+            // TRT Muzik 11 s ohne Bild, obwohl die Leitung nach 4 s wieder voll da war).
+            val ahead0 = buffered - pos
+            val noNewData = lastBuffered >= 0 && lastAhead >= 0 && ahead0 <= lastAhead
+            starved = if (!switching && buffering && noNewData && (firstFrameSeen || sinceStart >= 10_000)) starved + 1 else 0
             noFirst = if (!switching && !app.tunneling && ready && hasVideo && !firstFrameSeen) noFirst + 1 else 0
             if (firstFrameSeen && pictureMoving && !buffering) healthy++ else if (!pictureMoving) healthy = 0
             if (healthy >= 60) { healthy = 0; watchdogRestarts = 0; nextAllowed = 0 }
@@ -540,6 +547,7 @@ fun PlayerScreen(
             lastFrames = f
             lastPos = pos
             lastBuffered = buffered
+            lastAhead = buffered - pos
             // Läuft schon (erstes Bild war da) und puffert 5 s ohne neue Daten → neu (3 s, wo Neuverbinden bewährt ist).
             // Beim Start weiterhin 8 s Geduld.
             val proven = key != null && key in reconnectProven
