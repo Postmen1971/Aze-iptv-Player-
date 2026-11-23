@@ -453,8 +453,8 @@ adb shell input keyevent KEYCODE_PROG_YELLOW; sleep 2; shot "test11-suche"; adb 
 adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 2; shot "test11-senderliste"
 [ "$(count "LIST_OPEN")" -ge 1 ] || fail "Senderliste: ◀ hat sie nicht geöffnet"
 # Gruppenübersicht wie bei TiviMate: Playlist-Name als Kopfzeile, OK klappt die Gruppen zu und wieder auf
+# (◀ öffnet die Liste schon in den Gruppen – ein weiteres ◀ wäre das Menü)
 np=$(count "FOCUS P "); ng=$(count "GONE G QA"); nz=$(count "PLAYLIST_ZU"); na=$(count "PLAYLIST_AUF")
-adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 2
 for i in $(seq 1 40); do [ "$(count "FOCUS P ")" -gt "$np" ] && break; adb shell input keyevent KEYCODE_DPAD_UP; sleep 0.5; done
 [ "$(count "FOCUS P ")" -gt "$np" ] || fail "Gruppen: Playlist-Kopfzeile nicht erreichbar ($(qa | grep -E 'FOCUS (G|P) ' | tail -3 | tr '\n' ' '))"
 adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 2; shot "test11-playlist-zu"
@@ -463,10 +463,9 @@ adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 2; shot "test11-playlist-zu"
 adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 2; shot "test11-playlist-auf"
 [ "$(count "PLAYLIST_AUF")" -gt "$na" ] || fail "Gruppen: Kopfzeile klappt nicht wieder auf"
 note "Playlist-Kopfzeile" "$(qa | grep -E 'FOCUS P |PLAYLIST_' | tail -3)"
-# zurück in eine Gruppe mit Sendern, dann wie bisher: ▶ Senderliste, ▶ schließen
+# zurück auf die Gruppe QA, dann wie bisher ▶ (Senderliste)
 nq=$(count "FOCUS G QA")
 for i in $(seq 1 6); do [ "$(count "FOCUS G QA")" -gt "$nq" ] && break; adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1; done
-adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 2
 adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 2
 adb shell input keyevent KEYCODE_PROG_BLUE; sleep 3
 for d in 0 0 0 0; do adb shell input keyevent KEYCODE_$d; done   # Standard-PIN 0000
