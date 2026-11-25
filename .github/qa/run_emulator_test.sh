@@ -421,6 +421,10 @@ wait_for "VOD_CAT" 1 60 || fail "Filme: erste Kategorie kam nicht"
 T10=$(adb shell date +%H:%M:%S | tr -d '\r')   # ab hier: Filme sind offen (App-Start zählt nicht)
 sleep 15
 shot "test10-filme"
+# Zugang laut Anbieter (Ablaufdatum wie bei TiviMate): Test-Anbieter meldet „in 109 Tagen“, 1 von 2 Verbindungen
+wait_re "ZUGANG .*Gültig bis" 30 >/dev/null || fail "Zugang: Ablaufdatum des Test-Anbieters nicht abgefragt ($(qa | grep ZUGANG | tail -1))"
+note "Zugang" "$(qa | grep "ZUGANG" | tail -1)"
+qa | grep "ZUGANG" | tail -1 | grep -q "noch 10[89] Tage · Verbindungen 1 von 2" || fail "Zugang: falsch angezeigt – $(qa | grep ZUGANG | tail -1)"
 c=$(qa | grep -c "COVER " || true)
 note "Filme" "$(qa | grep -E "VOD_|COVER" | head -20)"
 [ "$(count "VOD_CAT_ERROR")" -eq 0 ] || fail "Filme: Kategorie konnte nicht geladen werden"

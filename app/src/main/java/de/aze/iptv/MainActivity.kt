@@ -21,6 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.asCoroutineDispatcher
 import de.aze.iptv.ui.Palette
@@ -133,6 +134,16 @@ class MainActivity : ComponentActivity() {
         applyOrientation()
         de.aze.iptv.ui.qaLog("DEVICE ${de.aze.iptv.ui.Device.kind} (erkannt ${de.aze.iptv.ui.Device.detected}) ${resources.configuration.screenWidthDp}×${resources.configuration.screenHeightDp} dp")
         app.start()
+        // Bei jeder Rückkehr in die App (Home-Taste, Standby – Android TV beendet sie dabei kaum) und danach alle
+        // 30 min: fällige Senderliste, Programmzeitschrift und Zugangsdaten nachladen
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                while (true) {
+                    app.onForeground()
+                    kotlinx.coroutines.delay(30 * 60_000L)
+                }
+            }
+        }
         // Nur im Test-Build (Emulator-Test bei GitHub): Test-Playlist per Start-Parameter. Im normalen Build gibt es das nicht.
         if (BuildConfig.TEST_HOOKS) {
             // Zwischenspeicher leeren wie der Knopf in den Einstellungen (während ein Sender läuft)

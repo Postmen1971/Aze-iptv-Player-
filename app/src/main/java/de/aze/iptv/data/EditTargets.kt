@@ -28,4 +28,8 @@ interface PlaylistTarget {
     fun renameSource(source: PlaylistSource, name: String)
     fun moveSource(source: PlaylistSource, delta: Int)
     fun removeSource(source: PlaylistSource)
+    /** Zugang je Playlist laut Anbieter (Ablaufdatum …); bei der Fernhilfe leer */
+    val accountInfo: Map<String, AccountInfo> get() = emptyMap()
+    /** Zugang neu abfragen, wenn die letzte Abfrage älter als [maxAgeMs] ist */
+    fun refreshAccountInfo(maxAgeMs: Long) {}
 }

@@ -523,6 +523,8 @@ private fun FreeListSection(app: AppController) {
 @Composable
 @kotlin.OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
+    // Ablaufdatum der Zugänge auffrischen (höchstens alle 10 min beim Anbieter nachfragen)
+    LaunchedEffect(Unit) { app.refreshAccountInfo(10 * 60_000L) }
     Section(title, startOpen = true) {
         if (app.sources.isEmpty()) {
             Text("Noch keine Playlist. Füge unten einen M3U-Link oder Server + Login hinzu.", color = Palette.TextMuted, fontSize = 14.sp)
@@ -556,6 +558,20 @@ internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
                     )
                     app.sourceStatus[src.id]?.let { st ->
                         Text(st, color = if (st.startsWith("Fehler") || st.contains("keine")) Palette.Live else Palette.Accent, fontSize = 14.sp)
+                    }
+                    // Zugang laut Anbieter (wie TiviMate / IBO Player): gültig bis, noch … Tage, Verbindungen
+                    app.accountInfo[src.id]?.let { acc ->
+                        val now = System.currentTimeMillis()
+                        Text(
+                            acc.describe(now),
+                            color = when (acc.level(now)) {
+                                de.aze.iptv.data.AccountInfo.Level.OK -> Palette.TextSoft
+                                de.aze.iptv.data.AccountInfo.Level.WARN -> androidx.compose.ui.graphics.Color(0xFFF5C518)
+                                de.aze.iptv.data.AccountInfo.Level.BAD -> Palette.Live
+                            },
+                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.qaPos("ZUGANG ${src.name}"),
+                        )
                     }
                 }
                 androidx.compose.foundation.layout.FlowRow(

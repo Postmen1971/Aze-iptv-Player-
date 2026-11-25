@@ -126,13 +126,17 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         }
     }
 
-    fun refreshEpg(quiet: Boolean = false) {
+    /**
+     * [retries]: bei Fehler so oft nach je 1 min still erneut versuchen – nach dem Aufwachen aus dem Standby ist das
+     * Netz bei Fernsehern oft noch nicht da (die Programmzeitschrift blieb dann bis zum Neuladen von Hand leer).
+     */
+    fun refreshEpg(quiet: Boolean = false, retries: Int = 0) {
         // Läuft schon: danach noch einmal laden (z. B. nach geänderter Zeitverschiebung)
         if (!epgEnabled) return
         if (epgLoading) { epgAgain = true; return }
         val urls = (epgFromSources() + epgExtra).distinct()
         if (urls.isEmpty()) {
-            message = "Keine EPG-Quelle gefunden. Bei M3U-Listen ohne Programmdaten unter Einstellungen → Programm (EPG) eine Quelle hinzufügen."
+            if (!quiet) message = "Keine EPG-Quelle gefunden. Bei M3U-Listen ohne Programmdaten unter Einstellungen → Programm (EPG) eine Quelle hinzufügen."
             return
         }
         scope.launch {
@@ -145,9 +149,41 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
                 epg = it
                 if (!quiet) message = "Programmzeitschrift geladen: ${it.channelCount} Sender mit Programm (${epgRepo.lastReport})."
             }.onFailure {
-                if (!quiet) message = "Programmzeitschrift konnte nicht geladen werden."
+                if (retries > 0) {
+                    de.aze.iptv.ui.qaLog("EPG_AUTO fehlgeschlagen – neuer Versuch in 1 min (noch $retries)")
+                    scope.launch { kotlinx.coroutines.delay(60_000); refreshEpg(quiet = true, retries = retries - 1) }
+                } else if (!quiet) message = "Programmzeitschrift konnte nicht geladen werden."
             }
         }
+    }
+
+    /**
+     * Programm älter als so viele Stunden → beim Start und beim Zurückkehren in die App neu laden. Die gespeicherten
+     * Daten reichen nur 24 h voraus – bisher wurde nur beim Kaltstart nach 12 h neu geladen. Android TV / Google TV
+     * beenden die App aber fast nie (Home-Taste, Standby): am nächsten Tag war das Programm abgelaufen und die gelbe
+     * Zeile in der Senderliste leer, bis man in den Einstellungen „Programm jetzt laden“ drückte (Aziz 25.11.).
+     */
+    private val epgAutoHours = 8
+
+    /** start() ist durch – erst danach prüft onForeground (sonst doppelt beim App-Start) */
+    private var started = false
+
+    /**
+     * App ist (wieder) im Vordergrund – und danach alle 30 min, solange sie zu sehen ist (MainActivity): fällige
+     * Senderliste, Programmzeitschrift und Zugangsdaten nachladen.
+     */
+    fun onForeground() {
+        if (!started || loading || activeSources.isEmpty()) return
+        if (needsRefresh()) {
+            de.aze.iptv.ui.qaLog("AUTO_AKTUALISIEREN Senderliste fällig")
+            refreshNow()
+            return
+        }
+        if (epgEnabled && !epgLoading && epgRepo.isStale(epgAutoHours)) {
+            de.aze.iptv.ui.qaLog("EPG_AUTO Programm älter als $epgAutoHours h – lädt neu")
+            refreshEpg(quiet = true, retries = 3)
+        }
+        refreshAccountInfo(6 * 3_600_000L)
     }
 
     // ---- Ton-Bild-Synchronisation ----
@@ -733,14 +769,16 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
             }
             if (epgEnabled) epg = runCatching { epgRepo.load() }.getOrDefault(Epg.EMPTY).withManual(epgMap)
             val refresh = needsRefresh() || refreshPending
-            val epgStale = !refresh && activeSources.isNotEmpty() && epgRepo.isStale(12)
+            val epgStale = !refresh && activeSources.isNotEmpty() && epgRepo.isStale(epgAutoHours)
             // (Versuch 1.0.307, die Liste erst nach dem ersten Bild zu lesen und Downloads 8 s zu verschieben, machte das
             // Umschalten in den ersten Minuten langsamer – Emulator 81 → 115 ms – zurückgenommen)
             if (refresh) {
                 refreshPending = false
                 refreshNow()
             }
-            else if (epgStale) refreshEpg()
+            else if (epgStale) refreshEpg(retries = 3)
+            refreshAccountInfo(6 * 3_600_000L)
+            started = true
         }
     }
 
@@ -804,8 +842,9 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
             }
             message = if (errors.isEmpty()) "Senderliste aktualisiert: ${lineup.all.size} Sender"
             else errors.entries.joinToString("\n") { (id, e) -> "${sources.firstOrNull { it.id == id }?.name ?: "Playlist"}: $e" }
-            // Programmzeitschrift gleich mit aktualisieren
-            refreshEpg()
+            // Programmzeitschrift gleich mit aktualisieren (Netz evtl. noch nicht da: still erneut versuchen)
+            refreshEpg(retries = 3)
+            refreshAccountInfo(0)
             if (refreshPending) {
                 refreshPending = false
                 refreshNow()
@@ -1021,13 +1060,62 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
     suspend fun connectionInfo(ch: Channel?): Pair<Int, Int>? = withContext(Dispatchers.IO) {
         val src = ch?.let { c -> sources.firstOrNull { it.id == c.source } } ?: return@withContext null
         if (src.type != SourceType.XTREAM) return@withContext null
-        val raw = src.url.trim().trimEnd('/')
-        val base = if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "http://$raw"
-        val api = "$base/player_api.php?username=${java.net.URLEncoder.encode(src.user.trim(), "UTF-8")}&password=${java.net.URLEncoder.encode(src.pass, "UTF-8")}"
-        val info = org.json.JSONObject(de.aze.iptv.data.Http.text(api)).optJSONObject("user_info") ?: return@withContext null
+        val info = org.json.JSONObject(de.aze.iptv.data.Http.text(xtreamApi(src))).optJSONObject("user_info") ?: return@withContext null
         val max = info.optString("max_connections").toIntOrNull() ?: return@withContext null
         val used = info.optString("active_cons").toIntOrNull() ?: 0
         max to used
+    }
+
+    private fun xtreamApi(src: PlaylistSource): String {
+        val raw = src.url.trim().trimEnd('/')
+        val base = if (raw.startsWith("http://") || raw.startsWith("https://")) raw else "http://$raw"
+        return "$base/player_api.php?username=${java.net.URLEncoder.encode(src.user.trim(), "UTF-8")}&password=${java.net.URLEncoder.encode(src.pass, "UTF-8")}"
+    }
+
+    // ---- Zugang laut Anbieter (wie TiviMate / IBO Player): bis wann gültig, Verbindungen ----
+
+    final override var accountInfo by mutableStateOf(runCatching { store.accountInfo() }.getOrDefault(emptyMap()))
+        private set
+    private var accountJob: kotlinx.coroutines.Job? = null
+
+    /** Server + Login und Portal beim Anbieter abfragen (M3U-Listen haben keine solche Angabe). */
+    final override fun refreshAccountInfo(maxAgeMs: Long) {
+        if (accountJob?.isActive == true) return
+        accountJob = scope.launch {
+            val now = System.currentTimeMillis()
+            val fresh = withContext(Dispatchers.IO) {
+                sources.filter { it.enabled && it.type != SourceType.M3U }
+                    .filter { s -> accountInfo[s.id]?.let { now - it.checkedAt >= maxAgeMs } ?: true }
+                    .mapNotNull { src ->
+                        val info = runCatching {
+                            when (src.type) {
+                                SourceType.XTREAM -> de.aze.iptv.data.AccountInfo.parseXtream(de.aze.iptv.data.Http.text(xtreamApi(src)), now)
+                                SourceType.STALKER -> StalkerClient.forSource(src).accountEnd()
+                                    ?.let { de.aze.iptv.data.AccountInfo.parsePortalDate(it) }
+                                    ?.let { de.aze.iptv.data.AccountInfo(it, checkedAt = now) }
+                                SourceType.M3U -> null
+                            }
+                        }.getOrNull()
+                        info?.let { src.id to it }
+                    }
+            }
+            if (fresh.isEmpty()) return@launch
+            val ids = sources.map { it.id }.toSet()
+            accountInfo = (accountInfo + fresh).filterKeys { it in ids }
+            store.saveAccountInfo(accountInfo)
+            de.aze.iptv.ui.qaLog("ZUGANG " + fresh.joinToString(" | ") { (id, a) -> "${sources.firstOrNull { it.id == id }?.name}: ${a.describe(now)}" })
+            warnExpiry(now)
+        }
+    }
+
+    /** Läuft ein Zugang in weniger als 7 Tagen ab (oder ist abgelaufen): einmal am Tag darauf hinweisen. */
+    private fun warnExpiry(now: Long) {
+        val day = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(now)
+        if (store.accountWarnDay == day) return
+        val bad = activeSources.mapNotNull { s -> accountInfo[s.id]?.takeIf { it.level(now) == de.aze.iptv.data.AccountInfo.Level.BAD }?.let { s to it } }
+        if (bad.isEmpty()) return
+        store.accountWarnDay = day
+        message = bad.joinToString("\n") { (s, a) -> "Zugang „${s.name}“: ${a.describe(now)}" }
     }
 
     /** Nur Test-Build: Multi-View beim Start öffnen. */

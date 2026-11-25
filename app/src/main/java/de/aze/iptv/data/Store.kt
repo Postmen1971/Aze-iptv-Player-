@@ -289,6 +289,21 @@ class Store(context: Context) {
         prefs.edit().putString("chAspects", Secure.encrypt(JSONObject(m as Map<*, *>).toString())).apply()
     }
 
+    /** Zugang je Playlist laut Anbieter (Ablaufdatum, Verbindungen) – siehe AccountInfo */
+    fun accountInfo(): Map<String, AccountInfo> = runCatching {
+        val o = JSONObject(prefs.getString("accountInfo", "{}") ?: "{}")
+        o.keys().asSequence().associateWith { AccountInfo.fromJson(o.getJSONObject(it)) }
+    }.getOrDefault(emptyMap())
+
+    fun saveAccountInfo(m: Map<String, AccountInfo>) {
+        prefs.edit().putString("accountInfo", JSONObject().apply { m.forEach { (k, v) -> put(k, v.toJson()) } }.toString()).apply()
+    }
+
+    /** Tag (yyyyMMdd) der letzten Warnung „Zugang läuft bald ab“ – höchstens einmal am Tag */
+    var accountWarnDay: String
+        get() = prefs.getString("accountWarnDay", "") ?: ""
+        set(v) = prefs.edit().putString("accountWarnDay", v).apply()
+
     /** In der Gruppenübersicht zugeklappte Playlists (Playlist-IDs, „*“ = Alle Playlists) */
     fun collapsedPlaylists(): Set<String> = prefs.getStringSet("collapsedPl", null)?.toSet() ?: emptySet()
     fun saveCollapsedPlaylists(s: Set<String>) {

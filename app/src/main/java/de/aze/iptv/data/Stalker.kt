@@ -124,6 +124,13 @@ class StalkerClient(portalUrl: String, mac: String) {
         }
     }
 
+    /** Ablaufdatum laut Portal als Text (end_date, bei manchen Portalen im Feld „phone“) oder null */
+    fun accountEnd(): String? {
+        val js = runCatching { call("type=account_info&action=get_main_info").optJSONObject("js") }.getOrNull() ?: return null
+        return listOf("end_date", "expire_billing_date", "phone").map { js.optString(it).trim() }
+            .firstOrNull { AccountInfo.parsePortalDate(it) != null }
+    }
+
     fun genres(): Map<String, String> {
         val js = call("type=itv&action=get_genres").opt("js")
         val arr = js as? JSONArray ?: return emptyMap()

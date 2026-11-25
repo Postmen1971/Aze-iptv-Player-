@@ -266,7 +266,11 @@ class Handler(BaseHTTPRequestHandler):
             data = {"info": {"plot": "Eine Test-Serie für die Anleitung.", "genre": "Familie", "rating": "8.0", "releaseDate": "2023-01-01"},
                     "episodes": {"1": [{"id": "9%02d" % e, "title": "Folge %d" % e, "container_extension": "mp4", "info": {"duration": "00:45:00"}} for e in range(1, 7)]}}
         elif action == "":
-            data = {"user_info": {"auth": 1, "status": "Active"}, "server_info": {"url": "10.0.2.2"}}
+            # wie echte Anbieter: Ablaufdatum (in 109 Tagen) und Verbindungen – die App zeigt das in der Playlist
+            import time as _t
+            data = {"user_info": {"auth": 1, "status": "Active", "exp_date": str(int(_t.time()) + 109 * 86400),
+                                  "is_trial": "0", "active_cons": "1", "max_connections": "2"},
+                    "server_info": {"url": "10.0.2.2"}}
         else:
             data = []
         return self.send_body(json.dumps(data).encode(), "application/json")
