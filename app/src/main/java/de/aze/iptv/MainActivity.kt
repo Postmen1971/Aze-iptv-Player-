@@ -166,6 +166,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             app.testOpenVod = intent?.getBooleanExtra("aze_test_vod", false) == true
+            app.testOpenSeries = intent?.getBooleanExtra("aze_test_series", false) == true
             app.testSkorText = intent?.getBooleanExtra("aze_test_skortext", false) == true
             if (intent?.getBooleanExtra("aze_test_football", false) == true) app.pendingFootball = true
             // Herzschlag aus dem Haupt-Thread alle 0,25 s: Lücken > 1,5 s = App hing (prüft der Emulator-Test)
@@ -286,7 +287,7 @@ class MainActivity : ComponentActivity() {
                 // Einstellungen sind mit PIN geschützt (Standard 0000).
                 // Erster Start ohne Playlist: direkt in die Einstellungen (ohne PIN) – die App schließt sich dabei nie von selbst
                 var screen by remember { mutableStateOf(if (!app.hasAnySource || app.testListEditor || app.testOpenSettings) Screen.SETTINGS else if (app.testOpenVod) Screen.VOD else Screen.PLAYER) }
-                var vodSeries by remember { mutableStateOf(false) }
+                var vodSeries by remember { mutableStateOf(app.testOpenSeries) }
                 val openSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS }
                 // Geräteart in den Einstellungen geändert → Drehen sofort anpassen (Handy: immer quer)
                 androidx.compose.runtime.LaunchedEffect(de.aze.iptv.ui.Device.kind, de.aze.iptv.ui.Device.freeRotation) { applyOrientation() }
@@ -410,6 +411,35 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         if (::app.isInitialized) app.flushLast()
     }
+
+    /**
+     * Bild-im-Bild (Handy/Tablet, Aziz 25.11.): Home-Taste oder App-Wechsel, während ein Sender oder Film läuft →
+     * weiter im kleinen Fenster. Abschaltbar in den Einstellungen; am Fernseher nie.
+     */
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!::app.isInitialized || !app.pip || !de.aze.iptv.ui.Device.isTouch || !pipSupported()) return
+        val live = app.pipLive && app.current != null
+        if (!live && !app.vodPlaying) return
+        if (android.os.Build.VERSION.SDK_INT >= 26) enterPip()
+    }
+
+    @androidx.annotation.RequiresApi(26)
+    private fun enterPip() {
+        runCatching {
+            val params = android.app.PictureInPictureParams.Builder().setAspectRatio(android.util.Rational(16, 9)).build()
+            if (enterPictureInPictureMode(params)) de.aze.iptv.ui.qaLog("BILD_IM_BILD ${if (app.vodPlaying) "Film" else "Sender"}")
+        }.onFailure { de.aze.iptv.ui.qaLog("BILD_IM_BILD_FEHLER ${it.javaClass.simpleName}") }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        if (::app.isInitialized) app.inPip = isInPictureInPictureMode
+    }
+
+    /** Kann das Gerät Bild-im-Bild? (ab Android 8, nicht jedes Gerät) */
+    fun pipSupported(): Boolean = android.os.Build.VERSION.SDK_INT >= 26 &&
+        packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     override fun onDestroy() {
         // Fernhilfe nicht im Hintergrund weiterlaufen lassen (der Briefkasten-Strom hielt sonst den Prozess beschäftigt)

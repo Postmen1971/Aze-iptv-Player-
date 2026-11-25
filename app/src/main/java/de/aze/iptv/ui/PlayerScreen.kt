@@ -1093,6 +1093,10 @@ fun PlayerScreen(
         }
     }
 
+    // Bild-im-Bild nur beim normalen Fernsehbild (nicht Mehrfachansicht, Videotext oder Fußball)
+    androidx.compose.runtime.SideEffect { app.pipLive = active && !multiView && !teletext && !football }
+    // Filme & Serien ersetzen den Live-Player: dann kein Bild-im-Bild für Live
+    DisposableEffect(Unit) { onDispose { app.pipLive = false } }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1340,6 +1344,9 @@ fun PlayerScreen(
             onRelease = { view -> view.player = null; if (playerViewRef[0] === view) playerViewRef[0] = null },
         )
         }
+
+        // Bild-im-Bild (Handy/Tablet): im kleinen Fenster nur das Bild – keine Leisten, Listen oder Hinweise
+        if (app.inPip) return@Box
 
         if (app.lineup.all.isEmpty()) {
             if (app.loading) {

@@ -23,7 +23,7 @@ data class AccountInfo(
     enum class Level { OK, WARN, BAD }
 
     /** volle Tage bis zum Ablauf (0 = heute, negativ = abgelaufen) */
-    fun daysLeft(now: Long): Long? = expiresAt?.let { Math.floorDiv(it - now, 86_400_000L) }
+    fun daysLeft(now: Long): Long? = expiresAt?.let { (it - now).floorDiv(86_400_000L) }
 
     private val inactive get() = status != null && !status.equals("Active", ignoreCase = true)
 
@@ -61,6 +61,44 @@ data class AccountInfo(
         if (trial) parts.add("Testzugang")
         if (maxCons != null && maxCons > 0) parts.add("Verbindungen ${activeCons ?: 0} von $maxCons")
         return parts.joinToString(" · ")
+    }
+
+    /** Ampel (Einstellungen → Sender & Playlists): „Gültig bis 14.03.2027“, „Abgelaufen am …“, „Unbegrenzt gültig“ */
+    fun dateLine(now: Long, zone: TimeZone = TimeZone.getDefault()): String {
+        val fmt = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).apply { timeZone = zone }
+        val exp = expiresAt
+        return when {
+            exp == null -> "Unbegrenzt gültig"
+            exp <= now -> "Abgelaufen am ${fmt.format(exp)}"
+            else -> "Gültig bis ${fmt.format(exp)}"
+        }
+    }
+
+    /** Ampel, große Zeile: „noch 109 Tage“, „noch 1 Tag“, „läuft heute ab“, „abgelaufen“ – null ohne Ablaufdatum */
+    fun daysLine(now: Long): String? {
+        val exp = expiresAt ?: return if (inactive) "Status: ${statusText(status!!)}" else null
+        if (exp <= now) {
+            val ago = (now - exp).floorDiv(86_400_000L)
+            return when (ago) {
+                0L -> "abgelaufen"
+                1L -> "seit 1 Tag abgelaufen"
+                else -> "seit $ago Tagen abgelaufen"
+            }
+        }
+        return when (val d = daysLeft(now)) {
+            0L -> "läuft heute ab"
+            1L -> "noch 1 Tag"
+            else -> "noch $d Tage"
+        }
+    }
+
+    /** Ampel, kleine Zeile: Status, Testzugang, Verbindungen */
+    fun extraLine(): String? {
+        val parts = ArrayList<String>()
+        if (inactive && expiresAt != null) parts.add("Status: ${statusText(status!!)}")
+        if (trial) parts.add("Testzugang")
+        if (maxCons != null && maxCons > 0) parts.add("Verbindungen ${activeCons ?: 0} von $maxCons")
+        return parts.joinToString(" · ").ifEmpty { null }
     }
 
     fun toJson(): JSONObject = JSONObject().apply {

@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -106,7 +107,22 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private class Playing(val url: String, val title: String, val resumeKey: String, val startMs: Long)
+private class Playing(
+    val url: String,
+    val title: String,
+    val resumeKey: String,
+    val startMs: Long,
+    /** für die Weiterschauen-Reihe */
+    val cont: de.aze.iptv.data.ContinueEntry? = null,
+    /** Serie: nächste Folge („Nächste Folge in 10 Sekunden“) – null = keine */
+    val next: (() -> Playing)? = null,
+    val nextLabel: String? = null,
+)
+
+/** Eigene Listen ganz oben in den Kategorien (keine Anbieter-Kategorien) */
+private const val CAT_CONTINUE = "@weiter"
+private const val CAT_WATCH = "@merk"
+private const val CAT_NEW = "@neu"
 
 /**
  * Filme & Serien – bedient sich wie Live-TV:
@@ -148,10 +164,24 @@ fun VodScreen(
 
     val p = playing
     if (p != null) {
-        VodPlayer(app, p, onExit = { pos, dur ->
-            app.saveResume(p.resumeKey, pos, dur)
-            playing = null
-        })
+        // neuer Player je Film/Folge (nächste Folge = neuer Eintrag)
+        androidx.compose.runtime.key(p.url, p.resumeKey) {
+            VodPlayer(
+                app, p,
+                onExit = { pos, dur ->
+                    app.saveResume(p.resumeKey, pos, dur)
+                    p.cont?.let { app.noteContinue(it) }
+                    playing = null
+                },
+                onNext = { np ->
+                    // diese Folge ist zu Ende geschaut
+                    app.saveResume(p.resumeKey, 0, 0)
+                    p.cont?.let { app.noteContinue(it) }
+                    qaLog("VOD_NEXT ${np.title}")
+                    playing = np
+                },
+            )
+        }
         return
     }
 
@@ -198,6 +228,7 @@ private class BrowseMemory {
     var api: Any? = null
     var series = false
     var selected = 0
+    var selectedId: String? = null
     var query: String? = null
     var openIdx = -1
     var openAt = ""
@@ -222,9 +253,10 @@ private fun Browse(
     onQuit: (() -> Unit)? = null,
 ) {
     val keep = mem.api === api && mem.series == series
-    if (!keep) { mem.api = api; mem.series = series; mem.selected = 0; mem.query = null; mem.openIdx = -1 }
+    if (!keep) { mem.api = api; mem.series = series; mem.selected = 0; mem.selectedId = null; mem.query = null; mem.openIdx = -1 }
     var cats by remember(api, series) { mutableStateOf<List<VodCategory>?>(null) }
-    var selected by remember(api, series) { mutableIntStateOf(mem.selected) }
+    // gewählte Kategorie per id: oben kommen eigene Listen dazu oder fallen weg (Weiterschauen leer), die Auswahl bleibt
+    var selectedId by remember(api, series) { mutableStateOf(mem.selectedId) }
     var items by remember(api, series) { mutableStateOf<List<VodItem>?>(null) }
     var error by remember(api, series) { mutableStateOf<String?>(null) }
     var counts by remember(api, series) { mutableStateOf<Map<String, Int>>(emptyMap()) }
@@ -236,7 +268,6 @@ private fun Browse(
     }
     var query by remember(api, series) { mutableStateOf<String?>(mem.query) }
     var results by remember(api, series) { mutableStateOf<List<VodItem>?>(null) }
-    mem.selected = selected
     mem.query = query
     val catFocus = remember { FocusRequester() }
     val openFocus = remember { FocusRequester() }
@@ -308,8 +339,43 @@ private fun Browse(
     val catList = remember(allCats, hiddenVod, sourceId, series) {
         allCats.filterNot { app.isVodHidden(sourceId, series, it.id) }
     }
-    LaunchedEffect(api, series, selected, cats, catList) {
-        val c = catList.getOrNull(selected) ?: return@LaunchedEffect
+    // Eigene Listen ganz oben (Aziz 25.11.): Weiterschauen, Merkliste, Neu hinzugefügt
+    val contEntries = app.continueFor(sourceId, series)
+    val watchRefs = app.watchFor(sourceId, series)
+    val newOk = remember(cats) { cats != null && api.supportsNew() }
+    val hasCont = contEntries.isNotEmpty()
+    val hasWatch = watchRefs.isNotEmpty()
+    val shownCats = remember(hasCont, hasWatch, newOk, catList) {
+        buildList {
+            if (hasCont) add(VodCategory(CAT_CONTINUE, "▶ Weiterschauen"))
+            if (hasWatch) add(VodCategory(CAT_WATCH, "★ Merkliste"))
+            if (newOk) add(VodCategory(CAT_NEW, "✦ Neu hinzugefügt"))
+            addAll(catList)
+        }
+    }
+    // Anfang (oder gewählte Liste fällt weg): Weiterschauen, sonst die erste Kategorie des Anbieters –
+    // nicht „Neu hinzugefügt“, das braucht die ganze Bibliothek und wäre beim Öffnen zu langsam
+    val catKeys = remember(shownCats) {
+        val seen = HashMap<String, Int>()
+        shownCats.map { c -> val n = (seen[c.id] ?: 0) + 1; seen[c.id] = n; if (n == 1) c.id else "${c.id}#$n" }
+    }
+    val selected = shownCats.indexOfFirst { it.id == selectedId }.let { at ->
+        if (at >= 0) at else shownCats.indexOfFirst { it.id == CAT_CONTINUE || !it.id.startsWith("@") }.coerceAtLeast(0)
+    }
+    val selCat = shownCats.getOrNull(selected)
+    mem.selected = selected
+    mem.selectedId = selCat?.id ?: selectedId
+    LaunchedEffect(selCat?.id, cats) {
+        if (cats != null && selCat != null && selCat.id != selectedId) selectedId = selCat.id
+    }
+    // eigene Liste geändert (z. B. Eintrag entfernt): neu anzeigen
+    val specialData: Any? = when (selCat?.id) {
+        CAT_CONTINUE -> contEntries
+        CAT_WATCH -> watchRefs
+        else -> null
+    }
+    LaunchedEffect(api, series, selCat?.id, cats, catList, specialData) {
+        val c = selCat ?: return@LaunchedEffect
         // Altes Raster bleibt kurz stehen: ist die Kategorie schnell da (Gesamtliste im Speicher), gibt es kein
         // „Lade …“-Aufblitzen; erst wenn es dauert, kommt die Ladeanzeige.
         delay(150) // erst laden, wenn man kurz auf einer Kategorie stehen bleibt
@@ -317,7 +383,19 @@ private fun Browse(
         val showLoading = launch { delay(250); items = null }
         val adultOn = app.adultFilter
         items = runCatching {
-            val l = if (series) api.series(c.id) else api.movies(c.id)
+            val l = when (c.id) {
+                CAT_CONTINUE -> contEntries.map { it.ref.toItem() }
+                CAT_WATCH -> watchRefs.map { it.toItem() }
+                CAT_NEW -> {
+                    // die neuesten Titel des Anbieters – ohne ausgeblendete Kategorien
+                    val all = api.all(series)
+                    val shown = catList.map { it.id }.toSet()
+                    withContext(kotlinx.coroutines.Dispatchers.Default) {
+                        de.aze.iptv.data.VodLibrary.newest(all, { it.cat == null || it.cat in shown })
+                    }
+                }
+                else -> if (series) api.series(c.id) else api.movies(c.id)
+            }
             if (adultOn) withContext(kotlinx.coroutines.Dispatchers.Default) { l.filterNot { de.aze.iptv.data.AdultFilter.isAdult(it.name) } } else l
         }
             // abgebrochen (Kategorie gewechselt): nicht als Fehler werten und die neue Liste nicht überschreiben
@@ -413,25 +491,33 @@ private fun Browse(
                 }
                 if (cats == null) Text("Lade Kategorien …", color = Palette.TextMuted, fontSize = 13.sp)
                 error?.let { Text(it, color = Palette.Live, fontSize = 13.sp) }
-                if (cats != null && catList.isEmpty() && error == null) {
+                if (cats != null && shownCats.isEmpty() && error == null) {
                     Text("Keine $kind in dieser Playlist.", color = Palette.TextMuted, fontSize = 13.sp)
                     api.sourceInfo().takeIf { it.isNotBlank() }?.let { Text("Quelle: $it", color = Palette.TextMuted, fontSize = 11.sp) }
                 }
                 LazyColumn(state = catListState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     // Ganz oben: eigene Suche – ▲ aus der ersten Kategorie oder antippen
-                    if (cats != null && catList.isNotEmpty()) item(key = "suche") {
+                    if (cats != null && shownCats.isNotEmpty()) item(key = "suche") {
                         VodSearchRow(kind = kind, query = query, modifier = Modifier.focusRequester(searchFocus)) { askSearch = true }
                     }
-                    itemsIndexed(catList) { i, c ->
+                    // Schlüssel = id (manche Anbieter liefern eine id doppelt → mit Zähler); nicht die Stelle, die
+                    // verschiebt sich, wenn oben Weiterschauen/Merkliste dazukommen oder wegfallen
+                    itemsIndexed(shownCats, key = { i, c -> catKeys.getOrElse(i) { "$i|${c.id}" } }) { i, c ->
+                        val own = c.id.startsWith("@")
                         Focusable(
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(catFocus) else Modifier),
-                            onClick = { selected = i; query = null },
+                            onClick = { selectedId = c.id; query = null },
                             // OK lang gedrückt: gleich die Suche (Aziz 25.11. – nicht erst nach oben zur Suchzeile)
                             onLongClick = openSearch,
                             // Nur beim Wechsel der Kategorie die Suche beenden (nicht wenn der Fokus nach der Suche zurückkommt)
-                            onFocus = { if (i != selected) { selected = i; query = null } },
+                            onFocus = { if (i != selected) { selectedId = c.id; query = null } },
+                            qaName = "K ${c.name}",
                         ) { focused ->
-                            val count = counts[c.id] ?: items?.size?.takeIf { i == selected }
+                            val count = when (c.id) {
+                                CAT_CONTINUE -> contEntries.size
+                                CAT_WATCH -> watchRefs.size
+                                else -> counts[c.id] ?: items?.size?.takeIf { i == selected }
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -448,7 +534,8 @@ private fun Browse(
                             ) {
                                 Text(
                                     c.name,
-                                    color = if (focused) Palette.OnAccent else Palette.TextSoft,
+                                    // eigene Listen (Weiterschauen, Merkliste, Neu) in der Hervorhebungsfarbe
+                                    color = if (focused) Palette.OnAccent else if (own) Palette.Highlight else Palette.TextSoft,
                                     fontSize = 15.sp,
                                     fontWeight = if (focused) FontWeight.SemiBold else FontWeight.Normal,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -473,7 +560,9 @@ private fun Browse(
                 val raw = if (q != null) results else items
                 // Erwachsenen-Filter läuft schon beim Laden (im Hintergrund), nicht hier beim Zeichnen
                 val list = raw
-                val title = if (q != null) "Suche: „$q“ · alle Kategorien" + (if (multi) " · $sourceLabel" else "") else catList.getOrNull(selected)?.name.orEmpty()
+                val title = if (q != null) "Suche: „$q“ · alle Kategorien" + (if (multi) " · $sourceLabel" else "") else selCat?.name.orEmpty()
+                // Weiterschauen/Merkliste: einzelne Einträge entfernen (Menütaste; am Handy in den Details)
+                val removable = q == null && (selCat?.id == CAT_CONTINUE || selCat?.id == CAT_WATCH)
                 // Vorschau oben (wie im Entwurf): zeigt den gewählten Film – sonst den ersten der Liste
                 val heroState = remember(list) { mutableStateOf<VodItem?>(null) }
                 Column {
@@ -492,6 +581,12 @@ private fun Browse(
                         )
                         if (list != null) Text("${list.size} $kind", color = Palette.Highlight, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                     }
+                    if (removable && !list.isNullOrEmpty()) {
+                        Text(
+                            Device.hint("Menütaste ☰ auf einem Cover: aus der Liste entfernen", "Entfernen: Cover antippen → in den Details"),
+                            color = Palette.TextMuted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 6.dp),
+                        )
+                    }
                     when {
                         list == null -> Text(if (q != null) "Suche …" else "Lade …", color = Palette.TextMuted, fontSize = 15.sp)
                         list.isEmpty() -> Text(
@@ -500,7 +595,7 @@ private fun Browse(
                         )
                         else -> {
                           // Rückkehr aus Details/Film: wieder zum geöffneten Eintrag (nur in derselben Kategorie/Suche)
-                          val restore = remember(list) { if (mem.openIdx in list.indices && mem.openAt == "$selected|$q") mem.openIdx else -1 }
+                          val restore = remember(list) { if (mem.openIdx in list.indices && mem.openAt == "${selCat?.id}|$q") mem.openIdx else -1 }
                           val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(initialFirstVisibleItemIndex = restore.coerceAtLeast(0))
                           // neue Suche: gleich auf den ersten Treffer (mit der Fernbedienung direkt weiter blättern)
                           LaunchedEffect(list) {
@@ -560,8 +655,23 @@ private fun Browse(
                                         idx == restore -> Modifier.focusRequester(openFocus)
                                         idx == 0 && q != null -> Modifier.focusRequester(firstHitFocus)
                                         else -> Modifier
-                                    },
-                                ) { mem.openIdx = idx; mem.openAt = "$selected|$q"; onOpen(list, idx) }
+                                    }.then(
+                                        if (!removable) Modifier else Modifier.onPreviewKeyEvent { e ->
+                                            if (e.key.nativeKeyCode != AndroidKeyEvent.KEYCODE_MENU) return@onPreviewKeyEvent false
+                                            if (e.type == KeyEventType.KeyUp) {
+                                                // danach steht der Fokus auf dem Cover, das nachrückt
+                                                mem.openIdx = idx.coerceAtMost(list.size - 2).coerceAtLeast(0)
+                                                mem.openAt = "${selCat?.id}|$q"
+                                                if (selCat?.id == CAT_CONTINUE) app.removeContinue(sourceId, series, item.id)
+                                                else app.toggleWatch(de.aze.iptv.data.VodRef.of(sourceId, series, item))
+                                                // letzter Eintrag weg: die Liste verschwindet → Markierung auf die Kategorien
+                                                // (erst nach dem Neuaufbau, sonst hinge sie noch an der alten Zeile)
+                                                if (list.size <= 1) scope.launch { repeat(3) { withFrameNanos { } }; runCatching { catFocus.requestFocus() } }
+                                            }
+                                            true
+                                        },
+                                    ),
+                                ) { mem.openIdx = idx; mem.openAt = "${selCat?.id}|$q"; onOpen(list, idx) }
                             }
                           }
                         }
@@ -879,6 +989,48 @@ private fun DetailView(
     var imdb by remember(item.id) { mutableStateOf<de.aze.iptv.data.Omdb.Rating?>(null) }
     val playButton = remember { FocusRequester() }
     var attempt by remember(item.id) { mutableIntStateOf(0) }
+    // Trailer (YouTube) im Vollbild über den Details
+    var trailer by remember(item.id) { mutableStateOf<String?>(null) }
+    val ref = remember(item.id, sourceId, series) { de.aze.iptv.data.VodRef.of(sourceId, series, item) }
+    val watched = app.isWatched(sourceId, series, item.id)
+    val dScope = rememberCoroutineScope()
+    /** Markierung zurück auf den ersten Knopf, wenn der markierte verschwindet (Fernbedienung) */
+    fun refocus() {
+        dScope.launch {
+            repeat(3) { withFrameNanos { } }
+            repeat(6) { if (runCatching { playButton.requestFocus() }.isSuccess) return@launch; withFrameNanos { } }
+        }
+    }
+
+    /** Folge abspielen – mit Eintrag für Weiterschauen und der nächsten Folge (Staffel für Staffel) */
+    fun episodePlaying(e: Episode, start: Long, all: SeriesDetails?): Playing {
+        val flat = all?.seasons?.values?.flatten().orEmpty()
+        val at = flat.indexOfFirst { it.id == e.id }
+        val nxt = if (at >= 0) flat.getOrNull(at + 1) else null
+        val key = "e:$sourceId:${e.id}"
+        return Playing(
+            api.episodeUrl(e), "${item.name} – S${e.season} E${e.number}", key, start,
+            cont = de.aze.iptv.data.ContinueEntry(ref, key, de.aze.iptv.data.EpisodeRef.of(e)),
+            next = nxt?.let { n -> { episodePlaying(n, app.resumeOf("e:$sourceId:${n.id}"), all) } },
+            nextLabel = nxt?.let { n -> "S${n.season} E${n.number}" + n.title.takeIf { t -> t.isNotBlank() }?.let { t -> " · $t" }.orEmpty() },
+        )
+    }
+    fun moviePlaying(start: Long): Playing {
+        val key = "m:$sourceId:${item.id}"
+        return Playing(api.movieUrl(item), item.name, key, start, cont = de.aze.iptv.data.ContinueEntry(ref, key))
+    }
+    /** Trailer, Vormerken, aus Weiterschauen entfernen – bei Filmen und Serien gleich */
+    val extraButtons: @Composable (inContinue: Boolean) -> Unit = { inContinue ->
+        info?.trailer?.let { id ->
+            TvButton("▶ Trailer", onClick = { qaLog("TRAILER $id"); trailer = id })
+        }
+        TvButton(if (watched) "✓ Vorgemerkt" else "Vormerken", selected = watched, onClick = { app.toggleWatch(ref) })
+        if (inContinue) TvButton("Aus Weiterschauen entfernen", onClick = {
+            app.removeContinue(sourceId, series, item.id)
+            // der Knopf verschwindet – Fokus auf „Abspielen“ bzw. die erste Staffel (erst nach dem Neuaufbau)
+            refocus()
+        })
+    }
 
     LaunchedEffect(item.id, attempt) {
         failed = false
@@ -963,14 +1115,15 @@ private fun DetailView(
                     ) {
                         if (resume > 0) {
                             TvButton("Weiterschauen ab ${fmtTime(resume)}", modifier = Modifier.focusRequester(playButton), onClick = {
-                                onPlay(Playing(api.movieUrl(item), item.name, key, resume))
+                                onPlay(moviePlaying(resume))
                             })
-                            TvButton("Von vorn", onClick = { onPlay(Playing(api.movieUrl(item), item.name, key, 0)) })
+                            TvButton("Von vorn", onClick = { onPlay(moviePlaying(0)) })
                         } else {
                             TvButton("Abspielen", modifier = Modifier.focusRequester(playButton), onClick = {
-                                onPlay(Playing(api.movieUrl(item), item.name, key, 0))
+                                onPlay(moviePlaying(0))
                             })
                         }
+                        extraButtons(resume > 0)
                         TvButton("Zurück", onClick = onBack)
                     }
                 }
@@ -992,13 +1145,31 @@ private fun DetailView(
                     if (!compact) movieButtons()
                 } else {
                     val s = sd
+                    // zuletzt angefangene Folge dieser Serie (Weiterschauen-Reihe)
+                    val ce = app.continueFor(sourceId, true).firstOrNull { it.ref.id == item.id }
+                    val ceEp = ce?.episode
+                    if (i != null) {
+                        androidx.compose.foundation.layout.FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (ceEp != null && ce != null) {
+                                TvButton(
+                                    "Weiterschauen S${ceEp.season} E${ceEp.number} ab ${fmtTime(app.resumeOf(ce.resumeKey))}",
+                                    modifier = Modifier.focusRequester(playButton),
+                                    onClick = { onPlay(episodePlaying(ceEp.toEpisode(), app.resumeOf(ce.resumeKey), s)) },
+                                )
+                            }
+                            extraButtons(ce != null)
+                        }
+                    }
                     if (s != null && s.seasons.isNotEmpty()) {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(s.seasons.keys.toList()) { n ->
                                 TvButton(
                                     "Staffel $n",
                                     selected = n == season,
-                                    modifier = if (n == s.seasons.keys.first()) Modifier.focusRequester(playButton) else Modifier,
+                                    modifier = if (n == s.seasons.keys.first() && ceEp == null) Modifier.focusRequester(playButton) else Modifier,
                                     onClick = { season = n },
                                 )
                             }
@@ -1008,7 +1179,7 @@ private fun DetailView(
                             items(eps.size, key = { i -> "$i|${eps[i].id}" }) { i ->
                                 val e = eps[i]
                                 EpisodeRow(app, e, sourceId) { start ->
-                                    onPlay(Playing(api.episodeUrl(e), "${item.name} – S${e.season} E${e.number}", "e:$sourceId:${e.id}", start))
+                                    onPlay(episodePlaying(e, start, s))
                                 }
                             }
                         }
@@ -1016,6 +1187,29 @@ private fun DetailView(
                         Text("Keine Folgen gefunden.", color = Palette.TextMuted, fontSize = 14.sp)
                         TvButton("Zurück", modifier = Modifier.focusRequester(playButton), onClick = onBack)
                     }
+                }
+            }
+        }
+        // Trailer im Vollbild (YouTube); Zurück schließt ihn
+        val t = trailer
+        if (t != null) {
+            BackHandler { trailer = null; refocus() }
+            var trailerError by remember(t) { mutableStateOf<String?>(null) }
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                YouTubeView(
+                    url = "youtube:video:$t",
+                    modifier = Modifier.fillMaxSize(),
+                    onPlaying = { trailerError = null },
+                    onError = { trailerError = it },
+                )
+                Text(
+                    trailerError ?: Device.hint("Trailer · Zurück schließt ihn", "Trailer · Zurück schließt ihn"),
+                    color = if (trailerError != null) Palette.Live else Palette.TextSoft, fontSize = 14.sp,
+                    modifier = Modifier.align(Alignment.TopStart).padding(16.dp)
+                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp),
+                )
+                if (Device.isTouch) {
+                    TvButton("✕ Schließen", onClick = { trailer = null; refocus() }, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
                 }
             }
         }
@@ -1134,7 +1328,7 @@ private fun SwipeDetail(
 @Composable
 private fun EpisodeRow(app: AppController, e: Episode, sourceId: String, onPlay: (Long) -> Unit) {
     val resume = app.resumeOf("e:$sourceId:${e.id}")
-    Focusable(modifier = Modifier.fillMaxWidth(), onClick = { onPlay(resume) }) { focused ->
+    Focusable(modifier = Modifier.fillMaxWidth(), onClick = { onPlay(resume) }, qaName = "E ${e.season}.${e.number}") { focused ->
         Row(
             Modifier
                 .fillMaxWidth()
@@ -1179,8 +1373,19 @@ private fun seekStep(repeat: Int): Long = when {
  */
 @OptIn(UnstableApi::class)
 @Composable
-private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durMs: Long) -> Unit) {
+private fun VodPlayer(
+    app: AppController,
+    p: Playing,
+    onExit: (posMs: Long, durMs: Long) -> Unit,
+    onNext: (Playing) -> Unit = {},
+) {
     val context = LocalContext.current
+    // für Bild-im-Bild (Handy/Tablet): beim Verlassen der App weiter im kleinen Fenster
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        app.vodPlaying = true
+        onDispose { app.vodPlaying = false }
+    }
+    val inPip = app.inPip
     // Filme/Serien: allgemeiner Ton-Bild-Versatz aus den Einstellungen
     val syncMs = app.audioDelay
     androidx.compose.runtime.SideEffect { de.aze.iptv.player.AudioSync.setMs(syncMs) }
@@ -1201,6 +1406,13 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
     var tracksVersion by remember { mutableIntStateOf(0) }
     val playFocus = remember { FocusRequester() }
     val rootFocus = remember { FocusRequester() }
+    // Serie: „Nächste Folge in 10 Sekunden“ (in den letzten Sekunden oder am Ende der Folge)
+    var nextHint by remember { mutableStateOf(false) }
+    var readyLogged by remember { mutableStateOf(false) }
+    var nextDismissed by remember { mutableStateOf(false) }
+    var ended by remember { mutableStateOf(false) }
+    var countdown by remember { mutableIntStateOf(10) }
+    val nextFocus = remember { FocusRequester() }
 
     val player = remember {
         val http = DefaultHttpDataSource.Factory().setUserAgent(Http.USER_AGENT).setAllowCrossProtocolRedirects(true)
@@ -1219,7 +1431,19 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
             // Speichergrenze wie beim Live-TV (sonst bis ~130 MB Vorrat – zu viel für schwache Fire TV Sticks)
             .setLoadControl(de.aze.iptv.player.PlaybackConfig.loadControl(context, de.aze.iptv.player.BufferLevel.LARGE))
             .build()
-            .apply { videoChangeFrameRateStrategy = C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF }
+            .apply {
+                videoChangeFrameRateStrategy = C.VIDEO_CHANGE_FRAME_RATE_STRATEGY_OFF
+                // gemerkte Sprachen (Aziz 25.11.): Tonspur und Untertitel wie beim letzten Film, wenn vorhanden
+                val audio = app.vodAudioLang ?: app.audioLanguage
+                val sub = app.vodSubLang
+                trackSelectionParameters = trackSelectionParameters.buildUpon().apply {
+                    if (!audio.isNullOrBlank()) setPreferredAudioLanguage(audio)
+                    when {
+                        sub == "aus" -> setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                        !sub.isNullOrBlank() -> setPreferredTextLanguage(sub)
+                    }
+                }.build()
+            }
     }
     // Home-Taste / Bildschirmschoner: Film anhalten (läuft sonst hinter anderen Apps weiter)
     val vodLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -1336,7 +1560,15 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
 
             override fun onPlaybackStateChanged(state: Int) {
                 buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_ENDED) scope.launch { onExit(0, 0) }
+                if (state == Player.STATE_READY && !readyLogged) {
+                    readyLogged = true
+                    qaLog("VOD_READY ${player.duration / 1000} s")
+                }
+                if (state == Player.STATE_ENDED) {
+                    // Serie: nächste Folge ankündigen (außer der Hinweis wurde weggeklickt)
+                    if (p.next != null && !nextDismissed) { ended = true; nextHint = true }
+                    else scope.launch { onExit(0, 0) }
+                }
             }
 
             override fun onTracksChanged(tracks: Tracks) {
@@ -1344,6 +1576,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
             }
         }
         player.addListener(l)
+        qaLog("VOD_PLAY ${p.title} ab ${p.startMs / 1000} s" + (p.nextLabel?.let { " · danach $it" } ?: ""))
         player.setMediaItem(MediaItem.fromUri(p.url), p.startMs)
         player.prepare()
         player.playWhenReady = true
@@ -1360,8 +1593,32 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
             position = player.currentPosition
             buffered = player.bufferedPosition
             duration = player.duration.takeIf { it != C.TIME_UNSET } ?: 0L
+            // letzte 10 Sekunden einer Folge: Hinweis auf die nächste schon jetzt
+            if (p.next != null && !nextDismissed && !nextHint && duration > 60_000 && player.isPlaying &&
+                duration - position in 1..10_000
+            ) nextHint = true
             delay(500)
         }
+    }
+    // Countdown bis zur nächsten Folge (läuft nicht, solange angehalten)
+    LaunchedEffect(nextHint) {
+        if (!nextHint) return@LaunchedEffect
+        qaLog("NAECHSTE_FOLGE ${p.nextLabel}")
+        showUi = false
+        picker = null
+        var left = if (ended) 10_000L else (duration - player.currentPosition).coerceIn(1_000L, 10_000L)
+        launch {
+            repeat(12) {
+                withFrameNanos { }
+                if (runCatching { nextFocus.requestFocus() }.isSuccess) return@launch
+            }
+        }
+        while (left > 0) {
+            countdown = ((left + 999) / 1000).toInt()
+            delay(200)
+            if (ended || player.isPlaying) left -= 200
+        }
+        p.next?.invoke()?.let(onNext)
     }
     // Leiste nach 5 s ausblenden (nicht während Pause oder Auswahl)
     LaunchedEffect(showUi, uiTick, isPlaying, picker) {
@@ -1372,11 +1629,20 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
     }
     LaunchedEffect(showUi, picker) {
         withFrameNanos { }
-        runCatching { if (showUi && picker == null) playFocus.requestFocus() else if (!showUi) rootFocus.requestFocus() }
+        runCatching { if (showUi && picker == null) playFocus.requestFocus() else if (!showUi && !nextHint) rootFocus.requestFocus() }
+    }
+
+    fun dismissNext() {
+        qaLog("NAECHSTE_FOLGE_AB")
+        nextHint = false
+        nextDismissed = true
+        if (ended) onExit(0, 0) else runCatching { rootFocus.requestFocus() }
     }
 
     BackHandler {
         when {
+            // Zurück schließt nur den Hinweis (Aziz 25.11.); die Folge läuft zu Ende
+            nextHint -> dismissNext()
             picker != null -> picker = null
             pending != null -> { seekJob?.cancel(); pending = null }
             showUi -> showUi = false
@@ -1405,6 +1671,8 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                 }
                 // Fehlermeldung offen: Tasten gehören den Knöpfen „Nochmal versuchen“ / „Zurück“
                 if (error != null) return@onPreviewKeyEvent false
+                // Hinweis „Nächste Folge“: Tasten gehören seinen Knöpfen
+                if (nextHint) return@onPreviewKeyEvent false
                 if (code in AndroidKeyEvent.KEYCODE_0..AndroidKeyEvent.KEYCODE_9 && picker == null) {
                     jumpPercent(code - AndroidKeyEvent.KEYCODE_0)
                     return@onPreviewKeyEvent true
@@ -1432,7 +1700,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
             // Tablet/Handy: Tippen zeigt/versteckt die Leiste, doppelt Tippen links/rechts spult 10 s
             .pointerInput(Unit) {
                 detectTapGestures(
-                    onTap = { if (picker != null) picker = null else { showUi = !showUi; uiTick++ } },
+                    onTap = { if (picker != null) picker = null else if (!nextHint) { showUi = !showUi; uiTick++ } },
                     onDoubleTap = { o ->
                         if (o.x < size.width / 2) { nudge(-1, 0); flash("−10 s") } else { nudge(+1, 0); flash("+10 s") }
                     },
@@ -1462,6 +1730,9 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                 }
             },
         )
+
+        // Bild-im-Bild: nur das Bild, keine Leisten oder Hinweise
+        if (inPip) return@Box
 
         if (buffering && error == null) {
             Text(
@@ -1594,6 +1865,7 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                 if (pk == C.TRACK_TYPE_TEXT) {
                     TvButton("Aus", selected = textOff, modifier = Modifier.fillMaxWidth().focusRequester(first), onClick = {
                         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).build()
+                        app.rememberVodSub("aus")
                         picker = null
                     })
                 }
@@ -1607,6 +1879,8 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                             modifier = Modifier.fillMaxWidth().then(if (i == 0 && pk == C.TRACK_TYPE_AUDIO) Modifier.focusRequester(first) else Modifier),
                             onClick = {
                                 TrackHelper.select(player, o)
+                                // Sprache merken – der nächste Film nimmt sie, wenn er sie hat
+                                if (pk == C.TRACK_TYPE_AUDIO) app.rememberVodAudio(o.language) else app.rememberVodSub(o.language)
                                 picker = null
                             },
                         )
@@ -1631,6 +1905,31 @@ private fun VodPlayer(app: AppController, p: Playing, onExit: (posMs: Long, durM
                 }
             }
             LaunchedEffect(it) { androidx.compose.runtime.withFrameNanos { }; runCatching { retryFocus.requestFocus() } }
+        }
+
+        // Serie: „Nächste Folge in 10 Sekunden“ – unten rechts, Zurück oder „Abbrechen“ schließt den Hinweis
+        if (nextHint && error == null) {
+            Column(
+                Modifier.align(Alignment.BottomEnd).padding(28.dp).widthIn(max = 420.dp)
+                    .background(Palette.Panel.copy(alpha = 0.95f), RoundedCornerShape(12.dp))
+                    .border(1.dp, Palette.Highlight.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                    .padding(16.dp)
+                    .qaPos("NAECHSTE FOLGE"),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    "Nächste Folge in $countdown " + if (countdown == 1) "Sekunde" else "Sekunden",
+                    color = Palette.Highlight, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                )
+                p.nextLabel?.let { Text(it, color = Palette.Text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    TvButton("▶ Jetzt ansehen", modifier = Modifier.focusRequester(nextFocus), onClick = {
+                        nextHint = false
+                        p.next?.invoke()?.let(onNext)
+                    })
+                    TvButton("Abbrechen", onClick = { dismissNext() })
+                }
+            }
         }
     }
 }

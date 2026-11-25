@@ -258,11 +258,15 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                         VodHideButtons(app)
                     }
                     PlaybackSection(app, onEditList = { editingList = true }, part = 3)
+                    VodListsSection(app)
                 }
                 "Fußball" -> LearnedChannelsSection(app)
                 "Fernbedienung" -> ControlsSection(app)
                 "Aussehen" -> AppearanceSection(app)
-                "Bild & Ton" -> PlaybackSection(app, onEditList = { editingList = true }, part = 2)
+                "Bild & Ton" -> {
+                    PipSection(app)
+                    PlaybackSection(app, onEditList = { editingList = true }, part = 2)
+                }
                 "Programmzeitschrift" -> EpgSection(app)
                 "PIN & Kinderschutz" -> {
                     Section("PIN & Kinderschutz", startOpen = true) {
@@ -559,20 +563,8 @@ internal fun PlaylistSection(app: PlaylistTarget, title: String = "Playlists") {
                     app.sourceStatus[src.id]?.let { st ->
                         Text(st, color = if (st.startsWith("Fehler") || st.contains("keine")) Palette.Live else Palette.Accent, fontSize = 14.sp)
                     }
-                    // Zugang laut Anbieter (wie TiviMate / IBO Player): gültig bis, noch … Tage, Verbindungen
-                    app.accountInfo[src.id]?.let { acc ->
-                        val now = System.currentTimeMillis()
-                        Text(
-                            acc.describe(now),
-                            color = when (acc.level(now)) {
-                                de.aze.iptv.data.AccountInfo.Level.OK -> Palette.TextSoft
-                                de.aze.iptv.data.AccountInfo.Level.WARN -> androidx.compose.ui.graphics.Color(0xFFF5C518)
-                                de.aze.iptv.data.AccountInfo.Level.BAD -> Palette.Live
-                            },
-                            fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.qaPos("ZUGANG ${src.name}"),
-                        )
-                    }
+                    // Zugang laut Anbieter als Ampel (Aziz 25.11.): grün über 30 Tage, gelb unter 30, rot unter 7 oder abgelaufen
+                    app.accountInfo[src.id]?.let { acc -> AccountLight(acc, Modifier.qaPos("ZUGANG ${src.name}")) }
                 }
                 androidx.compose.foundation.layout.FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -1140,6 +1132,54 @@ private fun AppearanceSection(app: AppController) {
             TextColors.forEachIndexed { i, (name, _) ->
                 TvButton(name, selected = app.textColorIndex == i, onClick = { app.updateTextColor(i) })
             }
+        }
+    }
+}
+
+/**
+ * Ablauf der Playlist als Ampel: groß und farbig, mit Resttagen und Datum (grün > 30 Tage, gelb < 30, rot < 7 / abgelaufen).
+ */
+@Composable
+private fun AccountLight(acc: de.aze.iptv.data.AccountInfo, modifier: Modifier = Modifier) {
+    val now = System.currentTimeMillis()
+    val lvl = acc.level(now)
+    val red = androidx.compose.ui.graphics.Color(0xFFC62828)
+    val yellow = androidx.compose.ui.graphics.Color(0xFFF9A825)
+    val green = androidx.compose.ui.graphics.Color(0xFF2E7D32)
+    val bg = when (lvl) {
+        de.aze.iptv.data.AccountInfo.Level.OK -> green
+        de.aze.iptv.data.AccountInfo.Level.WARN -> yellow
+        de.aze.iptv.data.AccountInfo.Level.BAD -> red
+    }
+    // auf Gelb dunkle Schrift, sonst weiß
+    val fg = if (lvl == de.aze.iptv.data.AccountInfo.Level.WARN) androidx.compose.ui.graphics.Color(0xFF1B1B1B) else androidx.compose.ui.graphics.Color.White
+    Row(
+        modifier.padding(top = 6.dp).background(bg, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        // kleine Ampel: das passende Licht leuchtet
+        Column(
+            Modifier.background(androidx.compose.ui.graphics.Color(0xFF151515), RoundedCornerShape(8.dp)).padding(5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            listOf(
+                de.aze.iptv.data.AccountInfo.Level.BAD to red,
+                de.aze.iptv.data.AccountInfo.Level.WARN to yellow,
+                de.aze.iptv.data.AccountInfo.Level.OK to green,
+            ).forEach { (l, c) ->
+                Box(
+                    Modifier.size(16.dp)
+                        .background(if (l == lvl) c else c.copy(alpha = 0.22f), androidx.compose.foundation.shape.CircleShape)
+                        .then(if (l == lvl) Modifier.border(1.5.dp, androidx.compose.ui.graphics.Color.White, androidx.compose.foundation.shape.CircleShape) else Modifier),
+                )
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            val days = acc.daysLine(now)
+            Text(days ?: acc.dateLine(now), color = fg, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            if (days != null) Text(acc.dateLine(now), color = fg, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            acc.extraLine()?.let { Text(it, color = fg.copy(alpha = 0.85f), fontSize = 13.sp) }
         }
     }
 }
@@ -1802,6 +1842,64 @@ internal fun TvSwitch(title: String, hint: String?, on: Boolean, onToggle: () ->
 }
 
 
+/** Weiterschauen, Merkliste, gemerkte Sprachen (Aziz 25.11.) */
+@kotlin.OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun VodListsSection(app: AppController) {
+    var ask by remember { mutableStateOf<Int?>(null) } // 1 = Weiterschauen, 2 = Merkliste
+    Section("Weiterschauen & Merkliste", startOpen = true) {
+        Text(
+            "„Weiterschauen“ und „Merkliste“ stehen ganz oben bei Filmen und Serien. Einzelne Einträge entfernt die Menütaste ☰ " +
+                "auf dem Cover (am Handy in den Details). Fertig geschaute verschwinden von selbst.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            TvButton("Weiterschauen leeren (${app.vodContinue.size})", modifier = Modifier.qaPos("WEITERSCHAUEN LEEREN"), onClick = { ask = 1 })
+            TvButton("Merkliste leeren (${app.vodWatch.size})", onClick = { ask = 2 })
+        }
+        val langs = listOfNotNull(
+            app.vodAudioLang?.let { "Ton: ${langName(it)}" },
+            app.vodSubLang?.let { "Untertitel: ${if (it == "aus") "aus" else langName(it)}" },
+        )
+        Text(
+            if (langs.isEmpty()) "Tonspur und Untertitel: wähle sie einmal im Film – der nächste nimmt dieselbe Sprache, wenn er sie hat."
+            else "Gemerkte Sprache (nimmt der nächste Film, wenn er sie hat): " + langs.joinToString(" · "),
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+    }
+    when (ask) {
+        1 -> ConfirmDialog(
+            "Weiterschauen leeren?", "Alle angefangenen Filme und Folgen verschwinden aus der Reihe.", "Leeren",
+            onYes = { app.clearContinue(); ask = null }, onNo = { ask = null },
+        )
+        2 -> ConfirmDialog(
+            "Merkliste leeren?", "Alle vorgemerkten Filme und Serien werden entfernt.", "Leeren",
+            onYes = { app.clearWatch(); ask = null }, onNo = { ask = null },
+        )
+    }
+}
+
+/** Bild-im-Bild gibt es nur am Handy/Tablet und nur, wenn das Gerät es kann */
+@Composable
+private fun PipSection(app: AppController) {
+    val activity = androidx.compose.ui.platform.LocalContext.current as? de.aze.iptv.MainActivity
+    if (!Device.isTouch || activity?.pipSupported() != true) return
+    Section("Bild-im-Bild", startOpen = true) {
+        Box(Modifier.qaPos("PIP SCHALTER")) {
+            TvSwitch(
+                "Bild-im-Bild beim Verlassen der App",
+                "Home-Taste oder App-Wechsel: der Sender bzw. Film läuft im kleinen Fenster weiter.",
+                app.pip,
+            ) { app.updatePip(!app.pip) }
+        }
+    }
+}
+
+private fun langName(code: String): String =
+    java.util.Locale(code).getDisplayLanguage(java.util.Locale.GERMAN).replaceFirstChar { it.uppercase() }.ifBlank { code }
+
 /** Einstellungen sichern / wiederherstellen – per Code, damit es auch ohne Dateimanager am Fernseher geht */
 @Composable
 private fun BackupSection(app: AppController) {
@@ -1923,9 +2021,9 @@ private val CATEGORY_HINT = mapOf(
     "Suchen" to "Tippe ein Stichwort – die App zeigt dir, wo die Einstellung ist.",
     "Sender & Playlists" to "Playlist hinzufügen (auch vom Handy), freie Sender, YouTube, Senderliste neu laden.",
     "Senderliste & Favoriten" to "Gruppen und Sender sortieren, ausblenden, umbenennen – und deine Favoriten.",
-    "Filme & Serien" to "Cover schneller laden, Kategorien ausblenden, IMDb-Bewertung.",
+    "Filme & Serien" to "Cover, Kategorien ausblenden, IMDb, Weiterschauen und Merkliste leeren.",
     "Fußball" to "Sender, die die App für „Fußball heute“ gelernt hat.",
-    "Bild & Ton" to "Ton-Bild-Synchron (Lippensynchron), Bildformat, Wiedergabe.",
+    "Bild & Ton" to "Ton-Bild-Synchron (Lippensynchron), Bildformat, Wiedergabe, Bild-im-Bild.",
     "Programmzeitschrift" to "EPG: was gerade läuft und was danach kommt.",
     "Fernbedienung" to "Tasten belegen, Umschalten, Infoleiste beim Umschalten.",
     "Aussehen" to "Farben und Design der App.",
@@ -1949,6 +2047,8 @@ private val SETTINGS_INDEX = listOf(
     Triple("Cover schneller laden", "cover bild poster tmdb schnell langsam", "Filme & Serien"),
     Triple("Film-Kategorien ausblenden", "kategorie land ausblenden filme serien", "Filme & Serien"),
     Triple("IMDb-Bewertung", "imdb bewertung sterne", "Filme & Serien"),
+    Triple("Weiterschauen & Merkliste leeren", "weiterschauen merkliste vormerken leeren löschen angefangen", "Filme & Serien"),
+    Triple("Bild-im-Bild", "bild im bild pip kleines fenster handy tablet verlassen", "Bild & Ton"),
     Triple("Gelernte Fußball-Sender", "fußball fussball liveonsat gelernt tv-plan", "Fußball"),
     Triple("Lippensynchron (Ton-Bild)", "ton bild synchron lippen verzögerung versatz audio", "Bild & Ton"),
     Triple("Bildformat / Wiedergabe", "bild format zoom wiedergabe puffer 4k", "Bild & Ton"),

@@ -18,6 +18,12 @@ ffmpeg -loglevel error -y -itsoffset 60 -f lavfi -i "testsrc2=size=640x360:rate=
   -t 120 -fps_mode passthrough $V $A -output_ts_offset 15 -f mpegts media/jB.ts
 cat media/jA.ts media/jB.ts > media/jump.ts
 rm -f media/jA.ts media/jB.ts
+# Filme & Serien des Test-Anbieters: Film 6 Minuten (Weiterschauen braucht 1 min .. Ende − 3 min), Folge 20 Sekunden
+V2="-c:v libx264 -preset veryfast -profile:v main -pix_fmt yuv420p -g 50 -b:v 250k -maxrate 300k -bufsize 600k"
+ffmpeg -loglevel error -y -f lavfi -i "testsrc2=size=480x270:rate=25" -f lavfi -i "sine=frequency=550:sample_rate=48000" \
+  -t 360 $V2 $A -f mpegts media/film.ts
+ffmpeg -loglevel error -y -f lavfi -i "testsrc2=size=480x270:rate=25" -f lavfi -i "sine=frequency=770:sample_rate=48000" \
+  -t 20 $V2 $A -f mpegts media/folge.ts
 # Film-Cover für den Test-Anbieter (ein Bild, 400×600 wie echte Poster)
 ffmpeg -loglevel error -y -f lavfi -i "color=c=0x2a6fdb:s=400x600" -frames:v 1 media/poster.jpg
 ls -la media

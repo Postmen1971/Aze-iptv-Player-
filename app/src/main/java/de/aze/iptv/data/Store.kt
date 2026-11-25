@@ -145,6 +145,27 @@ class Store(context: Context) {
         get() = Secure.decrypt(prefs.getString("epgUrl", "")) ?: ""
         set(v) = prefs.edit().putString("epgUrl", if (v.isBlank()) "" else Secure.encrypt(v.trim())).apply()
 
+    /** Weiterschauen-Reihe und Merkliste bei Filmen & Serien (siehe VodLibrary) */
+    var vodContinue: String
+        get() = prefs.getString("vodContinue", "[]") ?: "[]"
+        set(v) = prefs.edit().putString("vodContinue", v).apply()
+    var vodWatch: String
+        get() = prefs.getString("vodWatch", "[]") ?: "[]"
+        set(v) = prefs.edit().putString("vodWatch", v).apply()
+
+    /** Filme & Serien: zuletzt gewählte Ton- und Untertitel-Sprache („aus“ = Untertitel aus) */
+    var vodAudioLang: String?
+        get() = prefs.getString("vodAudioLang", null)
+        set(v) = prefs.edit().putString("vodAudioLang", v).apply()
+    var vodSubLang: String?
+        get() = prefs.getString("vodSubLang", null)
+        set(v) = prefs.edit().putString("vodSubLang", v).apply()
+
+    /** Handy/Tablet: beim Verlassen der App im kleinen Fenster weiterlaufen (Bild-im-Bild) */
+    var pip: Boolean
+        get() = prefs.getBoolean("pip", true)
+        set(v) = prefs.edit().putBoolean("pip", v).apply()
+
     /** Weiterschauen: gemerkte Stelle je Film/Folge (Millisekunden). */
     fun resumePositions(): MutableMap<String, Long> {
         val o = runCatching { JSONObject(prefs.getString("resume", "{}")) }.getOrDefault(JSONObject())

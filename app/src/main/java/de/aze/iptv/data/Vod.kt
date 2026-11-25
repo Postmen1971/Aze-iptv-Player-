@@ -20,6 +20,8 @@ class VodItem(
     val ext: String,
     /** Kategorie (für Kategorien aus der einmal geladenen Gesamtliste) */
     val cat: String? = null,
+    /** Wann der Anbieter den Titel hochgeladen hat (Sekunden seit 1970; 0 = unbekannt) – für „Neu hinzugefügt“ */
+    val added: Long = 0,
 )
 
 class VodDetails(
@@ -33,6 +35,8 @@ class VodDetails(
     val rating: String?,
     /** Originaltitel (für die IMDb-Suche) */
     val originalName: String? = null,
+    /** YouTube-Video-ID des Trailers (vom Anbieter, „youtube_trailer“) */
+    val trailer: String? = null,
 )
 
 class Episode(
@@ -64,6 +68,8 @@ interface VodProvider {
     fun episodeUrl(e: Episode): String
     /** Woher die Filme/Serien kommen (für Hinweise, wenn nichts gefunden wird) */
     fun sourceInfo(): String = ""
+    /** Liefert der Anbieter das Datum des Hochladens (für „Neu hinzugefügt“)? */
+    fun supportsNew(): Boolean = false
 }
 
 /**
@@ -144,7 +150,7 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
     /** Gesamtliste: im Speicher, sonst sofort aus der Kopie auf dem Gerät (wie TiviMate) – alt? dann im Hintergrund neu laden */
     private fun cached(series: Boolean): List<VodItem>? {
         synchronized(allCache) { allCache[api to series] }?.let { return it }
-        val f = VodDisk.file(api, if (series) "series" else "movies")
+        val f = VodDisk.file(api, if (series) "series2" else "movies2")
         val disk = VodDisk.readItems(f) ?: return null
         synchronized(allCache) { allCache[api to series] = disk }
         if (VodDisk.stale(f)) VodDisk.refresh(f.path) { download(series) }
@@ -156,7 +162,7 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
         return streamItems(if (series) "get_series" else "get_vod_streams", "", series).also {
             if (it.isNotEmpty()) {
                 synchronized(allCache) { allCache[api to series] = it }
-                VodDisk.writeItems(VodDisk.file(api, if (series) "series" else "movies"), it)
+                VodDisk.writeItems(VodDisk.file(api, if (series) "series2" else "movies2"), it)
             }
             de.aze.iptv.ui.qaLog("VOD_ALL ${if (series) "Serien" else "Filme"} ${it.size} in ${System.currentTimeMillis() - t0} ms")
         }
@@ -203,6 +209,7 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
                             year = g("year") ?: g("releaseDate")?.take(4),
                             ext = if (series) "" else g("container_extension") ?: "mp4",
                             cat = g("category_id"),
+                            added = (g(if (series) "last_modified" else "added") ?: g("added"))?.toLongOrNull() ?: 0L,
                         ),
                     )
                 }
@@ -214,7 +221,7 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
     }
 
     companion object {
-        private val WANTED = setOf("stream_id", "series_id", "name", "stream_icon", "cover", "rating", "rating_5based", "year", "releaseDate", "container_extension", "category_id")
+        private val WANTED = setOf("stream_id", "series_id", "name", "stream_icon", "cover", "rating", "rating_5based", "year", "releaseDate", "container_extension", "category_id", "added", "last_modified")
         /** Gesamtlisten je Anbieter-Zugang (bleiben, solange die App sichtbar ist – auch nach Verlassen von Filme/Serien) */
         private val allCache = HashMap<Pair<String, Boolean>, List<VodItem>>()
         /** dieselben Listen nach Kategorie sortiert (je Anbieter-Zugang und Filme/Serien) */
@@ -285,10 +292,12 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
             rating = i.str("rating")?.takeIf { (it.toDoubleOrNull() ?: 0.0) > 0 }
                 ?: i.str("rating_5based")?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "%.1f".format(java.util.Locale.ROOT, it * 2) },
             originalName = i.str("o_name") ?: i.str("original_name"),
+            trailer = VodLibrary.trailerId(i.str("youtube_trailer") ?: i.str("trailer")),
         )
     }
 
     override fun sourceInfo() = "Anbieter-Schnittstelle (Server + Login)"
+    override fun supportsNew() = true
 
     // Benutzer/Passwort im Pfad kodiert (Sonderzeichen wie # ? % / machten die Adresse sonst kaputt)
     private val pathUser get() = android.net.Uri.encode(src.user.trim())
@@ -471,6 +480,7 @@ class HybridVod(private val file: java.io.File, private val name: String) : VodP
     override suspend fun seriesDetails(id: String) = p().seriesDetails(id)
     @Volatile private var info = ""
     override fun sourceInfo() = info + (chosen?.sourceInfo()?.let { " → $it" } ?: "")
+    override fun supportsNew() = chosen?.supportsNew() ?: false
 
     override fun movieUrl(item: VodItem) = chosen?.movieUrl(item).orEmpty()
     override fun episodeUrl(e: Episode) = chosen?.episodeUrl(e).orEmpty()
@@ -515,6 +525,8 @@ object VodDisk {
 
     fun init(context: android.content.Context) {
         dir = java.io.File(context.filesDir, "vod").apply { mkdirs() }
+        // ältere Abbilder ohne Hochlade-Datum (für „Neu hinzugefügt“, 1.0.330): weg, werden einmal neu geladen
+        runCatching { dir?.listFiles()?.filter { it.name.endsWith("-movies.tsv") || it.name.endsWith("-series.tsv") }?.forEach { it.delete() } }
     }
 
     fun file(api: String, kind: String): java.io.File {
@@ -539,7 +551,7 @@ object VodDisk {
     }
 
     fun writeItems(f: java.io.File, items: List<VodItem>) = write(f, items.asSequence().map {
-        listOf(it.id, it.name, it.poster, it.rating, it.year, it.ext, it.cat).joinToString("\t") { v -> clean(v) }
+        listOf(it.id, it.name, it.poster, it.rating, it.year, it.ext, it.cat, it.added.takeIf { a -> a > 0 }?.toString()).joinToString("\t") { v -> clean(v) }
     })
 
     fun readItems(f: java.io.File): List<VodItem>? = runCatching {
@@ -550,7 +562,7 @@ object VodDisk {
                 val p = l.split('\t')
                 if (p.size < 7) return@forEach
                 fun n(i: Int) = p[i].ifEmpty { null }
-                out.add(VodItem(id = p[0], name = p[1], poster = n(2), rating = n(3), year = n(4), ext = p[5], cat = n(6)))
+                out.add(VodItem(id = p[0], name = p[1], poster = n(2), rating = n(3), year = n(4), ext = p[5], cat = n(6), added = p.getOrNull(7)?.toLongOrNull() ?: 0L))
             }
         }
         out.takeIf { it.isNotEmpty() }

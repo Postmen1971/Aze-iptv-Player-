@@ -477,6 +477,94 @@ alive || fail "Cover-Vorrat: App nicht mehr da"
 hang_check "Fernsehen während Cover-Vorrat" "$T10b"
 note "Cover-Vorrat" "$(qa | grep -E "COVER_STOCK|VOD_ALL" | tail -5)"
 
+log "== Test 10c: Filme & Serien – Neu hinzugefügt, Weiterschauen, Merkliste, Trailer, nächste Folge"
+# drückt $2, bis die Markierung auf $1 steht (höchstens $3-mal)
+focus_to() { local i; for i in $(seq 1 "${3:-8}"); do [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ] && return 0; adb shell input keyevent "$2"; sleep 0.9; done; [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ]; }
+T10c=$(adb shell date +%H:%M:%S | tr -d '\r')
+c=$(count "VOD_CAT")
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_xtream "http://10.0.2.2:8090" --ez aze_test_vod true >/dev/null
+wait_for "VOD_CAT" $((c+1)) 60 >/dev/null; sleep 3
+# ▲ aus der ersten Kategorie: „Neu hinzugefügt“ (die neuesten 200, neueste zuerst)
+if focus_to "K ✦ Neu hinzugefügt" KEYCODE_DPAD_UP 3; then
+  wait_for "VOD_CAT ✦ Neu hinzugefügt" 1 40 >/dev/null
+  note "Neu hinzugefügt" "$(qa | grep "VOD_CAT ✦" | tail -1)"
+  qa | grep "VOD_CAT ✦ Neu hinzugefügt" | tail -1 | grep -q "Neu hinzugefügt 200 in" || fail "Neu hinzugefügt: erwartet 200 Filme – $(qa | grep "VOD_CAT ✦" | tail -1)"
+  sleep 2; shot "test10c-neu-hinzugefuegt"
+else fail "Neu hinzugefügt: Kategorie fehlt über den Anbieter-Kategorien ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
+# Film öffnen, abspielen, auf 20 % springen (1:12 von 6:00) und zurück → steht in „Weiterschauen“
+adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 3
+if wait_for "FOCUS Abspielen" 1 15 >/dev/null; then
+  sleep 1; shot "test10c-film-details"
+  pos_visible "▶ Trailer" || fail "Trailer: Knopf fehlt in den Film-Details (Anbieter liefert einen Trailer)"
+  pos_visible "Vormerken" || fail "Merkliste: Knopf „Vormerken“ fehlt in den Film-Details"
+  np=$(count "VOD_READY")
+  adb shell input keyevent KEYCODE_DPAD_CENTER
+  wait_for "VOD_READY" $((np+1)) 40 >/dev/null
+  note "Film läuft" "$(qa | grep -E "VOD_PLAY|VOD_READY" | tail -2 | tr '\n' ' ')"
+  sleep 2; adb shell input keyevent KEYCODE_2; sleep 4; shot "test10c-film-laeuft"
+  nw=$(count "WEITERSCHAUEN_NEU")
+  for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 2; [ "$(count "WEITERSCHAUEN_NEU")" -gt "$nw" ] && break; done
+  [ "$(count "WEITERSCHAUEN_NEU")" -gt "$nw" ] || fail "Weiterschauen: angefangener Film wurde nicht aufgenommen ($(qa | grep -E 'WEITERSCHAUEN|VOD_' | tail -3 | tr '\n' ' '))"
+  sleep 2
+  qa | grep -q "POS Weiterschauen ab" || fail "Weiterschauen: Knopf „Weiterschauen ab …“ fehlt nach dem Zurückkommen"
+  # Trailer (YouTube) öffnen und mit Zurück schließen
+  if focus_to "▶ Trailer" KEYCODE_DPAD_RIGHT 4; then
+    nt=$(count "TRAILER "); adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 8; shot "test10c-trailer"
+    [ "$(count "TRAILER ")" -gt "$nt" ] || fail "Trailer: OK auf „▶ Trailer“ öffnet nichts"
+    adb shell input keyevent KEYCODE_BACK; sleep 2
+  else fail "Trailer: Knopf mit der Fernbedienung nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
+  # Vormerken
+  nm=$(count "MERKLISTE_NEU")
+  if focus_to "Vormerken" KEYCODE_DPAD_RIGHT 5; then
+    adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 2
+    [ "$(count "MERKLISTE_NEU")" -gt "$nm" ] || fail "Merkliste: „Vormerken“ hat nichts gemerkt"
+    shot "test10c-vorgemerkt"
+  else fail "Merkliste: „Vormerken“ mit der Fernbedienung nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
+  adb shell input keyevent KEYCODE_BACK; sleep 3
+  qa | grep -q "POS K ▶ Weiterschauen|" || fail "Weiterschauen: Reihe steht nicht oben in den Kategorien"
+  qa | grep -q "POS K ★ Merkliste|" || fail "Merkliste: Kategorie steht nicht oben"
+  shot "test10c-eigene-listen"
+  # Menütaste auf dem Cover entfernt den Eintrag (erst Merkliste, dann Weiterschauen)
+  adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 1
+  if focus_to "K ★ Merkliste" KEYCODE_DPAD_UP 8 || focus_to "K ★ Merkliste" KEYCODE_DPAD_DOWN 8; then
+    sleep 2; adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+    ne=$(count "MERKLISTE_ENTFERNT"); adb shell input keyevent KEYCODE_MENU; sleep 2
+    [ "$(count "MERKLISTE_ENTFERNT")" -gt "$ne" ] || fail "Merkliste: Menütaste entfernt den Eintrag nicht ($(qa | grep -o 'FOCUS .*' | tail -1))"
+  else fail "Merkliste: Kategorie mit der Fernbedienung nicht erreichbar"; fi
+  # die Merkliste ist jetzt leer und verschwindet – die Markierung springt auf die Kategorien (sonst ◀ aus den Kacheln)
+  sleep 1; qa | grep -o "FOCUS .*" | tail -1 | grep -q "^FOCUS V " && { adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 1; }
+  if focus_to "K ▶ Weiterschauen" KEYCODE_DPAD_UP 8; then
+    sleep 2; adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1; shot "test10c-weiterschauen"
+    ne=$(count "WEITERSCHAUEN_ENTFERNT"); adb shell input keyevent KEYCODE_MENU; sleep 2
+    [ "$(count "WEITERSCHAUEN_ENTFERNT")" -gt "$ne" ] || fail "Weiterschauen: Menütaste entfernt den Eintrag nicht ($(qa | grep -o 'FOCUS .*' | tail -1))"
+  else fail "Weiterschauen: Kategorie mit der Fernbedienung nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
+else fail "Film-Details: „Abspielen“ bekam keine Markierung ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
+# Serie: Folge zu Ende → „Nächste Folge in 10 Sekunden“ → nächste Folge startet; Zurück schließt den Hinweis
+c=$(count "VOD_CAT")
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_xtream "http://10.0.2.2:8090" --ez aze_test_vod true --ez aze_test_series true >/dev/null
+wait_for "VOD_CAT" $((c+1)) 60 >/dev/null; sleep 3
+adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 3
+if wait_for "FOCUS Staffel 1" 1 15 >/dev/null && focus_to "E 1.1" KEYCODE_DPAD_DOWN 3; then
+  nn=$(count "NAECHSTE_FOLGE "); nx=$(count "VOD_NEXT")
+  adb shell input keyevent KEYCODE_DPAD_CENTER
+  wait_for "NAECHSTE_FOLGE " $((nn+1)) 60 >/dev/null && { sleep 3; shot "test10c-naechste-folge"; }
+  wait_for "VOD_NEXT" $((nx+1)) 20 >/dev/null
+  note "Nächste Folge" "$(qa | grep -E "VOD_PLAY|NAECHSTE_FOLGE|VOD_NEXT" | tail -4 | tr '\n' ' ')"
+  qa | grep "VOD_PLAY" | tail -1 | grep -q "S1 E2" || fail "Nächste Folge: es startete nicht Folge 2 ($(qa | grep VOD_PLAY | tail -1))"
+  # am Ende der zweiten Folge: Zurück schließt den Hinweis (zurück zu den Folgen, keine dritte)
+  if wait_for "NAECHSTE_FOLGE " $((nn+2)) 60 >/dev/null; then
+    na=$(count "NAECHSTE_FOLGE_AB"); nx=$(count "VOD_NEXT")
+    adb shell input keyevent KEYCODE_BACK; sleep 12
+    [ "$(count "NAECHSTE_FOLGE_AB")" -gt "$na" ] || fail "Nächste Folge: Zurück schließt den Hinweis nicht"
+    [ "$(count "VOD_NEXT")" -eq "$nx" ] || fail "Nächste Folge: trotz Zurück startete die nächste Folge"
+    shot "test10c-hinweis-zu"
+  fi
+else fail "Serie: Folgen mit der Fernbedienung nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
+alive || fail "Filme & Serien: App nicht mehr da"
+hang_check "Weiterschauen/Merkliste/Folgen" "$T10c"
+
 log "== Test 11: Rundgang – Schnellmenü, Suche, Infoleiste (▶ lang), Senderliste, Einstellungen"
 adb shell am start -S -n $PKG/.MainActivity >/dev/null
 sleep 3; wait_for "FIRST_FRAME" 1 30; sleep 3
@@ -682,6 +770,13 @@ if tap "V 1"; then
   sleep 4; shot "test14-handy-film"
   pos_visible "Abspielen" || pos_visible "Von vorn" || fail "Handy: „Abspielen“ ist in den Film-Details nicht zu sehen"
   pos_visible "Zurück" || fail "Handy: „Zurück“ ist in den Film-Details nicht zu sehen"
+  # Vormerken antippen (und wieder weg, damit die Liste leer bleibt)
+  nm=$(count "MERKLISTE_NEU")
+  if tap "Vormerken"; then
+    sleep 1; [ "$(count "MERKLISTE_NEU")" -gt "$nm" ] || fail "Handy: „Vormerken“ antippen merkt nichts"
+    shot "test14-handy-vorgemerkt"
+    tap "✓ Vorgemerkt" || fail "Handy: „✓ Vorgemerkt“ nicht antippbar"; sleep 1
+  else fail "Handy: „Vormerken“ ist in den Film-Details nicht antippbar"; fi
   # Wischen durch die Filme der Kategorie: ↑ nächster (mit Beschreibung), ↓ voriger, → zurück zur Kachel-Übersicht
   WH=$(scr); SW=${WH%x*}; SH=${WH#*x}
   adb shell input swipe $((SW/2)) $((SH*3/4)) $((SW/2)) $((SH/4)) 250; sleep 3
@@ -716,8 +811,20 @@ if tap "⚙ Einstellungen"; then
   sleep 2; shot "test14-handy-einstellungen"
   open_pane "Aussehen" && { sleep 1; shot "test14-handy-aussehen"; }
   open_pane "Sender & Playlists" && { sleep 1; shot "test14-handy-playlists"; }
+  open_pane "Bild & Ton" && { sleep 1; shot "test14-handy-bild-ton"
+    pos_visible "PIP SCHALTER" || { adb shell pm list features 2>/dev/null | grep -q picture_in_picture && fail "Handy: Schalter „Bild-im-Bild“ fehlt in Bild & Ton"; }; }
   adb shell input keyevent KEYCODE_BACK; sleep 2; adb shell input keyevent KEYCODE_BACK; sleep 2
 else fail "Handy: „⚙ Einstellungen“ nicht antippbar"; fi
+# Bild-im-Bild: Home-Taste, während ein Sender läuft → kleines Fenster, der Sender läuft weiter
+if adb shell pm list features 2>/dev/null | grep -q "picture_in_picture"; then
+  np=$(count "BILD_IM_BILD ")
+  adb shell input keyevent KEYCODE_HOME; sleep 5; shot "test14-handy-bild-im-bild"
+  if [ "$(count "BILD_IM_BILD ")" -gt "$np" ]; then
+    picture_back "Bild-im-Bild" 15 || true
+    note "Bild-im-Bild" "$(qa | grep "BILD_IM_BILD" | tail -1)"
+  else fail "Bild-im-Bild: Home-Taste öffnet kein kleines Fenster ($(qa | grep -E 'BILD_IM_BILD' | tail -1))"; fi
+  adb shell am start -n $PKG/.MainActivity >/dev/null; sleep 4
+else note "Bild-im-Bild" "Emulator kann kein Bild-im-Bild – nicht geprüft"; fi
 alive || fail "Handy: App nicht mehr da"
 hang_check "Handy" "$T14"
 

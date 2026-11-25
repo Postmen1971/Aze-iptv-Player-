@@ -165,6 +165,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.ntfy_get(path)
         if path == "player_api.php":
             return self.xtream()
+        # Filme und Folgen des Test-Anbieters: ganze Datei mit Länge und Sprüngen (Range) wie echte Anbieter
+        if path.startswith("movie/") or path.startswith("series/"):
+            return self.send_file("film.ts" if path.startswith("movie/") else "folge.ts")
         if path == "get.php":  # Live-Liste des Test-Anbieters: leer (die Sender kommen aus list.m3u)
             return self.send_body(b"#EXTM3U\n", "audio/x-mpegurl")
         if path.startswith("poster/"):
@@ -230,6 +233,43 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.stream(name, behaviour, speed=3.0 if behaviour == "drop" else 1.0, cut=15)
 
+    def send_file(self, name):
+        f = os.path.join(MEDIA, name)
+        if not os.path.exists(f):
+            self.send_error(404)
+            return
+        size = os.path.getsize(f)
+        start, end = 0, size - 1
+        rng = self.headers.get("Range", "")
+        if rng.startswith("bytes="):
+            a, _, b = rng[6:].partition("-")
+            start = int(a) if a else 0
+            end = min(int(b), size - 1) if b else size - 1
+        if start >= size:
+            self.send_response(416)
+            self.send_header("Content-Range", "bytes */%d" % size)
+            self.end_headers()
+            return
+        self.send_response(206 if rng else 200)
+        self.send_header("Content-Type", "video/mp2t")
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(end - start + 1))
+        if rng:
+            self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
+        self.end_headers()
+        try:
+            with open(f, "rb") as fh:
+                fh.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = fh.read(min(65536, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
     def send_body(self, body, ctype):
         self.send_response(200)
         self.send_header("Content-Type", ctype)
@@ -251,17 +291,24 @@ class Handler(BaseHTTPRequestHandler):
         elif action == "get_vod_streams":
             # ein paar echte Titel für die Suche (Test 10): Sonderbuchstaben, mehrere Kategorien
             special = {7: "Der Schatz von Kahramanmaraş (2023)", 8: "Schatzjäger (2021)", 9: "TR | Hazine Avcısı (2022)"}
+            # „added“: Film 1 ist der neueste (für „Neu hinzugefügt“), dann stündlich älter
+            import time as _t
+            now = int(_t.time())
             data = [{"stream_id": i, "name": special.get(i, "Testfilm %d (2024)" % i), "stream_icon": base + "/poster/m%d.jpg" % i,
-                     "rating": "7.1", "container_extension": "mp4", "category_id": str(i % 6 + 1)} for i in range(1, 3001)]
+                     "rating": "7.1", "container_extension": "mp4", "category_id": str(i % 6 + 1),
+                     "added": str(now - i * 3600)} for i in range(1, 3001)]
             if cat: data = [d for d in data if d["category_id"] == cat]
         elif action == "get_series":
+            import time as _t
+            now = int(_t.time())
             data = [{"series_id": i, "name": "Testserie %d" % i, "cover": base + "/poster/s%d.jpg" % i,
-                     "rating": "8.0", "category_id": str(i % 6 + 1)} for i in range(1, 601)]
+                     "rating": "8.0", "category_id": str(i % 6 + 1), "last_modified": str(now - i * 7200)} for i in range(1, 601)]
             if cat: data = [d for d in data if d["category_id"] == cat]
         elif action == "get_vod_info":
             data = {"info": {"plot": "Ein Test-Film für die Anleitung: Zwei Freunde suchen einen verlorenen Schatz und erleben dabei ein großes Abenteuer.",
                              "genre": "Abenteuer, Familie", "cast": "Anna Beispiel, Max Muster", "director": "Erika Test",
-                             "duration": "01:42:00", "releasedate": "2024-05-01", "rating": "7.1"}, "movie_data": {}}
+                             "duration": "01:42:00", "releasedate": "2024-05-01", "rating": "7.1",
+                             "youtube_trailer": "aqz-KE-bpKQ"}, "movie_data": {}}
         elif action == "get_series_info":
             data = {"info": {"plot": "Eine Test-Serie für die Anleitung.", "genre": "Familie", "rating": "8.0", "releaseDate": "2023-01-01"},
                     "episodes": {"1": [{"id": "9%02d" % e, "title": "Folge %d" % e, "container_extension": "mp4", "info": {"duration": "00:45:00"}} for e in range(1, 7)]}}

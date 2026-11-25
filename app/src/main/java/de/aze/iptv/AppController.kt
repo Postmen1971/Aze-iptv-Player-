@@ -563,6 +563,96 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         resumeVersion++
     }
 
+    // ---- Weiterschauen-Reihe und Merkliste (siehe VodLibrary) ----
+    var vodContinue by mutableStateOf(de.aze.iptv.data.VodLibrary.continueFromJson(store.vodContinue))
+        private set
+    var vodWatch by mutableStateOf(de.aze.iptv.data.VodLibrary.watchFromJson(store.vodWatch))
+        private set
+
+    /** Nach dem Abspielen (Stelle schon gespeichert): in die Weiterschauen-Reihe – oder heraus, wenn zu Ende geschaut */
+    fun noteContinue(entry: de.aze.iptv.data.ContinueEntry) {
+        val open = resumeOf(entry.resumeKey) > 0
+        vodContinue = de.aze.iptv.data.VodLibrary.afterPlay(vodContinue, entry.copy(at = System.currentTimeMillis()), open)
+        store.vodContinue = de.aze.iptv.data.VodLibrary.continueToJson(vodContinue)
+        de.aze.iptv.ui.qaLog(if (open) "WEITERSCHAUEN_NEU ${entry.ref.name}" else "WEITERSCHAUEN_FERTIG ${entry.ref.name}")
+    }
+
+    fun continueFor(sourceId: String, series: Boolean): List<de.aze.iptv.data.ContinueEntry> {
+        @Suppress("UNUSED_VARIABLE") val v = resumeVersion
+        return de.aze.iptv.data.VodLibrary.continueFor(vodContinue, sourceId, series) { resume[it] ?: 0L }
+    }
+
+    /** Aus der Weiterschauen-Reihe entfernen (Menütaste / Knopf): Eintrag und gemerkte Stelle(n) weg */
+    fun removeContinue(sourceId: String, series: Boolean, id: String) {
+        val gone = vodContinue.filter { it.ref.sourceId == sourceId && it.ref.series == series && it.ref.id == id }
+        // auch Stellen von vor der Weiterschauen-Reihe (stehen nicht in der Liste)
+        val hadResume = !series && resume.remove("m:$sourceId:$id") != null
+        gone.forEach { resume.remove(it.resumeKey) }
+        if (gone.isEmpty() && !hadResume) return
+        store.saveResumePositions(resume)
+        resumeVersion++
+        vodContinue = vodContinue - gone.toSet()
+        store.vodContinue = de.aze.iptv.data.VodLibrary.continueToJson(vodContinue)
+        de.aze.iptv.ui.qaLog("WEITERSCHAUEN_ENTFERNT ${gone.firstOrNull()?.ref?.name ?: id}")
+    }
+
+    /** Ganze Weiterschauen-Reihe leeren (Einstellungen → Filme & Serien) */
+    fun clearContinue() {
+        vodContinue.forEach { resume.remove(it.resumeKey) }
+        resume.keys.filter { it.startsWith("m:") || it.startsWith("e:") }.forEach { resume.remove(it) }
+        store.saveResumePositions(resume)
+        resumeVersion++
+        vodContinue = emptyList()
+        store.vodContinue = "[]"
+    }
+
+    fun isWatched(sourceId: String, series: Boolean, id: String) =
+        vodWatch.any { it.sourceId == sourceId && it.series == series && it.id == id }
+
+    fun watchFor(sourceId: String, series: Boolean) = vodWatch.filter { it.sourceId == sourceId && it.series == series }
+
+    /** „Vormerken“ an/aus */
+    fun toggleWatch(ref: de.aze.iptv.data.VodRef) {
+        val was = isWatched(ref.sourceId, ref.series, ref.id)
+        vodWatch = de.aze.iptv.data.VodLibrary.toggleWatch(vodWatch, ref)
+        store.vodWatch = de.aze.iptv.data.VodLibrary.watchToJson(vodWatch)
+        de.aze.iptv.ui.qaLog(if (was) "MERKLISTE_ENTFERNT ${ref.name}" else "MERKLISTE_NEU ${ref.name}")
+    }
+
+    fun clearWatch() {
+        vodWatch = emptyList()
+        store.vodWatch = "[]"
+    }
+
+    /** Filme & Serien: zuletzt gewählte Sprachen (beim nächsten Film wieder genommen, wenn vorhanden) */
+    var vodAudioLang by mutableStateOf(store.vodAudioLang)
+        private set
+    var vodSubLang by mutableStateOf(store.vodSubLang)
+        private set
+
+    fun rememberVodAudio(lang: String?) {
+        if (lang.isNullOrBlank() || lang == vodAudioLang) return
+        vodAudioLang = lang; store.vodAudioLang = lang
+        de.aze.iptv.ui.qaLog("SPRACHE_TON $lang")
+    }
+
+    /** [lang] = Sprache der Untertitel, „aus“ = keine */
+    fun rememberVodSub(lang: String?) {
+        if (lang.isNullOrBlank() || lang == vodSubLang) return
+        vodSubLang = lang; store.vodSubLang = lang
+        de.aze.iptv.ui.qaLog("SPRACHE_UNTERTITEL $lang")
+    }
+
+    /** Bild-im-Bild (Handy/Tablet) */
+    var pip by mutableStateOf(store.pip)
+        private set
+    fun updatePip(on: Boolean) { pip = on; store.pip = on }
+    /** gerade im kleinen Fenster (Bild-im-Bild): nur das Bild zeigen, keine Leisten/Listen */
+    var inPip by mutableStateOf(false)
+    /** Live-Fernsehen ist der sichtbare Bildschirm (MainActivity) bzw. ein Film/eine Folge läuft (VodPlayer) */
+    var pipLive = false
+    var vodPlaying = false
+
     /** Bildqualität: sofort die beste Stufe statt langsam hochzuschalten. */
     var forceHighest by mutableStateOf(store.forceHighest)
         private set
@@ -1127,6 +1217,8 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
     var testListEditor = false
     /** Test-Zugang: gleich Filme öffnen (nur im QA-Build) */
     var testOpenVod = false
+    /** Test-Zugang: dabei gleich die Serien */
+    var testOpenSeries = false
     /** Test: gleich mit den Einstellungen starten (ohne PIN) */
     var testOpenSettings = false
     /** „Fußball heute“ aus dem Menü der Filme gewählt → im Fernsehen öffnen */
