@@ -1220,7 +1220,8 @@ private fun DetailView(
                         .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp),
                 )
                 if (Device.isTouch) {
-                    TvButton("✕ Schließen", onClick = { trailer = null; refocus() }, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
+                    // etwas tiefer: oben rechts steht am Handy die Zahl „1 / 200“ (Wischen durch die Filme)
+                    TvButton("✕ Schließen", onClick = { trailer = null; refocus() }, modifier = Modifier.align(Alignment.TopEnd).padding(top = 52.dp, end = 12.dp))
                 }
             }
         }

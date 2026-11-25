@@ -822,6 +822,18 @@ if tap "⚙ Einstellungen"; then
     # Ablauf als Ampel: unter der Playlist – hinscrollen (langsam, ohne Schwung)
     for i in 1 2 3; do pos_visible "ZUGANG Test-VOD" && break; adb shell input swipe $((SW*3/4)) $((SH*3/4)) $((SW*3/4)) $((SH/3)) 600; sleep 1.5; done
     shot "test14-handy-ampel"; pos_visible "ZUGANG Test-VOD" || note "Ampel" "nicht ins Bild gescrollt"; }
+  # Kategorien ausblenden am Handy: der Dialog muss in die geringe Höhe passen – „Alle auswählen“ und „OK“ sichtbar
+  if open_pane "Filme & Serien"; then
+    sleep 1; kb=$(qa | grep -o "POS Filme-Kategorien ausblenden[^|]*" | tail -1 | sed 's/^POS //')
+    if [ -n "$kb" ] && tap "$kb"; then
+      sleep 4; shot "test14-handy-ausblenden"
+      pos_visible "Alle auswählen" || fail "Handy: im Dialog „Kategorien ausblenden“ ist „Alle auswählen“ nicht zu sehen"
+      pos_visible "OK" || fail "Handy: im Dialog „Kategorien ausblenden“ ist „OK“ nicht zu sehen"
+      na=$(count "AUSBLENDEN_ALLE")
+      tap "Alle auswählen" && { sleep 1; [ "$(count "AUSBLENDEN_ALLE")" -gt "$na" ] || fail "Handy: „Alle auswählen“ hakt nichts an"; shot "test14-handy-alle-ausgewaehlt"; }
+      tap "Abbrechen" || adb shell input keyevent KEYCODE_BACK; sleep 2
+    else fail "Handy: Knopf „Filme-Kategorien ausblenden“ nicht antippbar"; fi
+  fi
   open_pane "Bild & Ton" && { sleep 1; shot "test14-handy-bild-ton"
     pos_visible "PIP SCHALTER" || { adb shell pm list features 2>/dev/null | grep -q picture_in_picture && fail "Handy: Schalter „Bild-im-Bild“ fehlt in Bild & Ton"; }; }
   adb shell input keyevent KEYCODE_BACK; sleep 2; adb shell input keyevent KEYCODE_BACK; sleep 2

@@ -55,7 +55,10 @@ fun HideGroupsDialog(app: AppController, onClose: () -> Unit) {
 /**
  * Liste mit Haken zum Ausblenden (wie beim IBO Player): unten OK · Alle auswählen · Abbrechen.
  * Haken = wird NICHT angezeigt. Erst OK übernimmt die Auswahl. Für Live-TV-Gruppen und Film-/Serien-Kategorien.
+ * Passt sich der Bildschirmhöhe an: am Handy (quer, wenig Höhe) rutschten die Knöpfe sonst unten aus dem Bild
+ * (Aziz 25.11.: „Alle auswählen“ gab es am Handy/Tablet nicht) – jetzt wird nur die Liste kürzer.
  */
+@kotlin.OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun HideListDialog(
     title: String,
@@ -73,14 +76,18 @@ fun HideListDialog(
         runCatching { first.requestFocus() }
     }
 
+    val cfg = androidx.compose.ui.platform.LocalConfiguration.current
+    val low = cfg.screenHeightDp < 520
     Dialog(onDismissRequest = onClose) {
         Column(
             Modifier
-                .width(560.dp)
+                .width(minOf(560, cfg.screenWidthDp - 32).dp)
+                // nie höher als der Bildschirm: die Knöpfe unten bleiben immer sichtbar
+                .heightIn(max = (cfg.screenHeightDp - 24).dp)
                 .background(Palette.Panel, RoundedCornerShape(18.dp))
                 .border(1.dp, Palette.Line, RoundedCornerShape(18.dp))
-                .padding(horizontal = 22.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .padding(horizontal = 22.dp, vertical = if (low) 12.dp else 20.dp),
+            verticalArrangement = Arrangement.spacedBy(if (low) 8.dp else 12.dp),
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, color = Palette.Text, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
@@ -89,7 +96,8 @@ fun HideListDialog(
                     color = if (warn) Palette.Live else Palette.TextMuted, fontSize = 13.sp,
                 )
             }
-            LazyColumn(Modifier.heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // weight(fill = false): die Liste nimmt nur den Platz, der nach Überschrift und Knöpfen übrig ist
+            LazyColumn(Modifier.weight(1f, fill = false).heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 itemsIndexed(all, key = { _, g -> g.key }) { i, g ->
                     val on = g.key in hidden
                     Focusable(
@@ -134,10 +142,16 @@ fun HideListDialog(
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                TvButton("Alle auswählen", onClick = {
-                    val keys = all.map { it.key }.toSet()
-                    hidden = if (hidden.containsAll(keys)) emptySet() else keys
+            val allOn = all.isNotEmpty() && hidden.containsAll(all.map { it.key })
+            androidx.compose.foundation.layout.FlowRow(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // alles anhaken (danach einzelne wieder abhaken) – sind schon alle angehakt: alle wieder weg
+                TvButton(if (allOn) "Alle abwählen" else "Alle auswählen", onClick = {
+                    hidden = if (allOn) emptySet() else all.map { it.key }.toSet()
+                    qaLog(if (allOn) "AUSBLENDEN_ALLE_AB" else "AUSBLENDEN_ALLE")
                     warn = false
                 })
                 TvButton("Abbrechen", onClick = onClose)
