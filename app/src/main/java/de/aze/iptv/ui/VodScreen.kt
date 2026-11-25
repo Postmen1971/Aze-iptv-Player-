@@ -1195,7 +1195,18 @@ private fun DetailView(
         if (t != null) {
             BackHandler { trailer = null; refocus() }
             var trailerError by remember(t) { mutableStateOf<String?>(null) }
-            Box(Modifier.fillMaxSize().background(Color.Black)) {
+            // Markierung in den Trailer holen: sonst steuerte die Fernbedienung die verdeckten Knöpfe dahinter
+            val trailerFocus = remember { FocusRequester() }
+            LaunchedEffect(t) { withFrameNanos { }; runCatching { trailerFocus.requestFocus() } }
+            Box(
+                Modifier.fillMaxSize().background(Color.Black)
+                    .focusRequester(trailerFocus)
+                    .focusable()
+                    .onPreviewKeyEvent { e ->
+                        if ((e.key == Key.Back || e.key == Key.Escape) && e.type == KeyEventType.KeyUp) { trailer = null; refocus() }
+                        true
+                    },
+            ) {
                 YouTubeView(
                     url = "youtube:video:$t",
                     modifier = Modifier.fillMaxSize(),
@@ -1657,6 +1668,12 @@ private fun VodPlayer(
             .focusRequester(rootFocus)
             .focusable()
             .onPreviewKeyEvent { e ->
+                // Hinweis „Nächste Folge“: Zurück schließt ihn – hier abfangen, sonst nimmt Compose das erste Zurück
+                // nur als „Markierung aus dem Knopf heraus“ und der Countdown läuft weiter
+                if (nextHint && (e.key == Key.Back || e.key == Key.Escape)) {
+                    if (e.type == KeyEventType.KeyUp) dismissNext()
+                    return@onPreviewKeyEvent true
+                }
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 uiTick++
                 val code = e.key.nativeKeyCode
@@ -1772,7 +1789,7 @@ private fun VodPlayer(
             }
         }
 
-        if (showUi || target != null || !isPlaying) {
+        if ((showUi || target != null || !isPlaying) && !nextHint) {
             Column(
                 Modifier
                     .align(Alignment.BottomCenter)

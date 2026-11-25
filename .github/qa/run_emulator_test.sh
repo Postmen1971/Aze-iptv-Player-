@@ -478,6 +478,13 @@ hang_check "Fernsehen während Cover-Vorrat" "$T10b"
 note "Cover-Vorrat" "$(qa | grep -E "COVER_STOCK|VOD_ALL" | tail -5)"
 
 log "== Test 10c: Filme & Serien – Neu hinzugefügt, Weiterschauen, Merkliste, Trailer, nächste Folge"
+# Knopf sichtbar? (letzte gemeldete Position, mindestens 20 Pixel zu sehen) – hier schon nötig, nicht erst ab Test 14
+pos_visible() {
+  local l v; l=$(qa | grep -F -e "POS $1|" | sed 's/.*AzeQA[^:]*: //' | tail -1)
+  case "$l" in "POS $1|"*) v=$(echo "$l" | cut -d'|' -f4); [ "${v:-0}" -ge 20 ] ;; *) return 1 ;; esac
+}
+# sucht Knopf $1 in den Film-Details mit den Pfeiltasten (auf schmalen Bildschirmen brechen die Knöpfe um)
+focus_btn() { local k; for k in RIGHT RIGHT RIGHT DOWN LEFT LEFT LEFT RIGHT RIGHT RIGHT; do [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ] && return 0; adb shell input keyevent KEYCODE_DPAD_$k; sleep 0.9; done; [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ]; }
 # drückt $2, bis die Markierung auf $1 steht (höchstens $3-mal)
 focus_to() { local i; for i in $(seq 1 "${3:-8}"); do [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ] && return 0; adb shell input keyevent "$2"; sleep 0.9; done; [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ]; }
 T10c=$(adb shell date +%H:%M:%S | tr -d '\r')
@@ -509,14 +516,15 @@ if wait_for "FOCUS Abspielen" 1 15 >/dev/null; then
   sleep 2
   qa | grep -q "POS Weiterschauen ab" || fail "Weiterschauen: Knopf „Weiterschauen ab …“ fehlt nach dem Zurückkommen"
   # Trailer (YouTube) öffnen und mit Zurück schließen
-  if focus_to "▶ Trailer" KEYCODE_DPAD_RIGHT 4; then
+  if focus_btn "▶ Trailer"; then
     nt=$(count "TRAILER "); adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 8; shot "test10c-trailer"
     [ "$(count "TRAILER ")" -gt "$nt" ] || fail "Trailer: OK auf „▶ Trailer“ öffnet nichts"
-    adb shell input keyevent KEYCODE_BACK; sleep 2
+    adb shell input keyevent KEYCODE_BACK; sleep 3
+    qa | grep -o "FOCUS .*" | tail -1 | grep -q "^FOCUS Weiterschauen ab" || fail "Trailer: nach Zurück steht die Markierung nicht wieder auf „Weiterschauen ab …“ ($(qa | grep -o 'FOCUS .*' | tail -1))"
   else fail "Trailer: Knopf mit der Fernbedienung nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
   # Vormerken
   nm=$(count "MERKLISTE_NEU")
-  if focus_to "Vormerken" KEYCODE_DPAD_RIGHT 5; then
+  if focus_btn "Vormerken"; then
     adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 2
     [ "$(count "MERKLISTE_NEU")" -gt "$nm" ] || fail "Merkliste: „Vormerken“ hat nichts gemerkt"
     shot "test10c-vorgemerkt"
@@ -810,7 +818,10 @@ if tap "⚙ Einstellungen"; then
   sleep 2; for d in 0 0 0 0; do tap "PIN $d" || break; done
   sleep 2; shot "test14-handy-einstellungen"
   open_pane "Aussehen" && { sleep 1; shot "test14-handy-aussehen"; }
-  open_pane "Sender & Playlists" && { sleep 1; shot "test14-handy-playlists"; }
+  open_pane "Sender & Playlists" && { sleep 1; shot "test14-handy-playlists"
+    # Ablauf als Ampel: unter der Playlist – hinscrollen (langsam, ohne Schwung)
+    for i in 1 2 3; do pos_visible "ZUGANG Test-VOD" && break; adb shell input swipe $((SW*3/4)) $((SH*3/4)) $((SW*3/4)) $((SH/3)) 600; sleep 1.5; done
+    shot "test14-handy-ampel"; pos_visible "ZUGANG Test-VOD" || note "Ampel" "nicht ins Bild gescrollt"; }
   open_pane "Bild & Ton" && { sleep 1; shot "test14-handy-bild-ton"
     pos_visible "PIP SCHALTER" || { adb shell pm list features 2>/dev/null | grep -q picture_in_picture && fail "Handy: Schalter „Bild-im-Bild“ fehlt in Bild & Ton"; }; }
   adb shell input keyevent KEYCODE_BACK; sleep 2; adb shell input keyevent KEYCODE_BACK; sleep 2
