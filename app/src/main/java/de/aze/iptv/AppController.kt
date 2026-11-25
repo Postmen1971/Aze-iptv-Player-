@@ -133,6 +133,8 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
     fun refreshEpg(quiet: Boolean = false, retries: Int = 0) {
         // Läuft schon: danach noch einmal laden (z. B. nach geänderter Zeitverschiebung)
         if (!epgEnabled) return
+        // ein neuer Versuch ersetzt einen noch wartenden (sonst liefen nach mehreren Aktualisierungen mehrere Ketten)
+        epgRetryJob?.cancel()
         if (epgLoading) { epgAgain = true; return }
         val urls = (epgFromSources() + epgExtra).distinct()
         if (urls.isEmpty()) {
@@ -151,7 +153,7 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
             }.onFailure {
                 if (retries > 0) {
                     de.aze.iptv.ui.qaLog("EPG_AUTO fehlgeschlagen – neuer Versuch in 1 min (noch $retries)")
-                    scope.launch { kotlinx.coroutines.delay(60_000); refreshEpg(quiet = true, retries = retries - 1) }
+                    epgRetryJob = scope.launch { kotlinx.coroutines.delay(60_000); refreshEpg(quiet = true, retries = retries - 1) }
                 } else if (!quiet) message = "Programmzeitschrift konnte nicht geladen werden."
             }
         }
@@ -164,6 +166,7 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
      * Zeile in der Senderliste leer, bis man in den Einstellungen „Programm jetzt laden“ drückte (Aziz 25.11.).
      */
     private val epgAutoHours = 8
+    private var epgRetryJob: kotlinx.coroutines.Job? = null
 
     /** start() ist durch – erst danach prüft onForeground (sonst doppelt beim App-Start) */
     private var started = false
