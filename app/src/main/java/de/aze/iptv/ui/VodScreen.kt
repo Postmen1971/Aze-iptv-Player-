@@ -3,6 +3,10 @@ package de.aze.iptv.ui
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import android.view.KeyEvent as AndroidKeyEvent
@@ -118,7 +122,9 @@ fun VodScreen(
     var series by remember { mutableStateOf(startWithSeries) }
     // Emulator-Test: gleich den Test-Anbieter für Filme wählen
     var sourceIdx by remember { mutableIntStateOf(if (app.testOpenVod) vodSources.indexOfFirst { it.name == "Test-VOD" }.coerceAtLeast(0) else 0) }
-    var detail by remember { mutableStateOf<VodItem?>(null) }
+    // Details: Liste, aus der der Film kam (Kategorie oder Suche), und welcher davon – am Handy/Tablet wischt man darin
+    var detailList by remember { mutableStateOf<List<VodItem>?>(null) }
+    var detailIdx by remember { mutableIntStateOf(0) }
     var playing by remember { mutableStateOf<Playing?>(null) }
     // Stelle im Katalog merken: nach Details oder Film zurück wieder in derselben Kategorie beim selben Eintrag landen
     val browseMem = remember { BrowseMemory() }
@@ -149,13 +155,25 @@ fun VodScreen(
         return
     }
 
-    val d = detail
-    if (d != null) {
-        DetailView(
-            app = app, api = api, item = d, series = series, sourceId = src.id,
-            onPlay = { playing = it },
-            onBack = { detail = null },
-        )
+    val dl = detailList
+    if (dl != null && detailIdx in dl.indices) {
+        // Handy/Tablet: ↑ wischen = nächster Film der Kategorie, ↓ = voriger, ← → = zurück zur Kachel-Übersicht
+        SwipeDetail(
+            enabled = Device.isTouch, count = dl.size, index = detailIdx, kind = if (series) "Serie" else "Film",
+            onIndex = { n ->
+                detailIdx = n
+                // zurück in der Übersicht: dort, wo man zuletzt war
+                browseMem.openIdx = n
+                qaLog("VOD_WISCHEN ${n + 1}/${dl.size} ${dl[n].name}")
+            },
+            onBack = { detailList = null },
+        ) { idx ->
+            DetailView(
+                app = app, api = api, item = dl[idx], series = series, sourceId = src.id,
+                onPlay = { playing = it },
+                onBack = { detailList = null },
+            )
+        }
         return
     }
 
@@ -166,7 +184,7 @@ fun VodScreen(
         multi = vodSources.size > 1,
         onSwitch = { series = it },
         onNextSource = { sourceIdx = (sourceIdx + 1) % vodSources.size },
-        onOpen = { detail = it },
+        onOpen = { list, idx -> detailList = list; detailIdx = idx },
         onExit = onExit,
         onOpenSettings = onOpenSettings,
         onFootball = onFootball,
@@ -196,7 +214,7 @@ private fun Browse(
     multi: Boolean,
     onSwitch: (Boolean) -> Unit,
     onNextSource: () -> Unit,
-    onOpen: (VodItem) -> Unit,
+    onOpen: (List<VodItem>, Int) -> Unit,
     onExit: () -> Unit,
     onOpenSettings: () -> Unit,
     onFootball: (() -> Unit)? = null,
@@ -535,7 +553,7 @@ private fun Browse(
                                         idx == 0 && q != null -> Modifier.focusRequester(firstHitFocus)
                                         else -> Modifier
                                     },
-                                ) { mem.openIdx = idx; mem.openAt = "$selected|$q"; onOpen(item) }
+                                ) { mem.openIdx = idx; mem.openAt = "$selected|$q"; onOpen(list, idx) }
                             }
                           }
                         }
@@ -989,6 +1007,115 @@ private fun DetailView(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Wischen durch die Filme einer Kategorie (Handy/Tablet, Aziz 25.11.): nach oben = nächster Film mit Beschreibung,
+ * nach unten = voriger, nach links oder rechts = zurück zur Kachel-Übersicht. Scrollt dabei etwas in der Ansicht (lange
+ * Beschreibung, Folgenliste, Staffeln), ist das kein Wischen zum nächsten – erst wenn dort nichts mehr zu scrollen ist.
+ */
+@Composable
+private fun SwipeDetail(
+    enabled: Boolean,
+    count: Int,
+    index: Int,
+    kind: String,
+    onIndex: (Int) -> Unit,
+    onBack: () -> Unit,
+    content: @Composable (Int) -> Unit,
+) {
+    if (!enabled) { content(index); return }
+    // hat während dieser Berührung etwas in der Ansicht gescrollt?
+    val scrolled = remember { booleanArrayOf(false) }
+    val conn = remember {
+        object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: androidx.compose.ui.geometry.Offset,
+                available: androidx.compose.ui.geometry.Offset,
+                source: androidx.compose.ui.input.nestedscroll.NestedScrollSource,
+            ): androidx.compose.ui.geometry.Offset {
+                if (consumed.x != 0f || consumed.y != 0f) scrolled[0] = true
+                return androidx.compose.ui.geometry.Offset.Zero
+            }
+        }
+    }
+    val minPx = with(androidx.compose.ui.platform.LocalDensity.current) { 70.dp.toPx() }
+    val current = androidx.compose.runtime.rememberUpdatedState(index)
+    val toIndex = androidx.compose.runtime.rememberUpdatedState(onIndex)
+    val toBack = androidx.compose.runtime.rememberUpdatedState(onBack)
+    // „der nächste Film“ / „die nächste Serie“
+    val film = kind == "Film"
+    val art = if (film) "der" else "die"
+    val next = if (film) "nächster" else "nächste"
+    var edge by remember { mutableStateOf<String?>(null) }
+    var help by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { delay(6_000); help = false }
+    LaunchedEffect(edge) { if (edge != null) { delay(2_500); edge = null } }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Palette.Ground)
+            .nestedScroll(conn)
+            .pointerInput(count) {
+                awaitEachGesture {
+                    // nur mitlesen (nichts verbrauchen): Knöpfe und Scrollen darunter funktionieren normal
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    scrolled[0] = false
+                    var pos = down.position
+                    var multi = false
+                    while (true) {
+                        val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        if (ev.changes.size > 1) multi = true
+                        val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                        pos = c.position
+                        if (!c.pressed) break
+                    }
+                    if (multi || scrolled[0]) return@awaitEachGesture
+                    val dx = pos.x - down.position.x
+                    val dy = pos.y - down.position.y
+                    val i = current.value
+                    when {
+                        kotlin.math.abs(dy) >= minPx && kotlin.math.abs(dy) > 1.4f * kotlin.math.abs(dx) -> {
+                            val n = if (dy < 0) i + 1 else i - 1
+                            if (n in 0 until count) toIndex.value(n)
+                            else edge = if (dy < 0) "Das war $art letzte $kind dieser Kategorie" else "Das ist $art erste $kind dieser Kategorie"
+                        }
+                        kotlin.math.abs(dx) >= minPx && kotlin.math.abs(dx) > 1.4f * kotlin.math.abs(dy) -> toBack.value()
+                    }
+                }
+            },
+    ) {
+        androidx.compose.animation.AnimatedContent(
+            targetState = index,
+            transitionSpec = {
+                val forward = targetState > initialState
+                (
+                    androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(280)) { h -> if (forward) h else -h } +
+                        androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(280))
+                    ) togetherWith (
+                    androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(280)) { h -> if (forward) -h / 3 else h / 3 } +
+                        androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(200))
+                    )
+            },
+            label = "wischen",
+        ) { i -> content(i) }
+        // Wo man ist: 12 / 500
+        Text(
+            "${index + 1} / $count",
+            color = Palette.TextSoft, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)
+                .background(Palette.Ground.copy(alpha = 0.7f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
+        )
+        val note = edge ?: if (help) "↑ wischen: $next $kind · ↓ zurück · ← → Übersicht" else null
+        if (note != null) {
+            Text(
+                note,
+                color = Palette.Text, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp)
+                    .background(Palette.Ground.copy(alpha = 0.85f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+            )
         }
     }
 }

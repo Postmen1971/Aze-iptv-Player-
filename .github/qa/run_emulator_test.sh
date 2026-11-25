@@ -673,7 +673,20 @@ if tap "V 1"; then
   sleep 4; shot "test14-handy-film"
   pos_visible "Abspielen" || pos_visible "Von vorn" || fail "Handy: „Abspielen“ ist in den Film-Details nicht zu sehen"
   pos_visible "Zurück" || fail "Handy: „Zurück“ ist in den Film-Details nicht zu sehen"
-  tap "Zurück" || adb shell input keyevent KEYCODE_BACK; sleep 2
+  # Wischen durch die Filme der Kategorie: ↑ nächster (mit Beschreibung), ↓ voriger, → zurück zur Kachel-Übersicht
+  WH=$(scr); SW=${WH%x*}; SH=${WH#*x}
+  adb shell input swipe $((SW/2)) $((SH*3/4)) $((SW/2)) $((SH/4)) 250; sleep 3
+  [ "$(count "VOD_WISCHEN 2/")" -ge 1 ] || fail "Handy: nach oben wischen zeigt nicht den nächsten Film"
+  shot "test14-handy-film-gewischt"
+  adb shell input swipe $((SW/2)) $((SH/4)) $((SW/2)) $((SH*3/4)) 250; sleep 3
+  [ "$(count "VOD_WISCHEN 1/")" -ge 1 ] || fail "Handy: nach unten wischen geht nicht zum vorigen Film"
+  note "Wischen" "$(qa | grep VOD_WISCHEN | tail -2 | tr '\n' ' ')"
+  nv=$(qa | grep -c "POS V 1|" || true)
+  adb shell input swipe $((SW/5)) $((SH/2)) $((SW*4/5)) $((SH/2)) 250; sleep 3
+  if [ "$(qa | grep -c "POS V 1|" || true)" -le "$nv" ]; then
+    fail "Handy: zur Seite wischen führt nicht zurück zur Übersicht"
+    tap "Zurück" || adb shell input keyevent KEYCODE_BACK; sleep 2
+  fi
 else fail "Handy: Film-Cover nicht antippbar"; fi
 tap "Serien" && { sleep 4; shot "test14-handy-serien"; }
 tap "📺 Live-TV" || { adb shell input keyevent KEYCODE_BACK; sleep 1; adb shell input keyevent KEYCODE_BACK; }
