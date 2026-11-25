@@ -1699,7 +1699,8 @@ internal fun ZapBar(app: AppController, cur: de.aze.iptv.data.NumberedChannel, q
             }
             if (prog != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(prog.title, color = Palette.Text, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                    // laufende Sendung im gedämpften Gelb wie in der Senderliste (Aziz 25.11.: dezent, nicht leuchtend)
+                    Text(prog.title, color = Palette.EpgText, fontSize = 15.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
                     Text(hm.format(java.util.Date(prog.start)) + " – " + hm.format(java.util.Date(prog.stop)), color = Palette.TextMuted, fontSize = 13.sp)
                 }
                 Box(Modifier.fillMaxWidth().height(5.dp).background(Palette.Raised, RoundedCornerShape(3.dp))) {

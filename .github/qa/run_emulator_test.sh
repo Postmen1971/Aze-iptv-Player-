@@ -455,6 +455,15 @@ if [ "$(count "FOCUS VOD_SUCHE")" -gt "$nf" ]; then
   # „kahramanmaras“ (ohne ş) findet genau „Der Schatz von Kahramanmaraş“
   echo "$hit" | grep -q " 1 Treffer (Filme" || fail "Filme-Suche: erwartet genau 1 Treffer – $hit"
   adb shell input keyevent KEYCODE_BACK; sleep 2   # Suche beenden
+  # OK lang gedrückt in den Kacheln öffnet die Suche direkt (ohne nach oben zur Suchzeile)
+  nl=$(count "VOD_SUCHE_LANG")
+  adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1
+  adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+  adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1
+  adb shell input keyevent --longpress KEYCODE_DPAD_CENTER; sleep 2
+  shot "test10-filme-suche-lang"
+  [ "$(count "VOD_SUCHE_LANG")" -gt "$nl" ] || fail "Filme: OK lang gedrückt öffnet die Suche nicht ($(qa | grep -E 'FOCUS ' | tail -1))"
+  adb shell input keyevent KEYCODE_BACK; sleep 1   # Suchfenster zu
 else
   fail "Filme-Suche: Suchzeile über den Kategorien nicht erreichbar ($(qa | grep -E 'FOCUS ' | tail -2 | tr '\n' ' '))"
 fi

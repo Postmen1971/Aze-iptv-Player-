@@ -230,6 +230,10 @@ private fun Browse(
     var counts by remember(api, series) { mutableStateOf<Map<String, Int>>(emptyMap()) }
     var menu by remember { mutableStateOf(false) }
     var askSearch by remember { mutableStateOf(false) }
+    val openSearch: () -> Unit = {
+        qaLog("VOD_SUCHE_LANG")
+        askSearch = true
+    }
     var query by remember(api, series) { mutableStateOf<String?>(mem.query) }
     var results by remember(api, series) { mutableStateOf<List<VodItem>?>(null) }
     mem.selected = selected
@@ -422,6 +426,8 @@ private fun Browse(
                         Focusable(
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(catFocus) else Modifier),
                             onClick = { selected = i; query = null },
+                            // OK lang gedrückt: gleich die Suche (Aziz 25.11. – nicht erst nach oben zur Suchzeile)
+                            onLongClick = openSearch,
                             // Nur beim Wechsel der Kategorie die Suche beenden (nicht wenn der Fokus nach der Suche zurückkommt)
                             onFocus = { if (i != selected) { selected = i; query = null } },
                         ) { focused ->
@@ -548,6 +554,8 @@ private fun Browse(
                                 PosterCard(
                                     item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0, series = series,
                                     onFocus = { heroState.value = item },
+                                    // OK lang gedrückt: Suche öffnen, egal wie weit unten man in den Kacheln ist
+                                    onLongClick = openSearch,
                                     modifier = when {
                                         idx == restore -> Modifier.focusRequester(openFocus)
                                         idx == 0 && q != null -> Modifier.focusRequester(firstHitFocus)
@@ -579,7 +587,7 @@ private fun Browse(
  */
 @Composable
 private fun VodSearchRow(kind: String, query: String?, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Focusable(modifier = modifier.fillMaxWidth().padding(bottom = 6.dp), qaName = "VOD_SUCHE", onClick = onClick) { focused ->
+    Focusable(modifier = modifier.fillMaxWidth().padding(bottom = 6.dp), qaName = "VOD_SUCHE", onClick = onClick, onLongClick = onClick) { focused ->
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -780,8 +788,11 @@ private fun VodHero(item: VodItem, series: Boolean, resumeMs: Long, category: St
 }
 
 @Composable
-private fun PosterCard(item: VodItem, number: Int, resumed: Boolean, series: Boolean = false, onFocus: (() -> Unit)? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Focusable(modifier = modifier, onClick = onClick, onFocus = onFocus, qaName = "V $number") { focused ->
+private fun PosterCard(
+    item: VodItem, number: Int, resumed: Boolean, series: Boolean = false, onFocus: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null, modifier: Modifier = Modifier, onClick: () -> Unit,
+) {
+    Focusable(modifier = modifier, onClick = onClick, onLongClick = onLongClick, onFocus = onFocus, qaName = "V $number") { focused ->
         // Stil: Aze = Rahmen, Kino = wächst + weißer Rahmen, Glas = wächst + Schatten (nur Zeichnen)
         val st = Palette.style
         val pShape = RoundedCornerShape(st.posterRadius.dp)
