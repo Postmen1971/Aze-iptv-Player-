@@ -249,7 +249,9 @@ class Handler(BaseHTTPRequestHandler):
         if action in ("get_vod_categories", "get_series_categories"):
             data = [{"category_id": c, "category_name": n} for c, n in cats]
         elif action == "get_vod_streams":
-            data = [{"stream_id": i, "name": "Testfilm %d (2024)" % i, "stream_icon": base + "/poster/m%d.jpg" % i,
+            # ein paar echte Titel für die Suche (Test 10): Sonderbuchstaben, mehrere Kategorien
+            special = {7: "Der Schatz von Kahramanmaraş (2023)", 8: "Schatzjäger (2021)", 9: "TR | Hazine Avcısı (2022)"}
+            data = [{"stream_id": i, "name": special.get(i, "Testfilm %d (2024)" % i), "stream_icon": base + "/poster/m%d.jpg" % i,
                      "rating": "7.1", "container_extension": "mp4", "category_id": str(i % 6 + 1)} for i in range(1, 3001)]
             if cat: data = [d for d in data if d["category_id"] == cat]
         elif action == "get_series":

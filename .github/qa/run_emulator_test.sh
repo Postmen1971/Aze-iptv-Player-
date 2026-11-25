@@ -431,6 +431,29 @@ for i in $(seq 1 15); do adb shell input keyevent KEYCODE_DPAD_DOWN; done
 sleep 3
 alive || fail "Filme: App nach dem Blättern nicht mehr da"
 hang_check "Filme blättern" "$T10"
+# Eigene Suche nur in Filmen: ◀ zurück in die Kategorien, ▲ bis ganz oben zur Suchzeile, OK, tippen, Enter
+nf=$(count "FOCUS VOD_SUCHE"); ns=$(count "VOD_SEARCH")
+adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 1
+for i in $(seq 1 12); do [ "$(count "FOCUS VOD_SUCHE")" -gt "$nf" ] && break; adb shell input keyevent KEYCODE_DPAD_UP; sleep 0.7; done
+if [ "$(count "FOCUS VOD_SUCHE")" -gt "$nf" ]; then
+  adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 2
+  adb shell input text "kahramanmaras"; sleep 1
+  adb shell input keyevent KEYCODE_ENTER
+  # Enter übernimmt (Tastatur „Fertig“); sonst ▼ auf „Übernehmen“ und OK
+  for i in $(seq 1 10); do [ "$(count "VOD_SEARCH")" -gt "$ns" ] && break; sleep 1; done
+  if [ "$(count "VOD_SEARCH")" -le "$ns" ]; then
+    adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1; adb shell input keyevent KEYCODE_DPAD_CENTER
+  fi
+  wait_for "VOD_SEARCH" $((ns+1)) 40 >/dev/null
+  sleep 3; shot "test10-filme-suche"
+  hit=$(qa | grep "VOD_SEARCH" | tail -1)
+  note "Filme-Suche" "$hit"
+  # „kahramanmaras“ (ohne ş) findet genau „Der Schatz von Kahramanmaraş“
+  echo "$hit" | grep -q " 1 Treffer (Filme" || fail "Filme-Suche: erwartet genau 1 Treffer – $hit"
+  adb shell input keyevent KEYCODE_BACK; sleep 2   # Suche beenden
+else
+  fail "Filme-Suche: Suchzeile über den Kategorien nicht erreichbar ($(qa | grep -E 'FOCUS ' | tail -2 | tr '\n' ' '))"
+fi
 # zurück zum Fernsehen: der Cover-Vorrat füllt sich jetzt im Hintergrund – Umschalten muss trotzdem flüssig bleiben
 T10b=$(adb shell date +%H:%M:%S | tr -d '\r')
 for i in 1 2 3 4; do adb shell input keyevent KEYCODE_BACK; sleep 2; done

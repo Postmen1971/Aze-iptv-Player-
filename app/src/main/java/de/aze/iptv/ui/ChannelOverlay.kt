@@ -564,6 +564,8 @@ internal fun SideMenu(
     onFootball: (() -> Unit)? = null,
     onQuit: (() -> Unit)? = null,
     onSkorText: (() -> Unit)? = null,
+    /** in Filme/Serien „Filme suchen“ bzw. „Serien suchen“ (sucht dort nur in Filmen bzw. Serien) */
+    searchLabel: String = "Suchen",
 ) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
@@ -575,7 +577,7 @@ internal fun SideMenu(
         add(Triple("TV", LineIcon.TV, onTv))
         add(Triple("Filme", LineIcon.MOVIE, { onVod(false) }))
         add(Triple("Serien", LineIcon.SERIES, { onVod(true) }))
-        add(Triple("Suchen", LineIcon.SEARCH, onSearch))
+        add(Triple(searchLabel, LineIcon.SEARCH, onSearch))
         if (onFootball != null) add(Triple("Fußball heute", LineIcon.FOOTBALL, onFootball))
         if (onSkorText != null) add(Triple("SkorText", LineIcon.SKORTEXT, onSkorText))
         if (multi) add(Triple("Playlist: $playlistLabel", LineIcon.PLAYLIST, onPlaylist))

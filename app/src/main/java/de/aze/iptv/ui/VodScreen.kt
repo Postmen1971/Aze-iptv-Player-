@@ -218,13 +218,23 @@ private fun Browse(
     mem.query = query
     val catFocus = remember { FocusRequester() }
     val openFocus = remember { FocusRequester() }
-    val catListState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (mem.selected - 3).coerceAtLeast(0))
+    // eigene Suche (nur Filme bzw. nur Serien): Zeile ganz oben über den Kategorien, erster Treffer
+    val searchFocus = remember { FocusRequester() }
+    val firstHitFocus = remember { FocusRequester() }
+    var focusHits by remember { mutableStateOf(false) }
+    // +1: über den Kategorien steht die Suchzeile
+    val catListState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (mem.selected + 1 - 3).coerceAtLeast(0))
     val kind = if (series) "Serien" else "Filme"
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     BackHandler {
         when {
             menu -> onExit()
-            query != null -> query = null
+            query != null -> {
+                // Suche beenden: zurück zur Suchzeile (der Treffer mit dem Fokus verschwindet gleich)
+                query = null
+                scope.launch { withFrameNanos { }; runCatching { searchFocus.requestFocus() } }
+            }
             else -> menu = true
         }
     }
@@ -299,19 +309,21 @@ private fun Browse(
         val q = query ?: return@LaunchedEffect
         if (cats == null) return@LaunchedEffect // Kategorien noch nicht da (Rückkehr in eine Suche)
         results = null
-        // Suche ohne ausgeblendete Kategorien
+        // Nur in Filmen bzw. Serien dieser Playlist, in allen Kategorien – ohne ausgeblendete Kategorien und ohne
+        // Titel, die der Erwachsenen-Filter verbirgt (siehe VodSearch)
         val shown = catList.map { it.id }.toSet()
         val adultOn = app.adultFilter
+        val t0 = System.currentTimeMillis()
         val all = runCatching { api.all(series) }
             .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
             .getOrDefault(emptyList())
         // ganze Bibliothek durchsuchen: nicht im Bedien-Teil
         results = withContext(kotlinx.coroutines.Dispatchers.Default) {
-            all.filter {
-                it.name.contains(q, ignoreCase = true) && (it.cat == null || it.cat in shown) &&
-                    !(adultOn && de.aze.iptv.data.AdultFilter.isAdult(it.name))
+            de.aze.iptv.data.VodSearch.search(all, q, { it.name }) {
+                (it.cat == null || it.cat in shown) && !(adultOn && de.aze.iptv.data.AdultFilter.isAdult(it.name))
             }
         }
+        qaLog("VOD_SEARCH „$q“ ${results?.size} Treffer (${if (series) "Serien" else "Filme"}, ${all.size} durchsucht) in ${System.currentTimeMillis() - t0} ms")
     }
     LaunchedEffect(menu) {
         if (!menu) {
@@ -332,7 +344,7 @@ private fun Browse(
             TvButton("📺 Live-TV", onClick = onExit)
             TvButton("Filme", selected = !series, onClick = { query = null; onSwitch(false) })
             TvButton("Serien", selected = series, onClick = { query = null; onSwitch(true) })
-            TvButton("🔍 Suchen", onClick = { askSearch = true })
+            TvButton("🔍 $kind suchen", onClick = { askSearch = true })
             if (multi) TvButton("Playlist: $sourceLabel", onClick = { query = null; onNextSource() })
             TvButton("⚙ Einstellungen", onClick = onOpenSettings)
         }
@@ -347,6 +359,8 @@ private fun Browse(
                     onTv = onExit,
                     onVod = { s -> menu = false; query = null; onSwitch(s) },
                     onSearch = { menu = false; askSearch = true },
+                    // hier sucht „Suchen“ nur in Filmen bzw. Serien – so steht es auch da
+                    searchLabel = "$kind suchen",
                     onSettings = onOpenSettings,
                     onPlaylist = { menu = false; query = null; onNextSource() },
                     onRight = { menu = false },
@@ -382,6 +396,10 @@ private fun Browse(
                     api.sourceInfo().takeIf { it.isNotBlank() }?.let { Text("Quelle: $it", color = Palette.TextMuted, fontSize = 11.sp) }
                 }
                 LazyColumn(state = catListState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    // Ganz oben: eigene Suche – ▲ aus der ersten Kategorie oder antippen
+                    if (cats != null && catList.isNotEmpty()) item(key = "suche") {
+                        VodSearchRow(kind = kind, query = query, modifier = Modifier.focusRequester(searchFocus)) { askSearch = true }
+                    }
                     itemsIndexed(catList) { i, c ->
                         Focusable(
                             modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(catFocus) else Modifier),
@@ -431,7 +449,7 @@ private fun Browse(
                 val raw = if (q != null) results else items
                 // Erwachsenen-Filter läuft schon beim Laden (im Hintergrund), nicht hier beim Zeichnen
                 val list = raw
-                val title = if (q != null) "Suche: „$q“" else catList.getOrNull(selected)?.name.orEmpty()
+                val title = if (q != null) "Suche: „$q“ · alle Kategorien" + (if (multi) " · $sourceLabel" else "") else catList.getOrNull(selected)?.name.orEmpty()
                 // Vorschau oben (wie im Entwurf): zeigt den gewählten Film – sonst den ersten der Liste
                 val heroState = remember(list) { mutableStateOf<VodItem?>(null) }
                 Column {
@@ -452,11 +470,23 @@ private fun Browse(
                     }
                     when {
                         list == null -> Text(if (q != null) "Suche …" else "Lade …", color = Palette.TextMuted, fontSize = 15.sp)
-                        list.isEmpty() -> Text(if (q != null) "Nichts gefunden." else "Keine Einträge in dieser Kategorie.", color = Palette.TextMuted, fontSize = 15.sp)
+                        list.isEmpty() -> Text(
+                            if (q != null) "Nichts gefunden. Ausgeblendete Kategorien werden nicht durchsucht." else "Keine Einträge in dieser Kategorie.",
+                            color = Palette.TextMuted, fontSize = 15.sp,
+                        )
                         else -> {
                           // Rückkehr aus Details/Film: wieder zum geöffneten Eintrag (nur in derselben Kategorie/Suche)
                           val restore = remember(list) { if (mem.openIdx in list.indices && mem.openAt == "$selected|$q") mem.openIdx else -1 }
                           val gridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(initialFirstVisibleItemIndex = restore.coerceAtLeast(0))
+                          // neue Suche: gleich auf den ersten Treffer (mit der Fernbedienung direkt weiter blättern)
+                          LaunchedEffect(list) {
+                              if (q == null || !focusHits || restore >= 0) return@LaunchedEffect
+                              focusHits = false
+                              repeat(12) {
+                                  withFrameNanos { }
+                                  if (runCatching { firstHitFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+                              }
+                          }
                           LaunchedEffect(list) {
                               if (restore < 0) return@LaunchedEffect
                               mem.openIdx = -1
@@ -500,7 +530,11 @@ private fun Browse(
                                 PosterCard(
                                     item, number = idx + 1, resumed = !series && app.resumeOf("m:$sourceId:${item.id}") > 0, series = series,
                                     onFocus = { heroState.value = item },
-                                    modifier = if (idx == restore) Modifier.focusRequester(openFocus) else Modifier,
+                                    modifier = when {
+                                        idx == restore -> Modifier.focusRequester(openFocus)
+                                        idx == 0 && q != null -> Modifier.focusRequester(firstHitFocus)
+                                        else -> Modifier
+                                    },
                                 ) { mem.openIdx = idx; mem.openAt = "$selected|$q"; onOpen(item) }
                             }
                           }
@@ -511,12 +545,51 @@ private fun Browse(
         }
 
         if (askSearch) {
-            InputDialog("$kind suchen", query.orEmpty(), password = false, keyboard = KeyboardType.Text, onDone = {
+            InputDialog("$kind suchen – in allen Kategorien", query.orEmpty(), password = false, keyboard = KeyboardType.Text, onDone = {
                 askSearch = false
                 query = it.trim().ifEmpty { null }
+                focusHits = query != null
             }, onCancel = { askSearch = false })
         }
     }
+    }
+}
+
+/**
+ * Suchzeile ganz oben in den Kategorien (eigene Suche nur in Filmen bzw. Serien). Ohne Suche „🔍 Filme suchen“,
+ * mit Suche der Suchbegriff (OK ändert ihn, Zurück beendet die Suche).
+ */
+@Composable
+private fun VodSearchRow(kind: String, query: String?, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Focusable(modifier = modifier.fillMaxWidth().padding(bottom = 6.dp), qaName = "VOD_SUCHE", onClick = onClick) { focused ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    when {
+                        focused -> Palette.Accent
+                        query != null -> Palette.Highlight.copy(alpha = 0.16f)
+                        else -> Palette.Highlight.copy(alpha = 0.07f)
+                    },
+                    RoundedCornerShape(10.dp),
+                )
+                .padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("🔍", fontSize = 15.sp, modifier = Modifier.padding(end = 8.dp))
+            Text(
+                if (query != null) "„$query“" else "$kind suchen",
+                color = when {
+                    focused -> Palette.OnAccent
+                    query != null -> Palette.Highlight
+                    else -> Palette.TextSoft
+                },
+                fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (query != null && focused) Text("OK ändern", color = Palette.OnAccent, fontSize = 11.sp)
+        }
     }
 }
 
