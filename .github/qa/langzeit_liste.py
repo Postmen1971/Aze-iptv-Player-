@@ -26,6 +26,9 @@ PREFER = {
     "DE": re.compile(r"^(Das Erste|ZDF|ZDFneo|ZDFinfo|3sat|arte|tagesschau24|phoenix|KiKA|ONE|ARD|BR|SWR|WDR|NDR|MDR|hr|rbb|DW)\b", re.I),
     "TR": re.compile(r"^(TRT|TBMM)", re.I),
 }
+# Vorab-Prüfung besteht, im Emulator aber jedes Mal HTTP 403 (Sender sperrt; Langzeit-Läufe 23.–25.11.) – sonst
+# verschwendet so ein Sender jedes Mal 8 Minuten im Abschnitt D
+AUSSCHLIESSEN = {"trt 3"}
 MAX_HEIGHT = 576  # Emulator dekodiert in Software – große Auflösungen würden nur den Emulator testen, nicht die App
 TOKENISH = re.compile(r"(token|expires|hdnts|hdnea|signature|sig=|policy|e=\d{9,}|st=\d{9,})", re.I)
 
@@ -150,6 +153,7 @@ def main():
         entries = [e for e in parse_m3u(text)
                    if not e["needs_headers"]
                    and not re.search(r"\[(Geo-blocked|Not 24/7)\]", e["name"], re.I)
+                   and clean(e["name"]).lower() not in AUSSCHLIESSEN
                    and e["url"].startswith("http")]
         seen = set()
         uniq = []
