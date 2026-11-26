@@ -398,6 +398,8 @@ for i in 1 2 3; do
 done
 wait_for "SORT_CH_FOCUS" 1 5 || fail "Sortieren: ▶ kommt nicht zu den Sendern"
 for i in $(seq 1 40); do adb shell input keyevent KEYCODE_DPAD_DOWN; done
+# langsamer Emulator verschluckt bei 40 schnellen Tasten manchmal welche – noch ein paar mit Pause hinterher
+sleep 1; for i in $(seq 1 8); do adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.3; done
 sleep 1
 adb shell input keyevent --longpress KEYCODE_DPAD_CENTER
 sleep 2
@@ -902,7 +904,8 @@ if focus_to "SET Filme & Serien" KEYCODE_DPAD_DOWN 14; then
   ok=0
   for i in $(seq 1 22); do
     # Filme oder Serien – derselbe Dialog (▼ landet je nach Breite auf dem einen oder anderen Knopf)
-    qa | grep -o "FOCUS .*" | tail -1 | grep -qE "^FOCUS (Filme|Serien)-Kategorien ausblenden" && { ok=1; break; }
+    # der Knopf der Test-Xtream-Playlist (die M3U-Playlist „Test“ hat keine Serien → kein Dialog)
+    qa | grep -o "FOCUS .*" | tail -1 | grep -qE "^FOCUS (Filme|Serien)-Kategorien ausblenden( \(Test-VOD\))?$" && { ok=1; break; }
     adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.8
   done
   if [ $ok = 1 ]; then
