@@ -592,7 +592,9 @@ if wait_for "FOCUS Abspielen" 1 15 >/dev/null && dl_btn "⬇ Herunterladen"; the
     sleep 2; shot "test10d-fertig"
     # vom Gerät abspielen
     nv=$(count "VOD_VOM_GERAET"); nr=$(count "VOD_READY")
-    focus_to "Abspielen" KEYCODE_DPAD_LEFT 6 || focus_to "Weiterschauen ab" KEYCODE_DPAD_LEFT 6
+    # zurück auf „Abspielen“ (auf dem schmalen Test-Bildschirm stehen die Knöpfe untereinander: ▲, dann ◀)
+    for k in UP UP UP LEFT LEFT UP LEFT; do [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS Abspielen" ] && break; adb shell input keyevent KEYCODE_DPAD_$k; sleep 0.9; done
+    [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS Abspielen" ] || fail "Download: „Abspielen“ nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -1))"
     adb shell input keyevent KEYCODE_DPAD_CENTER
     wait_for "VOD_READY" $((nr+1)) 30 >/dev/null || fail "Download: geladener Film startet nicht"
     [ "$(count "VOD_VOM_GERAET")" -gt "$nv" ] || fail "Download: Film lief nicht vom Gerät ($(qa | grep -E 'VOD_PLAY|VOD_VOM' | tail -2 | tr '\n' ' '))"
