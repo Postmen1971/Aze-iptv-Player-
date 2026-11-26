@@ -256,10 +256,10 @@ class Store(context: Context) {
         get() = prefs.getBoolean("ytExternal", false)
         set(v) = prefs.edit().putBoolean("ytExternal", v).apply()
 
-    /** Trailer in der YouTube-App (Standard, Aziz 26.11.) statt im Player der App */
+    /** Trailer in der YouTube-App statt im Player der App (Standard: im Player – läuft seit 1.0.342 mit Bild) */
     var trailerExternal: Boolean
-        get() = prefs.getBoolean("trailerExternal", true)
-        set(v) = prefs.edit().putBoolean("trailerExternal", v).apply()
+        get() = prefs.getBoolean("trailerExternal2", false)
+        set(v) = prefs.edit().putBoolean("trailerExternal2", v).apply()
 
     /** PIN-Abfrage vor den Einstellungen (an/aus). */
     var pinEnabled: Boolean

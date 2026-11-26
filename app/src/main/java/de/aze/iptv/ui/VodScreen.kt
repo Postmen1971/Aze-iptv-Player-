@@ -145,7 +145,8 @@ fun VodScreen(
     var detailIdx by remember { mutableIntStateOf(0) }
     var playing by remember { mutableStateOf<Playing?>(null) }
     // Trailer (YouTube-ID): eigener Bildschirm über allem
-    var trailer by remember { mutableStateOf<String?>(null) }
+    // Trailer: mögliche YouTube-IDs (deutsch zuerst) – gesperrte werden übersprungen
+    var trailer by remember { mutableStateOf<List<String>?>(null) }
     val vodContext = LocalContext.current
     // Stelle im Katalog merken: nach Details oder Film zurück wieder in derselben Kategorie beim selben Eintrag landen
     val browseMem = remember { BrowseMemory() }
@@ -213,10 +214,10 @@ fun VodScreen(
                 app = app, api = api, item = dl[idx], series = series, sourceId = src.id,
                 onPlay = { playing = it },
                 onBack = { detailList = null },
-                onTrailer = { id ->
-                    // Standard: gleich in der YouTube-App (läuft dort sicher mit Bild und Ton), Zurück kommt hierher
-                    if (app.trailerExternal && de.aze.iptv.data.YouTube.openInApp(vodContext, id)) qaLog("TRAILER_YOUTUBE_APP $id direkt")
-                    else trailer = id
+                onTrailer = { ids ->
+                    // auf Wunsch gleich in der YouTube-App (Einstellung), Zurück kommt hierher; sonst im Player der App
+                    if (app.trailerExternal && de.aze.iptv.data.YouTube.openInApp(vodContext, ids.first())) qaLog("TRAILER_YOUTUBE_APP ${ids.first()} direkt")
+                    else trailer = ids
                 },
             )
         }
@@ -1006,7 +1007,7 @@ private fun DetailView(
     sourceId: String,
     onPlay: (Playing) -> Unit,
     onBack: () -> Unit,
-    onTrailer: (String) -> Unit = {},
+    onTrailer: (List<String>) -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     var info by remember(item.id) { mutableStateOf<VodDetails?>(if (series) null else HeroInfo.get("m:$sourceId:${item.id}")) }
@@ -1018,6 +1019,20 @@ private fun DetailView(
     val playButton = remember { FocusRequester() }
     var attempt by remember(item.id) { mutableIntStateOf(0) }
     val ref = remember(item.id, sourceId, series) { de.aze.iptv.data.VodRef.of(sourceId, series, item) }
+    // Trailer: deutsche von TMDB zuerst, dann der des Anbieters, dann weitere (Aziz 26.11.: Anbieter-Trailer
+    // „in deinem Land nicht verfügbar“). Der Knopf erscheint sofort, wenn der Anbieter einen hat.
+    var trailers by remember(item.id) { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(item.id, info) {
+        val i = info ?: return@LaunchedEffect
+        val own = listOfNotNull(i.trailer)
+        if (trailers.isEmpty()) trailers = own
+        val more = runCatching { de.aze.iptv.data.Tmdb.trailers(i.tmdbId, i.originalName ?: item.name, series) }.getOrDefault(emptyList())
+        if (more.isNotEmpty()) {
+            // erst die deutschen (TMDB ordnet sie nach vorn), dann Anbieter, dann der Rest
+            trailers = (more.take(2) + own + more.drop(2)).distinct()
+            qaLog("TRAILER_KANDIDATEN ${trailers.size}")
+        }
+    }
     val watched = app.isWatched(sourceId, series, item.id)
     val dScope = rememberCoroutineScope()
     /** Markierung zurück auf den ersten Knopf, wenn der markierte verschwindet (Fernbedienung) */
@@ -1047,8 +1062,8 @@ private fun DetailView(
     }
     /** Trailer, Vormerken, aus Weiterschauen entfernen – bei Filmen und Serien gleich */
     val extraButtons: @Composable (inContinue: Boolean) -> Unit = { inContinue ->
-        info?.trailer?.let { id ->
-            TvButton("▶ Trailer", onClick = { qaLog("TRAILER $id"); onTrailer(id) })
+        if (trailers.isNotEmpty()) {
+            TvButton("▶ Trailer", onClick = { qaLog("TRAILER ${trailers.first()} (${trailers.size})"); onTrailer(trailers) })
         }
         TvButton(if (watched) "✓ Vorgemerkt" else "Vormerken", selected = watched, onClick = { app.toggleWatch(ref) })
         if (inContinue) TvButton("Aus Weiterschauen entfernen", onClick = {
@@ -1240,13 +1255,26 @@ private fun DetailView(
  * währenddessen weg (Aziz 26.11.: „Trailer nur Ton, kein Bild“ – vorher lag ein schwarzes Feld darüber).
  */
 @Composable
-private fun TrailerView(app: AppController, id: String, onClose: () -> Unit) {
+private fun TrailerView(app: AppController, ids: List<String>, onClose: () -> Unit) {
     val context = LocalContext.current
     BackHandler(onBack = onClose)
+    // gesperrter/nicht startender Trailer → automatisch der nächste (deutsche zuerst)
+    var idx by remember(ids) { mutableIntStateOf(0) }
+    val id = ids[idx.coerceIn(0, ids.lastIndex)]
+    var skipped by remember(ids) { mutableStateOf<String?>(null) }
     var error by remember(id) { mutableStateOf<String?>(null) }
     var playing by remember(id) { mutableStateOf(false) }
     // 12 s ohne Bild: Hinweis auf die YouTube-App (Aziz 26.11.: Trailer schwarz, ohne Ton)
     var slow by remember(id) { mutableStateOf(false) }
+    val next: (String) -> Boolean = { why ->
+        if (idx < ids.lastIndex) {
+            qaLog("TRAILER_NAECHSTER $id → ${ids[idx + 1]} · $why")
+            de.aze.iptv.data.HangLog.add("TRAILER_UEBERSPRUNGEN $id · $why")
+            skipped = why
+            idx++
+            true
+        } else false
+    }
     // In der offiziellen YouTube-App öffnen – läuft dort auf jedem Gerät mit Bild und Ton; Zurück kommt hierher
     val openApp: () -> Boolean = {
         val ok = de.aze.iptv.data.YouTube.openInApp(context, id)
@@ -1255,7 +1283,7 @@ private fun TrailerView(app: AppController, id: String, onClose: () -> Unit) {
     }
     LaunchedEffect(id) {
         delay(12_000)
-        if (!playing) {
+        if (!playing && !next("startet nicht")) {
             slow = true
             qaLog("TRAILER_STARTET_NICHT $id")
             de.aze.iptv.data.HangLog.add("TRAILER_STARTET_NICHT $id" + (error?.let { " · $it" } ?: ""))
@@ -1283,12 +1311,15 @@ private fun TrailerView(app: AppController, id: String, onClose: () -> Unit) {
             onPlaying = {
                 error = null
                 slow = false
+                skipped = null
                 if (!playing) { playing = true; qaLog("TRAILER_LAEUFT $id") }
             },
             onError = {
-                error = it
                 qaLog("TRAILER_FEHLER $it")
-                de.aze.iptv.data.HangLog.add("TRAILER_FEHLER $id · $it")
+                if (!next(it)) {
+                    error = it
+                    de.aze.iptv.data.HangLog.add("TRAILER_FEHLER $id · $it")
+                }
             },
         )
         // Hinweis kurz bzw. bis das Bild da ist; bei Fehler oder ohne Bild mit dem Weg in die YouTube-App
@@ -1298,8 +1329,9 @@ private fun TrailerView(app: AppController, id: String, onClose: () -> Unit) {
         if (error != null || hint || !playing) {
             Text(
                 when {
-                    error != null -> "$error · $ytHint"
+                    error != null -> (if (ids.size > 1) "Kein Trailer verfügbar – $error" else "$error") + " · $ytHint"
                     slow -> "Trailer startet hier nicht · $ytHint"
+                    skipped != null && !playing -> "Trailer nicht verfügbar – versuche einen anderen (${idx + 1} von ${ids.size}) …"
                     playing -> "Trailer · Zurück schließt ihn · " + Device.hint("OK = YouTube-App", "YouTube-App möglich")
                     else -> "Trailer lädt … · Zurück schließt ihn"
                 },

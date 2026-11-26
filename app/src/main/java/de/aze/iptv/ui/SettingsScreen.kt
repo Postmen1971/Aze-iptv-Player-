@@ -1874,12 +1874,12 @@ private fun VodListsSection(app: AppController) {
         androidx.compose.foundation.layout.FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            TvButton("In der YouTube-App", selected = app.trailerExternal, onClick = { app.updateTrailerExternal(true) })
             TvButton("Im Player der App", selected = !app.trailerExternal, onClick = { app.updateTrailerExternal(false) })
+            TvButton("In der YouTube-App", selected = app.trailerExternal, onClick = { app.updateTrailerExternal(true) })
         }
         Text(
-            "In der YouTube-App läuft der Trailer sicher mit Bild und Ton; mit Zurück bist du wieder hier. Ist keine YouTube-App " +
-                "installiert, läuft er im Player der App (dort lassen manche Studios ihre Trailer nicht zu).",
+            "Deutsche Trailer kommen zuerst; ist einer in Deutschland gesperrt, nimmt die App von selbst den nächsten. " +
+                "„In der YouTube-App“ öffnet ihn dort – mit Zurück bist du wieder hier. Ohne YouTube-App läuft er immer im Player der App.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
         val langs = listOfNotNull(

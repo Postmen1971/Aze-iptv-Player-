@@ -551,8 +551,8 @@ if wait_for "FOCUS Abspielen" 1 15 >/dev/null; then
     else
       # ohne Bild nach 12 s: Hinweis auf die YouTube-App muss da sein
       sleep 2
-      [ "$(count "TRAILER_STARTET_NICHT")" -gt 0 ] || [ "$(count "TRAILER_FEHLER")" -gt 0 ] || fail "Trailer: kein Bild und kein Hinweis auf die YouTube-App"
-      note "Trailer" "kein Video im Emulator (YouTube fehlt dort) – Hinweis „OK = in der YouTube-App öffnen“ erscheint: $(qa | grep -E 'TRAILER_FEHLER|TRAILER_STARTET' | tail -1)"
+      [ "$(count "TRAILER_STARTET_NICHT")" -gt 0 ] || [ "$(count "TRAILER_FEHLER")" -gt 0 ] || [ "$(count "TRAILER_NAECHSTER")" -gt 0 ] || fail "Trailer: kein Bild, kein anderer Trailer und kein Hinweis auf die YouTube-App"
+      note "Trailer" "kein Video im Emulator (YouTube fehlt dort) – Hinweis „OK = in der YouTube-App öffnen“ erscheint: $(qa | grep -E 'TRAILER_FEHLER|TRAILER_STARTET|TRAILER_NAECHSTER|TRAILER_KANDIDATEN' | tail -2 | tr '\n' ' ')"
     fi
     sleep 2; shot "test10c-trailer"
     adb shell input keyevent KEYCODE_BACK; sleep 3

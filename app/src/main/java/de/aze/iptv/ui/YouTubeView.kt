@@ -105,6 +105,15 @@ fun YouTubeView(url: String, modifier: Modifier, onPlaying: () -> Unit, onError:
                         var e=document.querySelector('.ytp-error, .ytp-error-content-wrap-reason');
                         if(e && e.offsetParent!==null) return 'err:'+(e.innerText||'').trim().slice(0,80);
                         if(v && v.currentTime>0) return (v.paused?'pause:':'play:')+v.currentTime;
+                        // gesperrt/entfernt (z. B. „in deinem Land nicht verfügbar“): YouTube zeigt eine eigene Fehlerseite
+                        try{
+                          var pr=p && p.getPlayerResponse && p.getPlayerResponse();
+                          var ps=pr && pr.playabilityStatus;
+                          if(ps && ps.status && ps.status!=='OK' && ps.status!=='LIVE_STREAM_OFFLINE') return 'err:'+((ps.reason||ps.status)+'').slice(0,90);
+                        }catch(x){}
+                        var t=(document.body && document.body.innerText)||'';
+                        var m=t.match(/[^\n]*(nicht verfügbar|nicht zur Verfügung|unavailable|not available|kullanılamıyor|kullanılabilir değil)[^\n]*/i);
+                        if(m) return 'err:'+m[0].trim().slice(0,90);
                         return '';
                     })()""",
                 ) { r -> result.complete(r?.trim('"').orEmpty()) }

@@ -37,6 +37,8 @@ class VodDetails(
     val originalName: String? = null,
     /** YouTube-Video-ID des Trailers (vom Anbieter, „youtube_trailer“) */
     val trailer: String? = null,
+    /** TMDB-Nummer (vom Anbieter) – für weitere Trailer, z. B. auf Deutsch */
+    val tmdbId: String? = null,
 )
 
 class Episode(
@@ -293,6 +295,7 @@ class XtreamVod(private val src: PlaylistSource) : VodProvider {
                 ?: i.str("rating_5based")?.toDoubleOrNull()?.takeIf { it > 0 }?.let { "%.1f".format(java.util.Locale.ROOT, it * 2) },
             originalName = i.str("o_name") ?: i.str("original_name"),
             trailer = VodLibrary.trailerId(i.str("youtube_trailer") ?: i.str("trailer")),
+            tmdbId = (i.str("tmdb_id") ?: i.str("tmdb"))?.trim()?.takeIf { it.all(Char::isDigit) && it != "0" },
         )
     }
 
