@@ -164,7 +164,7 @@ object Downloader {
                     runOne(next)
                 }
             } finally {
-                setStatus("")
+                showStatus("")
                 stopService()
                 // kam gerade noch etwas dazu (während die Schleife endete)? Dann gleich weiter
                 main.postDelayed({ if (synchronized(lock) { list.any { it.state == DlState.WAIT } }) kick() }, 500)
@@ -185,14 +185,14 @@ object Downloader {
                 // Fernsehen hat Vorrang
                 val mode = currentMode(e)
                 if (mode == DownloadRules.Mode.WAIT) {
-                    setStatus("wartet – Fernsehen läuft (Anbieter erlaubt nur eine Verbindung)")
+                    showStatus("wartet – Fernsehen läuft (Anbieter erlaubt nur eine Verbindung)")
                     update(key) { it.copy(state = DlState.WAIT) }
                     delay(3_000); continue
                 }
                 val url = resolver?.invoke(e)
                 if (url.isNullOrBlank()) {
                     // App noch nicht bereit (Playlists werden gelesen) – oder Playlist gelöscht
-                    if (resolver == null) { setStatus("wartet auf die Playlist"); delay(3_000); continue }
+                    if (resolver == null) { showStatus("wartet auf die Playlist"); delay(3_000); continue }
                     fail(key, "Playlist nicht gefunden"); return
                 }
                 val result = try {
@@ -218,7 +218,7 @@ object Downloader {
                         de.aze.iptv.ui.qaLog("DL_NEUVERSUCH $key $attempt ${result.why}")
                         if (attempt >= DownloadRules.MAX_ATTEMPTS) { fail(key, result.why); return }
                         val wait = DownloadRules.retryDelayMs(attempt - 1, result.rejected)
-                        setStatus("${result.why} – neuer Versuch in ${wait / 1000} s")
+                        showStatus("${result.why} – neuer Versuch in ${wait / 1000} s")
                         update(key) { it.copy(state = DlState.WAIT, error = result.why) }
                         // in kleinen Schritten warten (Anhalten/Löschen wirkt sofort)
                         var waited = 0L
@@ -302,7 +302,7 @@ object Downloader {
                             mark = now; markBytes = done
                             update(e.key, save = false) { it.copy(done = done, total = total) }
                             val pct = if (total > 0) " · ${(done * 100 / total)} %" else ""
-                            setStatus("lädt · ${DownloadRules.size(speed)}/s$pct" + if (mode == DownloadRules.Mode.SLOW) " (gebremst, Fernsehen läuft)" else "")
+                            showStatus("lädt · ${DownloadRules.size(speed)}/s$pct" + if (mode == DownloadRules.Mode.SLOW) " (gebremst, Fernsehen läuft)" else "")
                             de.aze.iptv.DownloadService.progress(ctx, e.title, if (total > 0) (done * 100 / total).toInt() else -1)
                             val m = currentMode(e)
                             if (m != mode) {
@@ -374,7 +374,7 @@ object Downloader {
         main.post { entries = copy }
     }
 
-    private fun setStatus(s: String) { main.post { status = s } }
+    private fun showStatus(s: String) { main.post { status = s } }
 
     private fun startService() = runCatching { de.aze.iptv.DownloadService.start(ctx) }
     private fun stopService() = runCatching { de.aze.iptv.DownloadService.stop(ctx) }
