@@ -1053,6 +1053,15 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         store.youtubeExternal = on
     }
 
+    /** Trailer gleich in der YouTube-App öffnen (Standard); ohne YouTube-App läuft er im Player der App */
+    var trailerExternal by mutableStateOf(store.trailerExternal)
+        private set
+
+    fun updateTrailerExternal(on: Boolean) {
+        trailerExternal = on
+        store.trailerExternal = on
+    }
+
     /** Kanäle aus einer Export-Datei übernehmen (vorhandene bleiben, doppelte werden übersprungen). */
     fun importYoutube(entries: List<YtEntry>): Int {
         val known = youtube.map { it.ref }.toHashSet()

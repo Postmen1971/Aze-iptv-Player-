@@ -68,6 +68,38 @@ object YouTube {
         else -> "https://www.youtube.com/watch?v=${url.removePrefix("youtube:video:")}"
     }
 
+    /** Offizielle YouTube-App: Fernseher (Android TV/Google TV), Fire TV, Handy/Tablet – in dieser Reihenfolge */
+    val APP_PACKAGES = listOf(
+        "com.google.android.youtube.tv",
+        "com.google.android.youtube.googletv",
+        "com.amazon.firetv.youtube",
+        "com.google.android.youtube",
+    )
+
+    /** installierte YouTube-App (oder null) */
+    fun appPackage(context: android.content.Context): String? = APP_PACKAGES.firstOrNull { p ->
+        runCatching { context.packageManager.getPackageInfo(p, 0) }.isSuccess
+    }
+
+    /**
+     * Video (Trailer) direkt in der offiziellen YouTube-App abspielen (Aziz 26.11.). Gestartet aus UNSEREM Fenster (ohne
+     * neue Aufgabe): Zurück schließt den Film in YouTube und landet wieder hier. „finish_on_ended“ schließt YouTube am
+     * Ende des Trailers von selbst, „force_fullscreen“ startet gleich im Vollbild (Angaben der YouTube-App; Geräte, die
+     * sie nicht kennen, ignorieren sie). true = geöffnet; false = keine YouTube-App da.
+     */
+    fun openInApp(context: android.content.Context, videoId: String): Boolean {
+        val pkg = appPackage(context) ?: return false
+        val activity = de.aze.iptv.player.FrameRate.findActivity(context)
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.youtube.com/watch?v=$videoId"))
+            .setPackage(pkg)
+            .putExtra("force_fullscreen", true)
+            .putExtra("finish_on_ended", true)
+        return runCatching {
+            if (activity != null) activity.startActivity(intent)
+            else context.startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }.isSuccess
+    }
+
     /** Adresse für den eingebetteten Player. */
     fun embedUrl(url: String, origin: String): String {
         // vq = gewünschte Qualität (höchste); der Player schaltet zusätzlich nach dem Start hoch
