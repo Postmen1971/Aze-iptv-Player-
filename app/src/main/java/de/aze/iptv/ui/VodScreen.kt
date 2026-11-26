@@ -137,11 +137,18 @@ fun VodScreen(
     onFootball: (() -> Unit)? = null, onQuit: (() -> Unit)? = null, onSkorText: (() -> Unit)? = null,
 ) {
     val vodSources = app.vodSources
-    var series by remember { mutableStateOf(startWithSeries) }
+    // nach der YouTube-App neu gestartet: gleich wieder die Details des Films (siehe AppController.markVodReturn)
+    val back = remember { app.pendingVodReturn.also { app.pendingVodReturn = null } }
+    var series by remember { mutableStateOf(back?.series ?: startWithSeries) }
     // Emulator-Test: gleich den Test-Anbieter für Filme wählen
-    var sourceIdx by remember { mutableIntStateOf(if (app.testOpenVod) vodSources.indexOfFirst { it.name == "Test-VOD" }.coerceAtLeast(0) else 0) }
+    var sourceIdx by remember {
+        mutableIntStateOf(
+            back?.let { b -> vodSources.indexOfFirst { it.id == b.sourceId }.takeIf { it >= 0 } }
+                ?: if (app.testOpenVod) vodSources.indexOfFirst { it.name == "Test-VOD" }.coerceAtLeast(0) else 0,
+        )
+    }
     // Details: Liste, aus der der Film kam (Kategorie oder Suche), und welcher davon – am Handy/Tablet wischt man darin
-    var detailList by remember { mutableStateOf<List<VodItem>?>(null) }
+    var detailList by remember { mutableStateOf<List<VodItem>?>(back?.takeIf { b -> vodSources.any { it.id == b.sourceId } }?.let { listOf(it.toItem()) }) }
     var detailIdx by remember { mutableIntStateOf(0) }
     var playing by remember { mutableStateOf<Playing?>(null) }
     // Trailer (YouTube-ID): eigener Bildschirm über allem
@@ -193,7 +200,9 @@ fun VodScreen(
 
     val t = trailer
     if (t != null) {
-        TrailerView(app, t, onClose = { trailer = null })
+        TrailerView(app, t, onClose = { trailer = null }, beforeApp = {
+            detailList?.getOrNull(detailIdx)?.let { app.markVodReturn(de.aze.iptv.data.VodRef.of(src.id, series, it)) }
+        })
         return
     }
 
@@ -216,8 +225,9 @@ fun VodScreen(
                 onBack = { detailList = null },
                 onTrailer = { ids ->
                     // auf Wunsch gleich in der YouTube-App (Einstellung), Zurück kommt hierher; sonst im Player der App
+                    if (app.trailerExternal) app.markVodReturn(de.aze.iptv.data.VodRef.of(src.id, series, dl[idx]))
                     if (app.trailerExternal && de.aze.iptv.data.YouTube.openInApp(vodContext, ids.first())) qaLog("TRAILER_YOUTUBE_APP ${ids.first()} direkt")
-                    else trailer = ids
+                    else { app.clearVodReturn(); trailer = ids }
                 },
             )
         }
@@ -1255,7 +1265,7 @@ private fun DetailView(
  * währenddessen weg (Aziz 26.11.: „Trailer nur Ton, kein Bild“ – vorher lag ein schwarzes Feld darüber).
  */
 @Composable
-private fun TrailerView(app: AppController, ids: List<String>, onClose: () -> Unit) {
+private fun TrailerView(app: AppController, ids: List<String>, onClose: () -> Unit, beforeApp: () -> Unit = {}) {
     val context = LocalContext.current
     BackHandler(onBack = onClose)
     // gesperrter/nicht startender Trailer → automatisch der nächste (deutsche zuerst)
@@ -1277,7 +1287,9 @@ private fun TrailerView(app: AppController, ids: List<String>, onClose: () -> Un
     }
     // In der offiziellen YouTube-App öffnen – läuft dort auf jedem Gerät mit Bild und Ton; Zurück kommt hierher
     val openApp: () -> Boolean = {
+        beforeApp()
         val ok = de.aze.iptv.data.YouTube.openInApp(context, id)
+        if (!ok) app.clearVodReturn()
         qaLog("TRAILER_YOUTUBE_APP $id ${if (ok) "geöffnet" else "fehlt"}")
         ok
     }

@@ -286,8 +286,10 @@ class MainActivity : ComponentActivity() {
             ) {
                 // Einstellungen sind mit PIN geschützt (Standard 0000).
                 // Erster Start ohne Playlist: direkt in die Einstellungen (ohne PIN) – die App schließt sich dabei nie von selbst
-                var screen by remember { mutableStateOf(if (!app.hasAnySource || app.testListEditor || app.testOpenSettings) Screen.SETTINGS else if (app.testOpenVod) Screen.VOD else Screen.PLAYER) }
-                var vodSeries by remember { mutableStateOf(app.testOpenSeries) }
+                // nach der YouTube-App neu gestartet (Android hatte die App beendet): zurück zum Film statt ins Live-TV
+                val vodReturn = remember { if (app.hasAnySource) app.takeVodReturn()?.also { app.pendingVodReturn = it; de.aze.iptv.ui.qaLog("RUECKKEHR_FILM ${it.name}") } else null }
+                var screen by remember { mutableStateOf(if (!app.hasAnySource || app.testListEditor || app.testOpenSettings) Screen.SETTINGS else if (app.testOpenVod || vodReturn != null) Screen.VOD else Screen.PLAYER) }
+                var vodSeries by remember { mutableStateOf(vodReturn?.series ?: app.testOpenSeries) }
                 val openSettings = { screen = if (app.pinEnabled) Screen.PIN else Screen.SETTINGS }
                 // Geräteart in den Einstellungen geändert → Drehen sofort anpassen (Handy: immer quer)
                 androidx.compose.runtime.LaunchedEffect(de.aze.iptv.ui.Device.kind, de.aze.iptv.ui.Device.freeRotation) { applyOrientation() }
@@ -410,6 +412,8 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         de.aze.iptv.data.Downloader.appVisible = true
+        // App lief weiter (nicht neu gestartet): sie steht ohnehin noch beim Film – gemerkten Rückkehr-Punkt vergessen
+        if (::app.isInitialized) app.clearVodReturn()
     }
 
     override fun onStop() {
