@@ -321,6 +321,11 @@ fun Focusable(
 ) {
     var focused by remember { mutableStateOf(false) }
     val qaMod = Modifier.qaPos(qaName)
+    // Test: ändert sich die Aufschrift eines markierten Knopfs (z. B. „⬇ 45 %“ → „✓ Auf dem Gerät“), neu melden –
+    // sonst sucht der Test mit dem alten Namen
+    if (qaName != null && de.aze.iptv.BuildConfig.TEST_HOOKS) {
+        androidx.compose.runtime.LaunchedEffect(qaName) { if (focused) qaLog("FOCUS $qaName") }
+    }
     var longFired by remember { mutableStateOf(false) }
     // Nur auf OK reagieren, wenn der Tastendruck auch hier begonnen hat
     // (sonst würde das Loslassen eines langen OK, das ein Menü geöffnet hat, sofort etwas auslösen).
