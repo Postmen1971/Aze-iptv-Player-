@@ -575,6 +575,46 @@ else fail "Serie: Folgen mit der Fernbedienung nicht erreichbar ($(qa | grep -o 
 alive || fail "Filme & Serien: App nicht mehr da"
 hang_check "Weiterschauen/Merkliste/Folgen" "$T10c"
 
+log "== Test 10d: Film herunterladen, vom Gerät abspielen, löschen"
+T10d=$(adb shell date +%H:%M:%S | tr -d '\r')
+c=$(count "VOD_CAT")
+adb shell am start -S -n $PKG/.MainActivity --es aze_test_xtream "http://10.0.2.2:8090" --ez aze_test_vod true >/dev/null
+wait_for "VOD_CAT" $((c+1)) 60 >/dev/null; sleep 3
+adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 3
+# Download-Knöpfe stehen hinter Trailer/Vormerken: mit ▶ hinlaufen
+dl_btn() { local i; for i in 1 2 3 4 5 6 7; do [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ] && return 0; adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 0.9; done; focus_btn "$1"; }
+if wait_for "FOCUS Abspielen" 1 15 >/dev/null && dl_btn "⬇ Herunterladen"; then
+  nf=$(count "DL_FERTIG")
+  adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 3; shot "test10d-laedt"
+  if wait_for "DL_FERTIG" $((nf+1)) 120 >/dev/null; then
+    note "Download" "$(qa | grep -E "DL_NEU|DL_START|DL_FERTIG|DL_NEUVERSUCH|DL_FEHLER" | tail -4)"
+    sleep 2; shot "test10d-fertig"
+    # vom Gerät abspielen
+    nv=$(count "VOD_VOM_GERAET"); nr=$(count "VOD_READY")
+    focus_to "Abspielen" KEYCODE_DPAD_LEFT 6 || focus_to "Weiterschauen ab" KEYCODE_DPAD_LEFT 6
+    adb shell input keyevent KEYCODE_DPAD_CENTER
+    wait_for "VOD_READY" $((nr+1)) 30 >/dev/null || fail "Download: geladener Film startet nicht"
+    [ "$(count "VOD_VOM_GERAET")" -gt "$nv" ] || fail "Download: Film lief nicht vom Gerät ($(qa | grep -E 'VOD_PLAY|VOD_VOM' | tail -2 | tr '\n' ' '))"
+    sleep 3; shot "test10d-vom-geraet"
+    for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 2; qa | grep -o "FOCUS .*" | tail -1 | grep -qE "^FOCUS (Abspielen|Weiterschauen ab)" && break; done
+    # Kategorie „Heruntergeladen“ steht oben (nach Zurück in die Übersicht)
+    adb shell input keyevent KEYCODE_BACK; sleep 3
+    qa | grep -q "POS K ⬇ Heruntergeladen|" || fail "Download: Kategorie „⬇ Heruntergeladen“ fehlt oben"
+    shot "test10d-kategorie"
+    adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 3
+    # löschen (Rückfrage: Markierung auf „Abbrechen“ → ▶ „Löschen“)
+    nd=$(count "DL_GELOESCHT")
+    if dl_btn "✓ Auf dem Gerät · löschen"; then
+      adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 2; shot "test10d-rueckfrage"
+      adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1; adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 2
+      [ "$(count "DL_GELOESCHT")" -gt "$nd" ] || fail "Download: Löschen hat nichts gelöscht ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"
+    else fail "Download: Knopf „✓ Auf dem Gerät · löschen“ nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
+  else fail "Download: nicht fertig geworden ($(qa | grep -E 'DL_' | tail -3 | tr '\n' ' '))"; fi
+else fail "Download: Knopf „⬇ Herunterladen“ in den Film-Details nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
+alive || fail "Download: App nicht mehr da"
+hang_check "Herunterladen" "$T10d"
+
 log "== Test 11: Rundgang – Schnellmenü, Suche, Infoleiste (▶ lang), Senderliste, Einstellungen"
 adb shell am start -S -n $PKG/.MainActivity >/dev/null
 sleep 3; wait_for "FIRST_FRAME" 1 30; sleep 3

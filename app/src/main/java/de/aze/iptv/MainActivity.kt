@@ -407,8 +407,15 @@ class MainActivity : ComponentActivity() {
         }.asCoroutineDispatcher()
     }
 
+    override fun onStart() {
+        super.onStart()
+        de.aze.iptv.data.Downloader.appVisible = true
+    }
+
     override fun onStop() {
         super.onStop()
+        // Bild-im-Bild zählt als sichtbar (dort läuft ja etwas) – sonst laden Downloads jetzt mit voller Geschwindigkeit
+        de.aze.iptv.data.Downloader.appVisible = ::app.isInitialized && app.inPip
         if (::app.isInitialized) app.flushLast()
     }
 

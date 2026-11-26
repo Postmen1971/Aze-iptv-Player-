@@ -122,6 +122,7 @@ private class Playing(
 /** Eigene Listen ganz oben in den Kategorien (keine Anbieter-Kategorien) */
 private const val CAT_CONTINUE = "@weiter"
 private const val CAT_WATCH = "@merk"
+private const val CAT_DL = "@geladen"
 private const val CAT_NEW = "@neu"
 
 /**
@@ -345,9 +346,17 @@ private fun Browse(
     val newOk = remember(cats) { cats != null && api.supportsNew() }
     val hasCont = contEntries.isNotEmpty()
     val hasWatch = watchRefs.isNotEmpty()
-    val shownCats = remember(hasCont, hasWatch, newOk, catList) {
+    // Heruntergeladen (Aziz 26.11.): Filme bzw. Serien dieser Playlist, die (ganz oder teilweise) auf dem Gerät liegen
+    val dlEntries = de.aze.iptv.data.Downloader.entries
+    val dlRefs = remember(dlEntries, sourceId, series) {
+        dlEntries.filter { it.ref.sourceId == sourceId && it.ref.series == series }.sortedByDescending { it.added }
+            .map { it.ref }.distinctBy { it.id }
+    }
+    val hasDl = dlRefs.isNotEmpty()
+    val shownCats = remember(hasCont, hasWatch, hasDl, newOk, catList) {
         buildList {
             if (hasCont) add(VodCategory(CAT_CONTINUE, "▶ Weiterschauen"))
+            if (hasDl) add(VodCategory(CAT_DL, "⬇ Heruntergeladen"))
             if (hasWatch) add(VodCategory(CAT_WATCH, "★ Merkliste"))
             if (newOk) add(VodCategory(CAT_NEW, "✦ Neu hinzugefügt"))
             addAll(catList)
@@ -372,6 +381,7 @@ private fun Browse(
     val specialData: Any? = when (selCat?.id) {
         CAT_CONTINUE -> contEntries
         CAT_WATCH -> watchRefs
+        CAT_DL -> dlRefs
         else -> null
     }
     LaunchedEffect(api, series, selCat?.id, cats, catList, specialData) {
@@ -386,6 +396,7 @@ private fun Browse(
             val l = when (c.id) {
                 CAT_CONTINUE -> contEntries.map { it.ref.toItem() }
                 CAT_WATCH -> watchRefs.map { it.toItem() }
+                CAT_DL -> dlRefs.map { it.toItem() }
                 CAT_NEW -> {
                     // die neuesten Titel des Anbieters – ohne ausgeblendete Kategorien
                     val all = api.all(series)
@@ -516,6 +527,7 @@ private fun Browse(
                             val count = when (c.id) {
                                 CAT_CONTINUE -> contEntries.size
                                 CAT_WATCH -> watchRefs.size
+                                CAT_DL -> dlRefs.size
                                 else -> counts[c.id] ?: items?.size?.takeIf { i == selected }
                             }
                             Row(
@@ -1009,7 +1021,7 @@ private fun DetailView(
         val nxt = if (at >= 0) flat.getOrNull(at + 1) else null
         val key = "e:$sourceId:${e.id}"
         return Playing(
-            api.episodeUrl(e), "${item.name} – S${e.season} E${e.number}", key, start,
+            de.aze.iptv.data.Downloader.localUri(key) ?: api.episodeUrl(e), "${item.name} – S${e.season} E${e.number}", key, start,
             cont = de.aze.iptv.data.ContinueEntry(ref, key, de.aze.iptv.data.EpisodeRef.of(e)),
             next = nxt?.let { n -> { episodePlaying(n, app.resumeOf("e:$sourceId:${n.id}"), all) } },
             nextLabel = nxt?.let { n -> "S${n.season} E${n.number}" + n.title.takeIf { t -> t.isNotBlank() }?.let { t -> " · $t" }.orEmpty() },
@@ -1017,7 +1029,7 @@ private fun DetailView(
     }
     fun moviePlaying(start: Long): Playing {
         val key = "m:$sourceId:${item.id}"
-        return Playing(api.movieUrl(item), item.name, key, start, cont = de.aze.iptv.data.ContinueEntry(ref, key))
+        return Playing(de.aze.iptv.data.Downloader.localUri(key) ?: api.movieUrl(item), item.name, key, start, cont = de.aze.iptv.data.ContinueEntry(ref, key))
     }
     /** Trailer, Vormerken, aus Weiterschauen entfernen – bei Filmen und Serien gleich */
     val extraButtons: @Composable (inContinue: Boolean) -> Unit = { inContinue ->
@@ -1043,7 +1055,14 @@ private fun DetailView(
             } else {
                 info = api.movieDetails(item.id)
             }
-        }.onFailure { failed = true }
+        }.onFailure {
+            // ohne Internet: geladene Folgen dieser Serie trotzdem zeigen (laufen vom Gerät)
+            val off = if (series) offlineSeries(sourceId, item.id) else null
+            if (off != null) {
+                sd = off; info = off.info; season = off.seasons.keys.first()
+                qaLog("VOD_OHNE_NETZ ${item.name} ${off.seasons.values.sumOf { it.size }} Folgen")
+            } else failed = true
+        }
         withFrameNanos { }
         runCatching { playButton.requestFocus() }
     }
@@ -1124,6 +1143,7 @@ private fun DetailView(
                             })
                         }
                         extraButtons(resume > 0)
+                        DownloadButtons(key, ref, null, onGone = { refocus() })
                         TvButton("Zurück", onClick = onBack)
                     }
                 }
@@ -1134,6 +1154,8 @@ private fun DetailView(
                     TvButton("Zurück", onClick = onBack)
                 }
                 when {
+                    failed && !series && de.aze.iptv.data.Downloader.localUri("m:$sourceId:${item.id}") != null ->
+                        Text("Ohne Internet – der Film läuft vom Gerät.", color = Palette.TextSoft, fontSize = 14.sp)
                     failed -> Text("Details konnten nicht geladen werden.", color = Palette.Live, fontSize = 14.sp)
                     i == null -> Text("Lade …", color = Palette.TextMuted, fontSize = 14.sp)
                 }
@@ -1160,6 +1182,7 @@ private fun DetailView(
                                     onClick = { onPlay(episodePlaying(ceEp.toEpisode(), app.resumeOf(ce.resumeKey), s)) },
                                 )
                             }
+                            if (s != null && season in s.seasons) SeasonDownloadButton(sourceId, ref, season, s.seasons[season].orEmpty())
                             extraButtons(ce != null)
                         }
                     }
@@ -1175,10 +1198,14 @@ private fun DetailView(
                             }
                         }
                         val eps = s.seasons[season].orEmpty()
+                        Text(
+                            Device.hint("OK lang auf einer Folge: nur diese herunterladen", "Folge lange antippen: nur diese herunterladen"),
+                            color = Palette.TextMuted, fontSize = 12.sp,
+                        )
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.fillMaxWidth()) {
                             items(eps.size, key = { i -> "$i|${eps[i].id}" }) { i ->
                                 val e = eps[i]
-                                EpisodeRow(app, e, sourceId) { start ->
+                                EpisodeRow(app, e, sourceId, ref) { start ->
                                     onPlay(episodePlaying(e, start, s))
                                 }
                             }
@@ -1338,9 +1365,26 @@ private fun SwipeDetail(
 }
 
 @Composable
-private fun EpisodeRow(app: AppController, e: Episode, sourceId: String, onPlay: (Long) -> Unit) {
-    val resume = app.resumeOf("e:$sourceId:${e.id}")
-    Focusable(modifier = Modifier.fillMaxWidth(), onClick = { onPlay(resume) }, qaName = "E ${e.season}.${e.number}") { focused ->
+private fun EpisodeRow(app: AppController, e: Episode, sourceId: String, ref: de.aze.iptv.data.VodRef, onPlay: (Long) -> Unit) {
+    val key = "e:$sourceId:${e.id}"
+    val resume = app.resumeOf(key)
+    val dl = de.aze.iptv.data.Downloader.entries.firstOrNull { it.key == key }
+    var askDelete by remember { mutableStateOf(false) }
+    if (askDelete) ConfirmDialog(
+        "Folge vom Gerät löschen?", "S${e.season} E${e.number} ${e.title}".trim() + " – läuft danach wieder nur mit Internet.", "Löschen",
+        onYes = { de.aze.iptv.data.Downloader.delete(key); askDelete = false }, onNo = { askDelete = false },
+    )
+    // OK lang (bzw. lange antippen): nur diese Folge laden / anhalten / weiter / löschen
+    val onLong: () -> Unit = {
+        when (dl?.state) {
+            null -> de.aze.iptv.data.Downloader.enqueue(ref, key, de.aze.iptv.data.EpisodeRef.of(e))
+            de.aze.iptv.data.DlState.WAIT, de.aze.iptv.data.DlState.RUN -> de.aze.iptv.data.Downloader.pause(key)
+            de.aze.iptv.data.DlState.PAUSE, de.aze.iptv.data.DlState.FAIL -> de.aze.iptv.data.Downloader.resume(key)
+            de.aze.iptv.data.DlState.DONE -> { askDelete = true }
+        }
+        Unit
+    }
+    Focusable(modifier = Modifier.fillMaxWidth(), onClick = { onPlay(resume) }, onLongClick = onLong, qaName = "E ${e.season}.${e.number}") { focused ->
         Row(
             Modifier
                 .fillMaxWidth()
@@ -1355,9 +1399,98 @@ private fun EpisodeRow(app: AppController, e: Episode, sourceId: String, onPlay:
                 e.plot?.let { Text(it, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
             if (resume > 0) Text("ab ${fmtTime(resume)}", color = if (focused) Palette.OnAccent else Palette.Accent, fontSize = 12.sp)
+            if (dl != null) Text(dlShort(dl), color = if (focused) Palette.OnAccent else if (dl.state == de.aze.iptv.data.DlState.FAIL) Palette.Live else Palette.Highlight, fontSize = 12.sp)
             e.duration?.let { Text(it, color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 12.sp) }
         }
     }
+}
+
+/** Kurz für Folgen-Zeilen und Knöpfe: „⬇ 45 %“, „✓ auf dem Gerät“ … */
+private fun dlShort(d: de.aze.iptv.data.DlEntry): String = when (d.state) {
+    de.aze.iptv.data.DlState.DONE -> "✓ auf dem Gerät"
+    de.aze.iptv.data.DlState.RUN -> "⬇ " + (if (d.percent >= 0) "${d.percent} %" else de.aze.iptv.data.DownloadRules.size(d.done))
+    de.aze.iptv.data.DlState.WAIT -> "⬇ wartet" + (if (d.percent > 0) " · ${d.percent} %" else "")
+    de.aze.iptv.data.DlState.PAUSE -> "⏸ angehalten" + (if (d.percent >= 0) " · ${d.percent} %" else "")
+    de.aze.iptv.data.DlState.FAIL -> "⚠ Download fehlgeschlagen"
+}
+
+/** Ohne Internet: geladene Folgen einer Serie als Staffeln (zum Abspielen vom Gerät) */
+private fun offlineSeries(sourceId: String, seriesId: String): SeriesDetails? {
+    val eps = de.aze.iptv.data.Downloader.entries.filter {
+        it.ref.series && it.ref.sourceId == sourceId && it.ref.id == seriesId && it.state == de.aze.iptv.data.DlState.DONE && it.episode != null
+    }.mapNotNull { it.episode?.toEpisode() }
+    if (eps.isEmpty()) return null
+    val seasons = eps.groupBy { it.season }.toSortedMap().mapValues { (_, l) -> l.sortedBy { it.number } }
+    return SeriesDetails(VodDetails("Ohne Internet: nur die Folgen auf dem Gerät.", null, null, null, null, null, null, null), seasons)
+}
+
+/**
+ * Knopf „Herunterladen“ in den Film-Details (Aziz 26.11.) – zeigt den Stand und bedient ihn:
+ * laden → anhalten → weiter; fertig → löschen (mit Rückfrage). Dazu „Abbrechen“, solange es nicht fertig ist.
+ */
+@Composable
+private fun DownloadButtons(key: String, ref: de.aze.iptv.data.VodRef, episode: de.aze.iptv.data.EpisodeRef?, onGone: () -> Unit) {
+    val d = de.aze.iptv.data.Downloader.entries.firstOrNull { it.key == key }
+    var ask by remember { mutableStateOf(false) }
+    val label = when (d?.state) {
+        null -> "⬇ Herunterladen"
+        de.aze.iptv.data.DlState.DONE -> "✓ Auf dem Gerät · löschen"
+        de.aze.iptv.data.DlState.RUN, de.aze.iptv.data.DlState.WAIT -> dlShort(d) + " · anhalten"
+        de.aze.iptv.data.DlState.PAUSE -> dlShort(d) + " · weiter"
+        de.aze.iptv.data.DlState.FAIL -> "⚠ ${d.error ?: "Fehler"} · nochmal"
+    }
+    TvButton(label, selected = d?.state == de.aze.iptv.data.DlState.DONE, modifier = Modifier.qaPos("DL KNOPF"), onClick = {
+        when (d?.state) {
+            null -> {
+                de.aze.iptv.data.Downloader.enqueue(ref, key, episode)
+            }
+            de.aze.iptv.data.DlState.RUN, de.aze.iptv.data.DlState.WAIT -> de.aze.iptv.data.Downloader.pause(key)
+            de.aze.iptv.data.DlState.PAUSE, de.aze.iptv.data.DlState.FAIL -> de.aze.iptv.data.Downloader.resume(key)
+            de.aze.iptv.data.DlState.DONE -> { ask = true }
+        }
+    })
+    if (d != null && d.state != de.aze.iptv.data.DlState.DONE) {
+        TvButton("Download abbrechen", danger = true, onClick = { de.aze.iptv.data.Downloader.delete(key); onGone() })
+    }
+    if (ask) ConfirmDialog(
+        "Vom Gerät löschen?", "„${d?.title ?: ref.name}“ läuft danach wieder nur mit Internet.", "Löschen",
+        onYes = { de.aze.iptv.data.Downloader.delete(key); ask = false; onGone() }, onNo = { ask = false },
+    )
+}
+
+/** Ganze Staffel laden (fehlende Folgen in die Warteschlange) bzw. Stand der Staffel */
+@Composable
+private fun SeasonDownloadButton(sourceId: String, ref: de.aze.iptv.data.VodRef, season: Int, eps: List<Episode>) {
+    if (eps.isEmpty()) return
+    val all = de.aze.iptv.data.Downloader.entries
+    val keys = eps.map { "e:$sourceId:${it.id}" }
+    val mine = all.filter { it.key in keys }
+    val done = mine.count { it.state == de.aze.iptv.data.DlState.DONE }
+    val busy = mine.any { it.state == de.aze.iptv.data.DlState.RUN || it.state == de.aze.iptv.data.DlState.WAIT }
+    var ask by remember(season) { mutableStateOf(false) }
+    val label = when {
+        done == eps.size -> "✓ Staffel $season auf dem Gerät"
+        busy -> "⬇ Staffel $season: $done von ${eps.size} · anhalten"
+        mine.isNotEmpty() -> "⬇ Staffel $season: $done von ${eps.size} · weiter laden"
+        else -> "⬇ Staffel $season herunterladen"
+    }
+    TvButton(label, selected = done == eps.size, modifier = Modifier.qaPos("DL STAFFEL"), onClick = {
+        when {
+            done == eps.size -> { ask = true }
+            busy -> mine.filter { it.state == de.aze.iptv.data.DlState.RUN || it.state == de.aze.iptv.data.DlState.WAIT }
+                .forEach { de.aze.iptv.data.Downloader.pause(it.key) }
+            else -> eps.forEach { e ->
+                val k = "e:$sourceId:${e.id}"
+                val d = mine.firstOrNull { it.key == k }
+                if (d == null) de.aze.iptv.data.Downloader.enqueue(ref, k, de.aze.iptv.data.EpisodeRef.of(e))
+                else if (d.state != de.aze.iptv.data.DlState.DONE) de.aze.iptv.data.Downloader.resume(k)
+            }
+        }
+    })
+    if (ask) ConfirmDialog(
+        "Staffel $season vom Gerät löschen?", "${eps.size} Folgen laufen danach wieder nur mit Internet.", "Löschen",
+        onYes = { keys.forEach { de.aze.iptv.data.Downloader.delete(it) }; ask = false }, onNo = { ask = false },
+    )
 }
 
 private fun fmtTime(ms: Long): String {
@@ -1395,7 +1528,10 @@ private fun VodPlayer(
     // für Bild-im-Bild (Handy/Tablet): beim Verlassen der App weiter im kleinen Fenster
     androidx.compose.runtime.DisposableEffect(Unit) {
         app.vodPlaying = true
-        onDispose { app.vodPlaying = false }
+        // vom Anbieter (nicht vom Gerät): ein Download wartet bzw. bremst dann (Verbindungen des Anbieters)
+        app.vodRemote = !p.url.startsWith("file:")
+        if (!app.vodRemote) qaLog("VOD_VOM_GERAET ${p.title}")
+        onDispose { app.vodPlaying = false; app.vodRemote = false }
     }
     val inPip = app.inPip
     // Filme/Serien: allgemeiner Ton-Bild-Versatz aus den Einstellungen

@@ -259,6 +259,7 @@ fun SettingsScreen(app: AppController, onClose: () -> Unit) {
                     }
                     PlaybackSection(app, onEditList = { editingList = true }, part = 3)
                     VodListsSection(app)
+                    DownloadsSection()
                 }
                 "Fußball" -> LearnedChannelsSection(app)
                 "Fernbedienung" -> ControlsSection(app)
@@ -1881,6 +1882,77 @@ private fun VodListsSection(app: AppController) {
     }
 }
 
+/**
+ * Downloads (Aziz 26.11.): Filme und Folgen auf dem Gerät – Speicherort, Platz, Stand, anhalten/weiter/löschen.
+ * Laden selbst: in den Film-Details „⬇ Herunterladen“, bei Serien „⬇ Staffel … herunterladen“ oder OK lang auf einer Folge.
+ */
+@kotlin.OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun DownloadsSection() {
+    val dl = de.aze.iptv.data.Downloader
+    val list = dl.entries
+    var ask by remember { mutableStateOf<String?>(null) } // Schlüssel oder „*“ = alle
+    Section("Downloads", startOpen = list.isNotEmpty()) {
+        Text(
+            "Filme und Folgen aufs Gerät laden und ohne Internet schauen: in den Details „⬇ Herunterladen“, bei Serien " +
+                "„⬇ Staffel … herunterladen“ oder OK lang auf einer Folge. Läuft Fernsehen, lädt es langsamer – erlaubt der " +
+                "Anbieter nur eine Verbindung, wartet es, bis nichts mehr läuft. Nur für den eigenen Gebrauch; beim Löschen der App " +
+                "werden die Dateien mit gelöscht.",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
+        val roots = remember { dl.roots() }
+        // Platz neu ausrechnen, wenn sich die Liste ändert
+        val free = remember(list, dl.storageIdx) { dl.freeBytes() }
+        val used = remember(list) { dl.usedBytes() }
+        Text(
+            "Speicher: ${dl.rootName(dl.storageIdx)} · frei ${de.aze.iptv.data.DownloadRules.size(free)} · belegt von Downloads ${de.aze.iptv.data.DownloadRules.size(used)}",
+            color = Palette.TextSoft, fontSize = 14.sp,
+        )
+        if (roots.size > 1) {
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                roots.indices.forEach { i ->
+                    TvButton("Speichern auf: ${dl.rootName(i)}", selected = i == dl.storageIdx, onClick = { dl.setStorage(i) })
+                }
+            }
+            Text("Gilt für neue Downloads.", color = Palette.TextMuted, fontSize = 12.sp)
+        }
+        if (dl.status.isNotBlank()) Text(dl.status, color = Palette.Highlight, fontSize = 14.sp)
+        list.sortedByDescending { it.added }.forEach { e ->
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(e.title, color = Palette.Text, fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    val sz = if (e.total > 0) "${de.aze.iptv.data.DownloadRules.size(e.done)} von ${de.aze.iptv.data.DownloadRules.size(e.total)}"
+                    else de.aze.iptv.data.DownloadRules.size(e.done)
+                    val st = when (e.state) {
+                        de.aze.iptv.data.DlState.DONE -> "fertig · ${de.aze.iptv.data.DownloadRules.size(e.total.coerceAtLeast(e.done))}"
+                        de.aze.iptv.data.DlState.RUN -> "lädt · $sz"
+                        de.aze.iptv.data.DlState.WAIT -> "wartet · $sz" + (e.error?.let { " · $it" } ?: "")
+                        de.aze.iptv.data.DlState.PAUSE -> "angehalten · $sz"
+                        de.aze.iptv.data.DlState.FAIL -> "Fehler: ${e.error ?: "unbekannt"}"
+                    }
+                    Text(st, color = if (e.state == de.aze.iptv.data.DlState.FAIL) Palette.Live else Palette.TextMuted, fontSize = 12.sp)
+                }
+                when (e.state) {
+                    de.aze.iptv.data.DlState.RUN, de.aze.iptv.data.DlState.WAIT -> TvButton("Anhalten", onClick = { dl.pause(e.key) })
+                    de.aze.iptv.data.DlState.PAUSE, de.aze.iptv.data.DlState.FAIL -> TvButton("Weiter", onClick = { dl.resume(e.key) })
+                    de.aze.iptv.data.DlState.DONE -> {}
+                }
+                TvButton("Löschen", modifier = Modifier.qaPos("DL LOESCHEN ${e.key}"), onClick = { ask = e.key })
+            }
+        }
+        if (list.size > 1) TvButton("Alle Downloads löschen", danger = true, onClick = { ask = "*" })
+    }
+    ask?.let { k ->
+        val one = list.firstOrNull { it.key == k }
+        ConfirmDialog(
+            if (k == "*") "Alle Downloads löschen?" else "Download löschen?",
+            if (k == "*") "${list.size} Filme/Folgen werden vom Gerät gelöscht." else "„${one?.title ?: ""}“ wird vom Gerät gelöscht.",
+            "Löschen",
+            onYes = { if (k == "*") dl.deleteAll() else dl.delete(k); ask = null }, onNo = { ask = null },
+        )
+    }
+}
+
 /** Bild-im-Bild gibt es nur am Handy/Tablet und nur, wenn das Gerät es kann */
 @Composable
 private fun PipSection(app: AppController) {
@@ -2021,7 +2093,7 @@ private val CATEGORY_HINT = mapOf(
     "Suchen" to "Tippe ein Stichwort – die App zeigt dir, wo die Einstellung ist.",
     "Sender & Playlists" to "Playlist hinzufügen (auch vom Handy), freie Sender, YouTube, Senderliste neu laden.",
     "Senderliste & Favoriten" to "Gruppen und Sender sortieren, ausblenden, umbenennen – und deine Favoriten.",
-    "Filme & Serien" to "Cover, Kategorien ausblenden, IMDb, Weiterschauen und Merkliste leeren.",
+    "Filme & Serien" to "Cover, Kategorien ausblenden, IMDb, Weiterschauen, Merkliste und Downloads.",
     "Fußball" to "Sender, die die App für „Fußball heute“ gelernt hat.",
     "Bild & Ton" to "Ton-Bild-Synchron (Lippensynchron), Bildformat, Wiedergabe, Bild-im-Bild.",
     "Programmzeitschrift" to "EPG: was gerade läuft und was danach kommt.",
@@ -2047,6 +2119,7 @@ private val SETTINGS_INDEX = listOf(
     Triple("Cover schneller laden", "cover bild poster tmdb schnell langsam", "Filme & Serien"),
     Triple("Film-Kategorien ausblenden", "kategorie land ausblenden filme serien", "Filme & Serien"),
     Triple("IMDb-Bewertung", "imdb bewertung sterne", "Filme & Serien"),
+    Triple("Downloads (Filme & Serien aufs Gerät)", "download herunterladen aufnehmen offline speicher usb stick gerät laden", "Filme & Serien"),
     Triple("Weiterschauen & Merkliste leeren", "weiterschauen merkliste vormerken leeren löschen angefangen", "Filme & Serien"),
     Triple("Bild-im-Bild", "bild im bild pip kleines fenster handy tablet verlassen", "Bild & Ton"),
     Triple("Gelernte Fußball-Sender", "fußball fussball liveonsat gelernt tv-plan", "Fußball"),

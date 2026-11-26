@@ -652,6 +652,8 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
     /** Live-Fernsehen ist der sichtbare Bildschirm (MainActivity) bzw. ein Film/eine Folge läuft (VodPlayer) */
     var pipLive = false
     var vodPlaying = false
+    /** der laufende Film kommt vom Anbieter (nicht vom Gerät) – Downloads warten bzw. bremsen dann */
+    @Volatile var vodRemote = false
 
     /** Bildqualität: sofort die beste Stufe statt langsam hochzuschalten. */
     var forceHighest by mutableStateOf(store.forceHighest)
@@ -1128,6 +1130,28 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         else de.aze.iptv.data.HybridVod(file, src.name)
         vodProviders[src.id] = key to p
         return p
+    }
+
+    // ---- Herunterladen (Filme & Folgen aufs Gerät, siehe Downloader) ----
+    init {
+        de.aze.iptv.data.Downloader.init(context)
+        // Adresse erst beim Laden bauen (gespeichert werden keine Zugangsdaten)
+        de.aze.iptv.data.Downloader.resolver = { e ->
+            vodSources.firstOrNull { it.id == e.ref.sourceId }?.let { src ->
+                val api = vodProvider(src)
+                val ep = e.episode
+                if (ep != null) api.episodeUrl(ep.toEpisode()) else api.movieUrl(e.ref.toItem())
+            }
+        }
+        // Fernsehen hat Vorrang: gebremst oder warten (Anbieter mit nur einer Verbindung)
+        de.aze.iptv.data.Downloader.policy = { e ->
+            val watching = (pipLive && current != null) || vodRemote
+            de.aze.iptv.data.DownloadRules.mode(watching, accountInfo[e.ref.sourceId]?.maxCons)
+        }
+        scope.launch {
+            kotlinx.coroutines.delay(4_000) // erst die Senderliste, dann weiterladen
+            de.aze.iptv.data.Downloader.start()
+        }
     }
 
     /**
