@@ -1053,6 +1053,30 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
         store.youtubeExternal = on
     }
 
+    // ---- Rückkehr nach der YouTube-App (Aziz 26.11.: nach dem Trailer landete er im Live-TV statt beim Film) ----
+    // Solange YouTube vorn ist, kann Android unsere App beenden (Speicher). Dann startet sie neu – bisher im Live-TV.
+    // Deshalb merken wir vor dem Öffnen von YouTube, bei welchem Film man war, und kehren beim Neustart dorthin zurück
+    // (höchstens 30 Minuten danach, nur einmal).
+    private val returnPrefs = context.getSharedPreferences("aze_return", Context.MODE_PRIVATE)
+
+    fun markVodReturn(ref: de.aze.iptv.data.VodRef) {
+        returnPrefs.edit().putString("ref", ref.toJson().toString()).putLong("at", System.currentTimeMillis()).apply()
+    }
+
+    fun clearVodReturn() { if (returnPrefs.contains("ref")) returnPrefs.edit().clear().apply() }
+
+    /** gemerkter Film (und gleich vergessen) – null, wenn keiner oder älter als 30 Minuten */
+    fun takeVodReturn(): de.aze.iptv.data.VodRef? {
+        val s = returnPrefs.getString("ref", null) ?: return null
+        val at = returnPrefs.getLong("at", 0)
+        clearVodReturn()
+        if (System.currentTimeMillis() - at > 30 * 60_000L) return null
+        return runCatching { de.aze.iptv.data.VodRef.fromJson(org.json.JSONObject(s)) }.getOrNull()
+    }
+
+    /** für VodScreen: beim Neustart gleich diese Film-Details öffnen */
+    var pendingVodReturn: de.aze.iptv.data.VodRef? = null
+
     /** Trailer gleich in der YouTube-App öffnen (Standard); ohne YouTube-App läuft er im Player der App */
     var trailerExternal by mutableStateOf(store.trailerExternal)
         private set
