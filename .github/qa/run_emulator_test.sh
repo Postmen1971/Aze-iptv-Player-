@@ -895,12 +895,17 @@ else
   note "Fernseher Handy-Eingabe" "Knopf mit der Fernbedienung nicht erreicht: $(qa | grep -o 'FOCUS .*' | tail -4 | tr '\n' ' ')"
 fi
 for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 2; done
-log "Fernseher: Kategorien ausblenden – „Alle auswählen“ steht oben und hat gleich die Markierung"
+log "Fernseher: Kategorien ausblenden – „Alle auswählen“ steht oben und hat gleich die Markierung (alles mit der Fernbedienung)"
 adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv --ez aze_test_settings true >/dev/null; sleep 6
-if open_pane "Filme & Serien"; then
-  sleep 1; kb=$(qa | grep -o "POS Filme-Kategorien ausblenden[^|]*" | tail -1 | sed 's/^POS //')
-  if [ -n "$kb" ] && tap "$kb"; then
-    sleep 4; shot "test15-tv-ausblenden"
+if focus_to "SET Filme & Serien" KEYCODE_DPAD_DOWN 14; then
+  sleep 1.5; adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
+  ok=0
+  for i in $(seq 1 22); do
+    qa | grep -o "FOCUS .*" | tail -1 | grep -q "^FOCUS Filme-Kategorien ausblenden" && { ok=1; break; }
+    adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.8
+  done
+  if [ $ok = 1 ]; then
+    adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 4; shot "test15-tv-ausblenden"
     pos_visible "ALLE OBEN" || fail "Fernseher: „Alle auswählen“ oben im Dialog fehlt"
     [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS Alle auswählen" ] || fail "Fernseher: Markierung steht nicht auf „Alle auswählen“ ($(qa | grep -o 'FOCUS .*' | tail -1))"
     na=$(count "AUSBLENDEN_ALLE")
@@ -910,8 +915,8 @@ if open_pane "Filme & Serien"; then
     adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1
     qa | grep -o "FOCUS .*" | tail -1 | grep -q "^FOCUS H " || fail "Fernseher: ▼ unter „Alle auswählen“ führt nicht in die Liste ($(qa | grep -o 'FOCUS .*' | tail -1))"
     adb shell input keyevent KEYCODE_BACK; sleep 2   # schließt, ohne etwas zu übernehmen
-  else fail "Fernseher: Knopf „Filme-Kategorien ausblenden“ nicht gefunden"; fi
-else fail "Fernseher: Bereich „Filme & Serien“ öffnet sich nicht"; fi
+  else fail "Fernseher: Knopf „Filme-Kategorien ausblenden“ mit der Fernbedienung nicht erreicht ($(qa | grep -o 'FOCUS .*' | tail -3 | tr '\n' ' '))"; fi
+else fail "Fernseher: Bereich „Filme & Serien“ mit der Fernbedienung nicht erreicht ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
 for i in 1 2 3; do adb shell input keyevent KEYCODE_BACK; sleep 2; done
 c=$(count "VOD_CAT")
 adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv --es aze_test_xtream "http://10.0.2.2:8090" --ez aze_test_vod true >/dev/null
