@@ -486,7 +486,28 @@ pos_visible() {
   case "$l" in "POS $1|"*) v=$(echo "$l" | cut -d'|' -f4); [ "${v:-0}" -ge 20 ] ;; *) return 1 ;; esac
 }
 # sucht Knopf $1 in den Film-Details mit den Pfeiltasten (auf schmalen Bildschirmen brechen die Knöpfe um)
-focus_btn() { local k; for k in RIGHT RIGHT RIGHT DOWN LEFT LEFT LEFT RIGHT RIGHT RIGHT; do [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ] && return 0; adb shell input keyevent KEYCODE_DPAD_$k; sleep 0.9; done; [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ]; }
+# Seit 1.0.338 wechseln ▲/▼ am Rand der Details zum vorigen/nächsten Film und ◀ geht zur Übersicht – blind drücken
+# geht also nicht mehr. Deshalb nach Lage: Ziel tiefer → ▼, höher → ▲, gleiche Zeile → ▶ bzw. ◀ (dann gibt es dort
+# sicher einen Nachbarn). Lage = Mitte aus der letzten POS-Zeile.
+pos_xy() { qa | grep -F -e "POS $1|" | sed 's/.*AzeQA[^:]*: //' | tail -1 | cut -d'|' -f2,3 | tr '|' ' '; }
+focus_btn() {
+  local want="$1" i cur t c tx ty cx cy k
+  for i in $(seq 1 12); do
+    cur=$(qa | grep -o "FOCUS .*" | tail -1 | sed 's/^FOCUS //')
+    [ "$cur" = "$want" ] && return 0
+    t=$(pos_xy "$want"); c=$(pos_xy "$cur")
+    if [ -z "$t" ] || [ -z "$c" ]; then k=RIGHT
+    else
+      tx=${t% *}; ty=${t#* }; cx=${c% *}; cy=${c#* }
+      if [ $((ty - cy)) -gt 20 ]; then k=DOWN
+      elif [ $((cy - ty)) -gt 20 ]; then k=UP
+      elif [ "$tx" -gt "$cx" ]; then k=RIGHT
+      else k=LEFT; fi
+    fi
+    adb shell input keyevent KEYCODE_DPAD_$k; sleep 0.9
+  done
+  [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $want" ]
+}
 # drückt $2, bis die Markierung auf $1 steht (höchstens $3-mal)
 focus_to() { local i; for i in $(seq 1 "${3:-8}"); do [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ] && return 0; adb shell input keyevent "$2"; sleep 0.9; done; [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS $1" ]; }
 T10c=$(adb shell date +%H:%M:%S | tr -d '\r')
@@ -519,8 +540,13 @@ if wait_for "FOCUS Abspielen" 1 15 >/dev/null; then
   qa | grep -q "POS Weiterschauen ab" || fail "Weiterschauen: Knopf „Weiterschauen ab …“ fehlt nach dem Zurückkommen"
   # Trailer (YouTube) öffnen und mit Zurück schließen
   if focus_btn "▶ Trailer"; then
-    nt=$(count "TRAILER "); adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 8; shot "test10c-trailer"
+    nt=$(count "TRAILER "); nl=$(count "TRAILER_LAEUFT")
+    adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 3
     [ "$(count "TRAILER ")" -gt "$nt" ] || fail "Trailer: OK auf „▶ Trailer“ öffnet nichts"
+    pos_visible "TRAILER HINWEIS" || fail "Trailer: Trailer-Bildschirm kam nicht"
+    # läuft das Video? (braucht YouTube im Emulator – fehlt das, nur ein Hinweis)
+    wait_for "TRAILER_LAEUFT" $((nl+1)) 20 >/dev/null && note "Trailer" "läuft: $(qa | grep TRAILER_LAEUFT | tail -1)" || note "Trailer" "kein Video im Emulator: $(qa | grep -E 'TRAILER_FEHLER' | tail -1)"
+    sleep 2; shot "test10c-trailer"
     adb shell input keyevent KEYCODE_BACK; sleep 3
     qa | grep -o "FOCUS .*" | tail -1 | grep -q "^FOCUS Weiterschauen ab" || fail "Trailer: nach Zurück steht die Markierung nicht wieder auf „Weiterschauen ab …“ ($(qa | grep -o 'FOCUS .*' | tail -1))"
   else fail "Trailer: Knopf mit der Fernbedienung nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
@@ -592,9 +618,8 @@ if wait_for "FOCUS Abspielen" 1 15 >/dev/null && dl_btn "⬇ Herunterladen"; the
     sleep 2; shot "test10d-fertig"
     # vom Gerät abspielen
     nv=$(count "VOD_VOM_GERAET"); nr=$(count "VOD_READY")
-    # zurück auf „Abspielen“ (auf dem schmalen Test-Bildschirm stehen die Knöpfe untereinander: ▲, dann ◀)
-    for k in UP UP UP LEFT LEFT UP LEFT; do [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS Abspielen" ] && break; adb shell input keyevent KEYCODE_DPAD_$k; sleep 0.9; done
-    [ "$(qa | grep -o "FOCUS .*" | tail -1)" = "FOCUS Abspielen" ] || fail "Download: „Abspielen“ nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -1))"
+    # zurück auf „Abspielen“ (auf dem schmalen Test-Bildschirm stehen die Knöpfe untereinander) – nach Lage, nicht blind
+    focus_btn "Abspielen" || fail "Download: „Abspielen“ nicht erreichbar ($(qa | grep -o 'FOCUS .*' | tail -1))"
     adb shell input keyevent KEYCODE_DPAD_CENTER
     wait_for "VOD_READY" $((nr+1)) 30 >/dev/null || fail "Download: geladener Film startet nicht"
     [ "$(count "VOD_VOM_GERAET")" -gt "$nv" ] || fail "Download: Film lief nicht vom Gerät ($(qa | grep -E 'VOD_PLAY|VOD_VOM' | tail -2 | tr '\n' ' '))"
@@ -969,7 +994,33 @@ adb shell am start -S -n $PKG/.MainActivity --es aze_test_device tv --es aze_tes
 wait_for "VOD_CAT" $((c+1)) 40 >/dev/null; sleep 8; shot "test15-tv-filme"
 adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1; adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 2; shot "test15-tv-filme-raster"
 adb shell input keyevent KEYCODE_DPAD_CENTER; sleep 4; shot "test15-tv-film"
-adb shell input keyevent KEYCODE_BACK; sleep 2
+# Fernbedienung in den Details (Aziz 26.11.): ▼ nächster Film mit Beschreibung, ▲ voriger, ◀ zurück zur Kachel
+cur=$(qa | grep "VOD_WISCHEN\|FOCUS V " | tail -1)
+nw=$(count "VOD_WISCHEN")
+for i in 1 2 3 4 5; do adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 1.3; [ "$(count "VOD_WISCHEN")" -gt "$nw" ] && break; done
+if [ "$(count "VOD_WISCHEN")" -gt "$nw" ]; then
+  w1=$(qa | grep "VOD_WISCHEN" | tail -1 | grep -o "VOD_WISCHEN [0-9]*" | grep -o "[0-9]*$")
+  sleep 3; shot "test15-tv-naechster-film"
+  nw=$(count "VOD_WISCHEN")
+  for i in 1 2 3 4 5; do adb shell input keyevent KEYCODE_DPAD_UP; sleep 1.3; [ "$(count "VOD_WISCHEN")" -gt "$nw" ] && break; done
+  w2=$(qa | grep "VOD_WISCHEN" | tail -1 | grep -o "VOD_WISCHEN [0-9]*" | grep -o "[0-9]*$")
+  note "Fernseher Details ▼▲" "▼ → Film $w1, ▲ → Film $w2"
+  [ -n "$w2" ] && [ "$w2" -eq $((w1 - 1)) ] || fail "Fernseher: ▲ in den Details führt nicht zum vorigen Film (▼ $w1, ▲ ${w2:-–})"
+  sleep 2
+else fail "Fernseher: ▼ in den Details wechselt nicht zum nächsten Film ($(qa | grep -o 'FOCUS .*' | tail -2 | tr '\n' ' '))"; fi
+for i in 1 2 3 4 5 6; do adb shell input keyevent KEYCODE_DPAD_LEFT; sleep 1.2; qa | grep -o "FOCUS .*" | tail -1 | grep -q "^FOCUS V " && break; done
+qa | grep -o "FOCUS .*" | tail -1 | grep -q "^FOCUS V ${w2:-2}$" || fail "Fernseher: ◀ in den Details führt nicht zurück zur Kachel ($(qa | grep -o 'FOCUS .*' | tail -1))"
+sleep 1; shot "test15-tv-zurueck-kacheln"
+# Suche (OK lang): das Fenster steht oben, die Tastatur unten verdeckt es nicht
+nl=$(count "VOD_SUCHE_LANG")
+adb shell input keyevent --longpress KEYCODE_DPAD_CENTER; sleep 3; shot "test15-tv-suche-tastatur"
+if [ "$(count "VOD_SUCHE_LANG")" -gt "$nl" ]; then
+  WH=$(scr); H=${WH#*x}
+  ky=$(pos_xy "EINGABE KNOEPFE" | cut -d' ' -f2)
+  note "Fernseher Suche" "Knöpfe der Suche bei y=${ky:-?} von $H"
+  [ -n "$ky" ] && [ "$ky" -lt $((H / 2)) ] || fail "Fernseher: Suchfenster steht nicht oben (Knöpfe bei y=${ky:-?} von $H) – die Tastatur würde es verdecken"
+  adb shell input keyevent KEYCODE_BACK; sleep 1; adb shell input keyevent KEYCODE_BACK; sleep 2
+else fail "Fernseher: OK lang auf der Kachel öffnet die Suche nicht"; fi
 alive || fail "Fernseher: App nicht mehr da"
 hang_check "Fernseher" "$T15"
 adb shell wm size reset; adb shell wm density reset

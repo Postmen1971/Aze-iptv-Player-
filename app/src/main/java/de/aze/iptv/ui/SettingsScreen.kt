@@ -1618,6 +1618,16 @@ internal fun InputDialog(
     var text by remember { mutableStateOf(initial) }
     val focus = remember { FocusRequester() }
     Dialog(onDismissRequest = onCancel) {
+        // Oben am Bildschirm statt in der Mitte (Aziz 26.11.): die Tastatur am Fernseher (untere Hälfte) lag sonst über
+        // Eingabefeld und Knöpfen, z. B. bei der Suche in Filmen & Serien (OK lang gedrückt)
+        val dialogWindow = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+        val topPx = with(androidx.compose.ui.platform.LocalDensity.current) { 16.dp.roundToPx() }
+        LaunchedEffect(dialogWindow) {
+            dialogWindow?.let { w ->
+                w.setGravity(android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL)
+                w.attributes = w.attributes.apply { y = topPx }
+            }
+        }
         Column(
             modifier = Modifier
                 .widthIn(max = 640.dp)
@@ -1646,7 +1656,7 @@ internal fun InputDialog(
                 ),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.qaPos("EINGABE KNOEPFE")) {
                 TvButton("Übernehmen", onClick = { onDone(text) })
                 TvButton("Abbrechen", onClick = onCancel)
             }

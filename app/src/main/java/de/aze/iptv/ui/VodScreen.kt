@@ -64,6 +64,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -143,6 +144,8 @@ fun VodScreen(
     var detailList by remember { mutableStateOf<List<VodItem>?>(null) }
     var detailIdx by remember { mutableIntStateOf(0) }
     var playing by remember { mutableStateOf<Playing?>(null) }
+    // Trailer (YouTube-ID): eigener Bildschirm über allem
+    var trailer by remember { mutableStateOf<String?>(null) }
     // Stelle im Katalog merken: nach Details oder Film zurück wieder in derselben Kategorie beim selben Eintrag landen
     val browseMem = remember { BrowseMemory() }
 
@@ -186,6 +189,12 @@ fun VodScreen(
         return
     }
 
+    val t = trailer
+    if (t != null) {
+        TrailerView(t, onClose = { trailer = null })
+        return
+    }
+
     val dl = detailList
     if (dl != null && detailIdx in dl.indices) {
         // Handy/Tablet: ↑ wischen = nächster Film der Kategorie, ↓ = voriger, ← → = zurück zur Kachel-Übersicht
@@ -203,6 +212,7 @@ fun VodScreen(
                 app = app, api = api, item = dl[idx], series = series, sourceId = src.id,
                 onPlay = { playing = it },
                 onBack = { detailList = null },
+                onTrailer = { trailer = it },
             )
         }
         return
@@ -991,6 +1001,7 @@ private fun DetailView(
     sourceId: String,
     onPlay: (Playing) -> Unit,
     onBack: () -> Unit,
+    onTrailer: (String) -> Unit = {},
 ) {
     BackHandler(onBack = onBack)
     var info by remember(item.id) { mutableStateOf<VodDetails?>(if (series) null else HeroInfo.get("m:$sourceId:${item.id}")) }
@@ -1001,8 +1012,6 @@ private fun DetailView(
     var imdb by remember(item.id) { mutableStateOf<de.aze.iptv.data.Omdb.Rating?>(null) }
     val playButton = remember { FocusRequester() }
     var attempt by remember(item.id) { mutableIntStateOf(0) }
-    // Trailer (YouTube) im Vollbild über den Details
-    var trailer by remember(item.id) { mutableStateOf<String?>(null) }
     val ref = remember(item.id, sourceId, series) { de.aze.iptv.data.VodRef.of(sourceId, series, item) }
     val watched = app.isWatched(sourceId, series, item.id)
     val dScope = rememberCoroutineScope()
@@ -1034,7 +1043,7 @@ private fun DetailView(
     /** Trailer, Vormerken, aus Weiterschauen entfernen – bei Filmen und Serien gleich */
     val extraButtons: @Composable (inContinue: Boolean) -> Unit = { inContinue ->
         info?.trailer?.let { id ->
-            TvButton("▶ Trailer", onClick = { qaLog("TRAILER $id"); trailer = id })
+            TvButton("▶ Trailer", onClick = { qaLog("TRAILER $id"); onTrailer(id) })
         }
         TvButton(if (watched) "✓ Vorgemerkt" else "Vormerken", selected = watched, onClick = { app.toggleWatch(ref) })
         if (inContinue) TvButton("Aus Weiterschauen entfernen", onClick = {
@@ -1217,40 +1226,54 @@ private fun DetailView(
                 }
             }
         }
-        // Trailer im Vollbild (YouTube); Zurück schließt ihn
-        val t = trailer
-        if (t != null) {
-            BackHandler { trailer = null; refocus() }
-            var trailerError by remember(t) { mutableStateOf<String?>(null) }
-            // Markierung in den Trailer holen: sonst steuerte die Fernbedienung die verdeckten Knöpfe dahinter
-            val trailerFocus = remember { FocusRequester() }
-            LaunchedEffect(t) { withFrameNanos { }; runCatching { trailerFocus.requestFocus() } }
-            Box(
-                Modifier.fillMaxSize().background(Color.Black)
-                    .focusRequester(trailerFocus)
-                    .focusable()
-                    .onPreviewKeyEvent { e ->
-                        if ((e.key == Key.Back || e.key == Key.Escape) && e.type == KeyEventType.KeyUp) { trailer = null; refocus() }
-                        true
-                    },
-            ) {
-                YouTubeView(
-                    url = "youtube:video:$t",
-                    modifier = Modifier.fillMaxSize(),
-                    onPlaying = { trailerError = null },
-                    onError = { trailerError = it },
-                )
-                Text(
-                    trailerError ?: Device.hint("Trailer · Zurück schließt ihn", "Trailer · Zurück schließt ihn"),
-                    color = if (trailerError != null) Palette.Live else Palette.TextSoft, fontSize = 14.sp,
-                    modifier = Modifier.align(Alignment.TopStart).padding(16.dp)
-                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp),
-                )
-                if (Device.isTouch) {
-                    // etwas tiefer: oben rechts steht am Handy die Zahl „1 / 200“ (Wischen durch die Filme)
-                    TvButton("✕ Schließen", onClick = { trailer = null; refocus() }, modifier = Modifier.align(Alignment.TopEnd).padding(top = 52.dp, end = 12.dp))
-                }
-            }
+    }
+}
+
+/**
+ * Trailer (YouTube) im Vollbild. Die YouTube-Anzeige liegt – wie bei den YouTube-Sendern – HINTER der Oberfläche
+ * (eingebettet zeigen SHIELD & Co. nur Ton, kein Bild). Deshalb ist hier alles durchsichtig und die Details sind
+ * währenddessen weg (Aziz 26.11.: „Trailer nur Ton, kein Bild“ – vorher lag ein schwarzes Feld darüber).
+ */
+@Composable
+private fun TrailerView(id: String, onClose: () -> Unit) {
+    BackHandler(onBack = onClose)
+    var error by remember(id) { mutableStateOf<String?>(null) }
+    var playing by remember(id) { mutableStateOf(false) }
+    // Markierung hier halten: die Fernbedienung steuert nichts dahinter; Zurück schließt
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(id) { withFrameNanos { }; runCatching { focus.requestFocus() } }
+    Box(
+        Modifier.fillMaxSize()
+            .focusRequester(focus)
+            .focusable()
+            .onPreviewKeyEvent { e ->
+                if ((e.key == Key.Back || e.key == Key.Escape) && e.type == KeyEventType.KeyUp) onClose()
+                true
+            },
+    ) {
+        YouTubeView(
+            url = "youtube:video:$id",
+            modifier = Modifier.fillMaxSize(),
+            onPlaying = {
+                error = null
+                if (!playing) { playing = true; qaLog("TRAILER_LAEUFT $id") }
+            },
+            onError = { error = it; qaLog("TRAILER_FEHLER $it") },
+        )
+        // Hinweis nur kurz bzw. bis das Bild da ist
+        var hint by remember(id) { mutableStateOf(true) }
+        LaunchedEffect(id) { delay(5_000); hint = false }
+        if (error != null || hint || !playing) {
+            Text(
+                error ?: if (playing) "Trailer · Zurück schließt ihn" else "Trailer lädt … · Zurück schließt ihn",
+                color = if (error != null) Palette.Live else Palette.TextSoft, fontSize = 14.sp,
+                modifier = Modifier.align(Alignment.TopStart).padding(16.dp)
+                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp)
+                    .qaPos("TRAILER HINWEIS"),
+            )
+        }
+        if (Device.isTouch) {
+            TvButton("✕ Schließen", onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
         }
     }
 }
@@ -1270,7 +1293,6 @@ private fun SwipeDetail(
     onBack: () -> Unit,
     content: @Composable (Int) -> Unit,
 ) {
-    if (!enabled) { content(index); return }
     // hat während dieser Berührung etwas in der Ansicht gescrollt?
     val scrolled = remember { booleanArrayOf(false) }
     val conn = remember {
@@ -1297,12 +1319,38 @@ private fun SwipeDetail(
     var help by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) { delay(6_000); help = false }
     LaunchedEffect(edge) { if (edge != null) { delay(2_500); edge = null } }
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     Box(
         Modifier
             .fillMaxSize()
             .background(Palette.Ground)
+            // Fernbedienung (Aziz 26.11.): ▼ nächster Film mit Beschreibung, ▲ voriger, ◀ zurück zur Kachel-Übersicht –
+            // aber nur, wenn die Markierung in diese Richtung nicht mehr weiterkommt (Knöpfe in zwei Zeilen, Folgenliste,
+            // Staffeln). Gehaltene Taste wechselt nicht (sonst rauscht man vom Ende der Folgenliste in die nächste Serie).
+            .onKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                val dir = when (e.key) {
+                    Key.DirectionDown -> androidx.compose.ui.focus.FocusDirection.Down
+                    Key.DirectionUp -> androidx.compose.ui.focus.FocusDirection.Up
+                    Key.DirectionLeft -> androidx.compose.ui.focus.FocusDirection.Left
+                    else -> return@onKeyEvent false
+                }
+                if (focusManager.moveFocus(dir)) return@onKeyEvent true
+                if (e.nativeKeyEvent.repeatCount > 0) return@onKeyEvent true
+                val i = current.value
+                when (dir) {
+                    androidx.compose.ui.focus.FocusDirection.Left -> toBack.value()
+                    else -> {
+                        val n = if (dir == androidx.compose.ui.focus.FocusDirection.Down) i + 1 else i - 1
+                        if (n in 0 until count) toIndex.value(n)
+                        else edge = if (n >= count) "Das war $art letzte $kind dieser Kategorie" else "Das ist $art erste $kind dieser Kategorie"
+                    }
+                }
+                true
+            }
             .nestedScroll(conn)
             .pointerInput(count) {
+                if (!enabled) return@pointerInput
                 awaitEachGesture {
                     // nur mitlesen (nichts verbrauchen): Knöpfe und Scrollen darunter funktionieren normal
                     val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
@@ -1352,7 +1400,9 @@ private fun SwipeDetail(
             modifier = Modifier.align(Alignment.TopEnd).padding(10.dp)
                 .background(Palette.Ground.copy(alpha = 0.7f), RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 3.dp),
         )
-        val note = edge ?: if (help) "↑ wischen: $next $kind · ↓ zurück · ← → Übersicht" else null
+        val note = edge ?: if (help) {
+            if (enabled) "↑ wischen: $next $kind · ↓ zurück · ← → Übersicht" else "▼ $next $kind · ▲ zurück · ◀ Übersicht"
+        } else null
         if (note != null) {
             Text(
                 note,
