@@ -545,7 +545,15 @@ if wait_for "FOCUS Abspielen" 1 15 >/dev/null; then
     [ "$(count "TRAILER ")" -gt "$nt" ] || fail "Trailer: OK auf „▶ Trailer“ öffnet nichts"
     pos_visible "TRAILER HINWEIS" || fail "Trailer: Trailer-Bildschirm kam nicht"
     # läuft das Video? (braucht YouTube im Emulator – fehlt das, nur ein Hinweis)
-    wait_for "TRAILER_LAEUFT" $((nl+1)) 20 >/dev/null && note "Trailer" "läuft: $(qa | grep TRAILER_LAEUFT | tail -1)" || note "Trailer" "kein Video im Emulator: $(qa | grep -E 'TRAILER_FEHLER' | tail -1)"
+    # (wait_for zählt ein Ausbleiben als Fehler – hier soll es nur ein Hinweis sein)
+    for i in $(seq 1 16); do [ "$(count "TRAILER_LAEUFT")" -gt "$nl" ] && break; sleep 1; done
+    if [ "$(count "TRAILER_LAEUFT")" -gt "$nl" ]; then note "Trailer" "läuft: $(qa | grep TRAILER_LAEUFT | tail -1)"
+    else
+      # ohne Bild nach 12 s: Hinweis auf die YouTube-App muss da sein
+      sleep 2
+      [ "$(count "TRAILER_STARTET_NICHT")" -gt 0 ] || [ "$(count "TRAILER_FEHLER")" -gt 0 ] || fail "Trailer: kein Bild und kein Hinweis auf die YouTube-App"
+      note "Trailer" "kein Video im Emulator (YouTube fehlt dort) – Hinweis „OK = in der YouTube-App öffnen“ erscheint: $(qa | grep -E 'TRAILER_FEHLER|TRAILER_STARTET' | tail -1)"
+    fi
     sleep 2; shot "test10c-trailer"
     adb shell input keyevent KEYCODE_BACK; sleep 3
     qa | grep -o "FOCUS .*" | tail -1 | grep -q "^FOCUS Weiterschauen ab" || fail "Trailer: nach Zurück steht die Markierung nicht wieder auf „Weiterschauen ab …“ ($(qa | grep -o 'FOCUS .*' | tail -1))"

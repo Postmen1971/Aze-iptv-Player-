@@ -191,7 +191,7 @@ fun VodScreen(
 
     val t = trailer
     if (t != null) {
-        TrailerView(t, onClose = { trailer = null })
+        TrailerView(app, t, onClose = { trailer = null })
         return
     }
 
@@ -1235,11 +1235,41 @@ private fun DetailView(
  * währenddessen weg (Aziz 26.11.: „Trailer nur Ton, kein Bild“ – vorher lag ein schwarzes Feld darüber).
  */
 @Composable
-private fun TrailerView(id: String, onClose: () -> Unit) {
+private fun TrailerView(app: AppController, id: String, onClose: () -> Unit) {
+    val context = LocalContext.current
     BackHandler(onBack = onClose)
     var error by remember(id) { mutableStateOf<String?>(null) }
     var playing by remember(id) { mutableStateOf(false) }
-    // Markierung hier halten: die Fernbedienung steuert nichts dahinter; Zurück schließt
+    // 12 s ohne Bild: Hinweis auf die YouTube-App (Aziz 26.11.: Trailer schwarz, ohne Ton)
+    var slow by remember(id) { mutableStateOf(false) }
+    // In der offiziellen YouTube-App öffnen – läuft dort auf jedem Gerät mit Bild und Ton; Zurück kommt hierher
+    val openApp: () -> Boolean = {
+        val ok = runCatching {
+            context.startActivity(
+                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(de.aze.iptv.data.YouTube.watchUrl("youtube:video:$id")))
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.isSuccess
+        qaLog("TRAILER_YOUTUBE_APP $id ${if (ok) "geöffnet" else "fehlt"}")
+        ok
+    }
+    // Einstellung „YouTube: In der YouTube-App“ (Einstellungen → YouTube): Trailer gleich dort
+    if (app.youtubeExternal) {
+        LaunchedEffect(id) {
+            if (!openApp()) app.message = "YouTube-App ist nicht installiert"
+            onClose()
+        }
+        return
+    }
+    LaunchedEffect(id) {
+        delay(12_000)
+        if (!playing) {
+            slow = true
+            qaLog("TRAILER_STARTET_NICHT $id")
+            de.aze.iptv.data.HangLog.add("TRAILER_STARTET_NICHT $id" + (error?.let { " · $it" } ?: ""))
+        }
+    }
+    // Markierung hier halten: die Fernbedienung steuert nichts dahinter; Zurück schließt, OK = YouTube-App
     val focus = remember { FocusRequester() }
     LaunchedEffect(id) { withFrameNanos { }; runCatching { focus.requestFocus() } }
     Box(
@@ -1247,7 +1277,11 @@ private fun TrailerView(id: String, onClose: () -> Unit) {
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { e ->
-                if ((e.key == Key.Back || e.key == Key.Escape) && e.type == KeyEventType.KeyUp) onClose()
+                if (e.type == KeyEventType.KeyUp) when (e.key) {
+                    Key.Back, Key.Escape -> onClose()
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> if (openApp()) onClose() else { error = "YouTube-App ist nicht installiert" }
+                    else -> {}
+                }
                 true
             },
     ) {
@@ -1256,24 +1290,38 @@ private fun TrailerView(id: String, onClose: () -> Unit) {
             modifier = Modifier.fillMaxSize(),
             onPlaying = {
                 error = null
+                slow = false
                 if (!playing) { playing = true; qaLog("TRAILER_LAEUFT $id") }
             },
-            onError = { error = it; qaLog("TRAILER_FEHLER $it") },
+            onError = {
+                error = it
+                qaLog("TRAILER_FEHLER $it")
+                de.aze.iptv.data.HangLog.add("TRAILER_FEHLER $id · $it")
+            },
         )
-        // Hinweis nur kurz bzw. bis das Bild da ist
+        // Hinweis kurz bzw. bis das Bild da ist; bei Fehler oder ohne Bild mit dem Weg in die YouTube-App
         var hint by remember(id) { mutableStateOf(true) }
         LaunchedEffect(id) { delay(5_000); hint = false }
+        val ytHint = Device.hint("OK = in der YouTube-App öffnen", "„YouTube-App“ antippen")
         if (error != null || hint || !playing) {
             Text(
-                error ?: if (playing) "Trailer · Zurück schließt ihn" else "Trailer lädt … · Zurück schließt ihn",
-                color = if (error != null) Palette.Live else Palette.TextSoft, fontSize = 14.sp,
+                when {
+                    error != null -> "$error · $ytHint"
+                    slow -> "Trailer startet hier nicht · $ytHint"
+                    playing -> "Trailer · Zurück schließt ihn · " + Device.hint("OK = YouTube-App", "YouTube-App möglich")
+                    else -> "Trailer lädt … · Zurück schließt ihn"
+                },
+                color = if (error != null || slow) Palette.Live else Palette.TextSoft, fontSize = 14.sp,
                 modifier = Modifier.align(Alignment.TopStart).padding(16.dp)
                     .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp)
                     .qaPos("TRAILER HINWEIS"),
             )
         }
         if (Device.isTouch) {
-            TvButton("✕ Schließen", onClick = onClose, modifier = Modifier.align(Alignment.TopEnd).padding(12.dp))
+            Row(Modifier.align(Alignment.TopEnd).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TvButton("▶ YouTube-App", onClick = { if (openApp()) onClose() else { error = "YouTube-App ist nicht installiert" } })
+                TvButton("✕ Schließen", onClick = onClose)
+            }
         }
     }
 }
