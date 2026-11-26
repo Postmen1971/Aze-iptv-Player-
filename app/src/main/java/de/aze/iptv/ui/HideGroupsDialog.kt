@@ -70,10 +70,17 @@ fun HideListDialog(
     val all = entries
     var hidden by remember { mutableStateOf(all.filter { it.hidden }.map { it.key }.toSet()) }
     var warn by remember { mutableStateOf(false) }
+    // Markierung startet oben auf „Alle auswählen“ (Aziz 26.11.: bei vielen Kategorien nicht erst ganz nach unten)
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) {
         withFrameNanos { }
         runCatching { first.requestFocus() }
+    }
+    val allOn = all.isNotEmpty() && hidden.containsAll(all.map { it.key })
+    val toggleAll = {
+        hidden = if (allOn) emptySet() else all.map { it.key }.toSet()
+        qaLog(if (allOn) "AUSBLENDEN_ALLE_AB" else "AUSBLENDEN_ALLE")
+        warn = false
     }
 
     val cfg = androidx.compose.ui.platform.LocalConfiguration.current
@@ -96,12 +103,20 @@ fun HideListDialog(
                     color = if (warn) Palette.Live else Palette.TextMuted, fontSize = 13.sp,
                 )
             }
+            // „Alle auswählen“ auch oben – unten steht es zusätzlich neben OK
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Box(Modifier.qaPos("ALLE OBEN")) {
+                    TvButton(if (allOn) "Alle abwählen" else "Alle auswählen", modifier = Modifier.focusRequester(first), onClick = toggleAll)
+                }
+                Text("${hidden.count { k -> all.any { it.key == k } }} von ${all.size} ausgeblendet", color = Palette.TextMuted, fontSize = 13.sp)
+            }
             // weight(fill = false): die Liste nimmt nur den Platz, der nach Überschrift und Knöpfen übrig ist
             LazyColumn(Modifier.weight(1f, fill = false).heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                itemsIndexed(all, key = { _, g -> g.key }) { i, g ->
+                itemsIndexed(all, key = { _, g -> g.key }) { _, g ->
                     val on = g.key in hidden
                     Focusable(
-                        modifier = Modifier.fillMaxWidth().then(if (i == 0) Modifier.focusRequester(first) else Modifier),
+                        modifier = Modifier.fillMaxWidth(),
+                        qaName = "H ${g.name}",
                         onClick = {
                             hidden = if (on) hidden - g.key else hidden + g.key
                             warn = false
@@ -142,18 +157,13 @@ fun HideListDialog(
                     }
                 }
             }
-            val allOn = all.isNotEmpty() && hidden.containsAll(all.map { it.key })
             androidx.compose.foundation.layout.FlowRow(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // alles anhaken (danach einzelne wieder abhaken) – sind schon alle angehakt: alle wieder weg
-                TvButton(if (allOn) "Alle abwählen" else "Alle auswählen", onClick = {
-                    hidden = if (allOn) emptySet() else all.map { it.key }.toSet()
-                    qaLog(if (allOn) "AUSBLENDEN_ALLE_AB" else "AUSBLENDEN_ALLE")
-                    warn = false
-                })
+                TvButton(if (allOn) "Alle abwählen" else "Alle auswählen", onClick = toggleAll)
                 TvButton("Abbrechen", onClick = onClose)
                 TvButton("OK", selected = true, onClick = {
                     if (all.isNotEmpty() && all.all { it.key in hidden }) {
