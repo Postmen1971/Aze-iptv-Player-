@@ -901,7 +901,8 @@ if focus_to "SET Filme & Serien" KEYCODE_DPAD_DOWN 14; then
   sleep 1.5; adb shell input keyevent KEYCODE_DPAD_RIGHT; sleep 1
   ok=0
   for i in $(seq 1 22); do
-    qa | grep -o "FOCUS .*" | tail -1 | grep -q "^FOCUS Filme-Kategorien ausblenden" && { ok=1; break; }
+    # Filme oder Serien – derselbe Dialog (▼ landet je nach Breite auf dem einen oder anderen Knopf)
+    qa | grep -o "FOCUS .*" | tail -1 | grep -qE "^FOCUS (Filme|Serien)-Kategorien ausblenden" && { ok=1; break; }
     adb shell input keyevent KEYCODE_DPAD_DOWN; sleep 0.8
   done
   if [ $ok = 1 ]; then
