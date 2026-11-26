@@ -18,6 +18,14 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
+    <!-- Trailer in der YouTube-App öffnen: ab Android 11 muss die App angeben, welche Apps sie sehen will -->
+    <queries>
+        <package android:name="com.google.android.youtube.tv" />
+        <package android:name="com.google.android.youtube.googletv" />
+        <package android:name="com.amazon.firetv.youtube" />
+        <package android:name="com.google.android.youtube" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:fullBackupContent="false"

@@ -1870,6 +1870,18 @@ private fun VodListsSection(app: AppController) {
             TvButton("Weiterschauen leeren (${app.vodContinue.size})", modifier = Modifier.qaPos("WEITERSCHAUEN LEEREN"), onClick = { ask = 1 })
             TvButton("Merkliste leeren (${app.vodWatch.size})", onClick = { ask = 2 })
         }
+        Text("Trailer abspielen", color = Palette.TextSoft, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            TvButton("In der YouTube-App", selected = app.trailerExternal, onClick = { app.updateTrailerExternal(true) })
+            TvButton("Im Player der App", selected = !app.trailerExternal, onClick = { app.updateTrailerExternal(false) })
+        }
+        Text(
+            "In der YouTube-App läuft der Trailer sicher mit Bild und Ton; mit Zurück bist du wieder hier. Ist keine YouTube-App " +
+                "installiert, läuft er im Player der App (dort lassen manche Studios ihre Trailer nicht zu).",
+            color = Palette.TextMuted, fontSize = 13.sp,
+        )
         val langs = listOfNotNull(
             app.vodAudioLang?.let { "Ton: ${langName(it)}" },
             app.vodSubLang?.let { "Untertitel: ${if (it == "aus") "aus" else langName(it)}" },

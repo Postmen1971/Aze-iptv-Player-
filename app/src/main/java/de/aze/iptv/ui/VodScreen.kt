@@ -146,6 +146,7 @@ fun VodScreen(
     var playing by remember { mutableStateOf<Playing?>(null) }
     // Trailer (YouTube-ID): eigener Bildschirm über allem
     var trailer by remember { mutableStateOf<String?>(null) }
+    val vodContext = LocalContext.current
     // Stelle im Katalog merken: nach Details oder Film zurück wieder in derselben Kategorie beim selben Eintrag landen
     val browseMem = remember { BrowseMemory() }
 
@@ -212,7 +213,11 @@ fun VodScreen(
                 app = app, api = api, item = dl[idx], series = series, sourceId = src.id,
                 onPlay = { playing = it },
                 onBack = { detailList = null },
-                onTrailer = { trailer = it },
+                onTrailer = { id ->
+                    // Standard: gleich in der YouTube-App (läuft dort sicher mit Bild und Ton), Zurück kommt hierher
+                    if (app.trailerExternal && de.aze.iptv.data.YouTube.openInApp(vodContext, id)) qaLog("TRAILER_YOUTUBE_APP $id direkt")
+                    else trailer = id
+                },
             )
         }
         return
@@ -1244,22 +1249,9 @@ private fun TrailerView(app: AppController, id: String, onClose: () -> Unit) {
     var slow by remember(id) { mutableStateOf(false) }
     // In der offiziellen YouTube-App öffnen – läuft dort auf jedem Gerät mit Bild und Ton; Zurück kommt hierher
     val openApp: () -> Boolean = {
-        val ok = runCatching {
-            context.startActivity(
-                android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(de.aze.iptv.data.YouTube.watchUrl("youtube:video:$id")))
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-            )
-        }.isSuccess
+        val ok = de.aze.iptv.data.YouTube.openInApp(context, id)
         qaLog("TRAILER_YOUTUBE_APP $id ${if (ok) "geöffnet" else "fehlt"}")
         ok
-    }
-    // Einstellung „YouTube: In der YouTube-App“ (Einstellungen → YouTube): Trailer gleich dort
-    if (app.youtubeExternal) {
-        LaunchedEffect(id) {
-            if (!openApp()) app.message = "YouTube-App ist nicht installiert"
-            onClose()
-        }
-        return
     }
     LaunchedEffect(id) {
         delay(12_000)
