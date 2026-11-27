@@ -806,9 +806,10 @@ open_list; NG=$(count "POS G "); swipe_r; [ "$(count "POS G ")" -gt "$NG" ] || {
 swipe_r
 if tap "M Filme"; then
   sleep 6; shot "test13-filme"
-  # Filter steht evtl. auf einer Playlist ohne Filme: „Playlist: …“ antippen, bis Cover da sind
+  # Erste Playlist ohne Filme: die App springt selbst in eine mit Filmen (VOD_PLAYLIST_LEER); sonst eine Kategorie antippen
   for p in 1 2 3; do qa | tail -400 | grep -q "POS V 1|" && break
-    P=$(qa | grep -oE "POS Playlist: [^|]*" | tail -1 | sed 's/POS //'); [ -n "$P" ] && tap "$P"; sleep 4; done
+    K=$(qa | tail -300 | grep -oE "POS K [^|]*\|[-0-9]*\|[-0-9]*\|[0-9]+" | awk -F'|' '$4>=30' | cut -d'|' -f1 | sed 's/POS //' | grep -v "K ▶\|K ★\|K ⬇\|K ✦" | head -1)
+    [ -n "$K" ] && tap "$K"; sleep 4; done
   tap "V 1" && { sleep 3; shot "test13-film"; tap "Zurück" || adb shell input keyevent KEYCODE_BACK; sleep 2; } || fail "Touch: Film-Cover nicht antippbar"
   tap "Serien" || fail "Touch: Filme – „Serien“ nicht antippbar"
   sleep 3; tap "📺 Live-TV" || { fail "Touch: Filme – „📺 Live-TV“ nicht antippbar"; adb shell input keyevent KEYCODE_BACK; }

@@ -539,6 +539,15 @@ private fun Browse(
         }
         out
     }
+    // Aktive Playlist hat gar keine Filme/Serien (z. B. reine Live-Liste), eine andere schon: gleich dorthin
+    LaunchedEffect(cats, otherLists) {
+        if (cats?.isEmpty() != true) return@LaunchedEffect
+        val i = listedSources.firstOrNull { sources[it].id != sourceId && otherLists[sources[it].id]?.isNotEmpty() == true } ?: return@LaunchedEffect
+        val l = otherLists[sources[i].id] ?: return@LaunchedEffect
+        val first = l.firstOrNull { !it.id.startsWith("@") } ?: l.first()
+        qaLog("VOD_PLAYLIST_LEER → ${sources[i].name}")
+        onSelectSource(i, first.id)
+    }
     val selectedRow = catRows.indexOfFirst { it.active && it.cat != null && it.cat.id == selCat?.id }
     mem.selected = selectedRow.coerceAtLeast(0)
     mem.selectedId = selCat?.id ?: selectedId
