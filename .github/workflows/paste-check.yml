@@ -12,6 +12,7 @@ jobs:
             echo "::notice title=$1::Größe $(stat -c%s "$2") Byte → HTTP $code · $(sed 's/<[^>]*>//g' r.txt | tr -s ' \n' ' ' | head -c 300)"
             sleep 6
           }
+          set +e
           printf 'Aze test einfach\n' > a.txt; try "klein ASCII" a.txt
           code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://paste.rs/); echo "::notice title=ohne Content-Type::HTTP $code · $(sed 's/<[^>]*>//g' r.txt | tr -s ' \n' ' ' | head -c 400)"; sleep 6
           code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'content=Aze test' https://paste.rs/); echo "::notice title=Formular::HTTP $code · $(sed 's/<[^>]*>//g' r.txt | tr -s ' \n' ' ' | head -c 400)"; sleep 6
@@ -32,9 +33,14 @@ jobs:
           printf 'TRAILER_FEHLER abcdefghijk · Der Uploader stellt dieses Video in deinem Land nicht zur Verfügung\nhttps://www.youtube.com/watch?v=abc\n' > f.txt; try "mit Link" f.txt
       - name: Ersatzdienste
         run: |
+          set +e
           printf 'Aze test Umlaute ÄÖÜ · → ✓\n' > a.txt
-          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -A 'Aze-IPTV' --data-urlencode "content@a.txt" -d syntax=text -d expiry_days=30 https://dpaste.com/api/v2/); echo "::notice title=dpaste.com::HTTP $code · $(head -c 200 r.txt)"
-          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'file=@a.txt' https://0x0.st); echo "::notice title=0x0.st::HTTP $code · $(head -c 200 r.txt)"
-          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://bpa.st/curl); echo "::notice title=bpa.st::HTTP $code · $(head -c 200 r.txt)"
-          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'f:1=<a.txt' https://ix.io); echo "::notice title=ix.io::HTTP $code · $(head -c 200 r.txt)"
-          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://paste.c-net.org/); echo "::notice title=paste.c-net.org::HTTP $code · $(head -c 200 r.txt)"
+          t() { echo "::notice title=$1::HTTP $2 · $(sed 's/<[^>]*>//g' r.txt 2>/dev/null | tr -s ' \n' ' ' | head -c 250)"; rm -f r.txt; }
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -A 'Aze-IPTV' --data-urlencode "content@a.txt" -d syntax=text -d expiry_days=30 https://dpaste.com/api/v2/ 2>&1); t dpaste.com "$code"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'file=@a.txt' -A 'Aze-IPTV/1.0' https://0x0.st 2>&1); t 0x0.st "$code"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://bpa.st/curl 2>&1); t bpa.st "$code"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'content=<a.txt' https://dpaste.org/api/ 2>&1); t dpaste.org "$code"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://paste.c-net.org/ 2>&1); t paste.c-net.org "$code"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'clbin=<a.txt' https://clbin.com 2>&1); t clbin.com "$code"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://termbin.com 2>&1); t termbin "$code"
+          curl -sS -m 30 https://paste.rs/web -o r.txt; echo "::notice title=paste.rs Formular::$(grep -io '<form[^>]*>' r.txt | head -3) $(grep -io '<textarea[^>]*>\|<input[^>]*>' r.txt | head -5 | tr '\n' ' ')"
