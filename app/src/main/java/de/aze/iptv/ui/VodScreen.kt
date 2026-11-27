@@ -497,18 +497,20 @@ private fun Browse(
     // ---- Kategorienliste über alle Playlists (Aziz 27.11.) ----
     val catCacheNow = mem.catCache.toMap()
     val collapsedNow = app.vodCollapsed
-    val otherLists = remember(catCacheNow, hiddenVod, adultOff, dlEntries, series, sources, sourceId, app.vodContinue, app.vodWatch) {
+    val otherLists: Map<String, List<VodCategory>?> = remember(catCacheNow, hiddenVod, adultOff, dlEntries, series, sources, sourceId, app.vodContinue, app.vodWatch) {
         sources.associate { s ->
-            s.id to if (s.id == sourceId) null else catCacheNow["${s.id}|${if (series) "s" else "m"}"]?.let { raw ->
-                val filtered = raw.filterNot { (adultOff && de.aze.iptv.data.AdultFilter.isAdult(it.name)) || app.isVodHidden(s.id, series, it.id) }
-                buildList {
+            val raw: List<VodCategory>? = if (s.id == sourceId) null else catCacheNow["${s.id}|${if (series) "s" else "m"}"]
+            val shown: List<VodCategory>? = raw?.let { r ->
+                val filtered = r.filterNot { c -> (adultOff && de.aze.iptv.data.AdultFilter.isAdult(c.name)) || app.isVodHidden(s.id, series, c.id) }
+                buildList<VodCategory> {
                     if (app.continueFor(s.id, series).isNotEmpty()) add(VodCategory(CAT_CONTINUE, "▶ Weiterschauen"))
-                    if (dlEntries.any { it.ref.sourceId == s.id && it.ref.series == series }) add(VodCategory(CAT_DL, "⬇ Heruntergeladen"))
+                    if (dlEntries.any { d -> d.ref.sourceId == s.id && d.ref.series == series }) add(VodCategory(CAT_DL, "⬇ Heruntergeladen"))
                     if (app.watchFor(s.id, series).isNotEmpty()) add(VodCategory(CAT_WATCH, "★ Merkliste"))
                     if (filtered.isNotEmpty() && runCatching { app.vodProvider(s).supportsNew() }.getOrDefault(false)) add(VodCategory(CAT_NEW, "✦ Neu hinzugefügt"))
                     addAll(filtered)
                 }
             }
+            s.id to shown
         }
     }
     // Playlists ohne Filme/Serien (reine Live-Listen) erscheinen gar nicht; die aktive immer
