@@ -274,6 +274,14 @@ class Store(context: Context) {
         }.getOrDefault(emptySet())
         set(v) = prefs.edit().putString("vodHidden", JSONArray(v.toList()).toString()).apply()
 
+    /** Filme & Serien: zugeklappte Playlists in der Kategorienliste (Einträge "playlistId|m" bzw. "|s") */
+    var vodCollapsed: Set<String>
+        get() = runCatching {
+            val a = JSONArray(prefs.getString("vodCollapsed", "[]"))
+            (0 until a.length()).map { a.getString(it) }.toSet()
+        }.getOrDefault(emptySet())
+        set(v) = prefs.edit().putString("vodCollapsed", JSONArray(v.toList()).toString()).apply()
+
     /** Optional: Schlüssel für omdbapi.com, um IMDb-Bewertungen anzuzeigen. */
     var omdbKey: String
         get() = Secure.decrypt(prefs.getString("omdbKey", "")) ?: ""

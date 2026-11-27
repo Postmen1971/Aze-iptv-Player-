@@ -238,9 +238,17 @@ fun VodScreen(
         mem = browseMem,
         app = app, api = api, series = series, sourceId = src.id,
         sourceLabel = src.name,
+        sources = vodSources,
         multi = vodSources.size > 1,
         onSwitch = { series = it },
-        onNextSource = { sourceIdx = (sourceIdx + 1) % vodSources.size },
+        // Kategorie einer anderen Playlist gewählt: diese wird die aktive (Kategorie bleibt gewählt)
+        onSelectSource = { i, catId ->
+            if (i in vodSources.indices && i != sourceIdx) {
+                browseMem.pendingSel = catId
+                qaLog("VOD_PLAYLIST ${vodSources[i].name}")
+                sourceIdx = i
+            }
+        },
         onOpen = { list, idx -> detailList = list; detailIdx = idx },
         onExit = onExit,
         onOpenSettings = onOpenSettings,
@@ -250,10 +258,77 @@ fun VodScreen(
     )
 }
 
+/** Zeile der Kategorienliste: Kopfzeile einer Playlist (cat == null) oder eine Kategorie */
+private class VodCatRow(
+    val src: Int,
+    val srcId: String,
+    val cat: VodCategory?,
+    val key: String,
+    val active: Boolean,
+    val count: Int? = null,
+)
+
+/**
+ * Kopfzeile einer Playlist in der Kategorienliste. Ab zwei Playlists mit Anzahl und ▲ (aufgeklappt) / ▼ (zugeklappt),
+ * OK klappt – wie die Gruppen beim Fernsehen. Mit nur einer Playlist steht nur ihr Name da (nicht anwählbar).
+ */
+@Composable
+private fun VodPlaylistHeader(name: String, active: Boolean, multi: Boolean, count: Int?, collapsed: Boolean, kind: String, onToggle: () -> Unit) {
+    if (!multi) {
+        Text(
+            name, color = Palette.Highlight, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().padding(start = 10.dp, top = 2.dp, bottom = 4.dp).qaPos("PL $name"),
+        )
+        return
+    }
+    Focusable(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp), onClick = onToggle, qaName = "PL $name") { focused ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    when {
+                        focused -> Palette.Accent
+                        active -> Palette.Highlight.copy(alpha = 0.22f)
+                        else -> Palette.Highlight.copy(alpha = 0.10f)
+                    },
+                    RoundedCornerShape(14.dp),
+                )
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                name,
+                color = if (focused) Palette.OnAccent else if (active) Palette.Highlight else Palette.Text,
+                fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f),
+            )
+            if (count != null) {
+                Text(
+                    "$count Kategorien",
+                    color = if (focused) Palette.OnAccent else Palette.TextMuted, fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
+            Text(
+                if (collapsed) "▼" else "▲",
+                color = if (focused) Palette.OnAccent else Palette.Highlight, fontSize = 13.sp,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+    }
+}
+
 /** Wo man im Katalog zuletzt war (kein Compose-Zustand: wird nur beim Wiederaufbau der Übersicht gelesen). */
 private class BrowseMemory {
-    var api: Any? = null
+    var srcId: String? = null
     var series = false
+    /** beim Wechsel in eine andere Playlist: diese Kategorie dort wählen */
+    var pendingSel: String? = null
+    /** Kategorien je Playlist ("id|m"/"id|s") – beim Wechsel sofort da, und für die Kopfzeilen der anderen Playlists */
+    val catCache = androidx.compose.runtime.mutableStateMapOf<String, List<VodCategory>>()
+    /** Anzahl je Kategorie je Playlist (sobald bekannt) */
+    val countCache = androidx.compose.runtime.mutableStateMapOf<String, Map<String, Int>>()
     var selected = 0
     var selectedId: String? = null
     var query: String? = null
@@ -269,9 +344,10 @@ private fun Browse(
     series: Boolean,
     sourceId: String,
     sourceLabel: String,
+    sources: List<de.aze.iptv.data.PlaylistSource>,
     multi: Boolean,
     onSwitch: (Boolean) -> Unit,
-    onNextSource: () -> Unit,
+    onSelectSource: (Int, String) -> Unit,
     onOpen: (List<VodItem>, Int) -> Unit,
     onExit: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -279,14 +355,20 @@ private fun Browse(
     onSkorText: (() -> Unit)? = null,
     onQuit: (() -> Unit)? = null,
 ) {
-    val keep = mem.api === api && mem.series == series
-    if (!keep) { mem.api = api; mem.series = series; mem.selected = 0; mem.selectedId = null; mem.query = null; mem.openIdx = -1 }
-    var cats by remember(api, series) { mutableStateOf<List<VodCategory>?>(null) }
+    val keep = mem.srcId == sourceId && mem.series == series
+    if (!keep) {
+        // andere Playlist oder Filme ↔ Serien: von vorn – bei Playlist-Wechsel über die Kategorienliste die dort gewählte Kategorie
+        mem.selectedId = if (mem.series == series) mem.pendingSel else null
+        mem.pendingSel = null
+        mem.srcId = sourceId; mem.series = series; mem.selected = 0; mem.query = null; mem.openIdx = -1
+    }
+    val cacheKey = "$sourceId|${if (series) "s" else "m"}"
+    var cats by remember(api, series) { mutableStateOf<List<VodCategory>?>(mem.catCache[cacheKey]) }
     // gewählte Kategorie per id: oben kommen eigene Listen dazu oder fallen weg (Weiterschauen leer), die Auswahl bleibt
     var selectedId by remember(api, series) { mutableStateOf(mem.selectedId) }
     var items by remember(api, series) { mutableStateOf<List<VodItem>?>(null) }
     var error by remember(api, series) { mutableStateOf<String?>(null) }
-    var counts by remember(api, series) { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var counts by remember(api, series) { mutableStateOf(mem.countCache[cacheKey] ?: emptyMap()) }
     var menu by remember { mutableStateOf(false) }
     var askSearch by remember { mutableStateOf(false) }
     val openSearch: () -> Unit = {
@@ -323,8 +405,21 @@ private fun Browse(
         cats = runCatching { if (series) api.seriesCategories() else api.movieCategories() }
             .onFailure { error = "Kategorien konnten nicht geladen werden." }
             .getOrDefault(emptyList())
+        cats?.takeIf { it.isNotEmpty() }?.let { mem.catCache[cacheKey] = it }
+        // (beim Playlist-Wechsel über die Liste ist das dieselbe Zeile, die schon markiert ist)
         withFrameNanos { }
         runCatching { catFocus.requestFocus() }
+    }
+    // Die anderen Playlists: ihre Kategorien für die Liste (Kopfzeile mit Anzahl, aufgeklappt mit Kategorien)
+    LaunchedEffect(series, sources) {
+        for (s in sources) {
+            val k = "${s.id}|${if (series) "s" else "m"}"
+            if (s.id == sourceId || mem.catCache.containsKey(k)) continue
+            val l = runCatching { app.vodProvider(s).let { if (series) it.seriesCategories() else it.movieCategories() } }
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it }
+                .getOrNull() ?: continue
+            mem.catCache[k] = l
+        }
     }
     // Anzahl je Kategorie im Hintergrund holen (große Listen brauchen ein paar Sekunden)
     val ctx = LocalContext.current
@@ -333,6 +428,7 @@ private fun Browse(
         androidx.compose.runtime.snapshotFlow { items }.first { it != null }
         delay(1_500)
         counts = runCatching { api.counts(series) }.getOrDefault(emptyMap())
+        if (counts.isNotEmpty()) mem.countCache[cacheKey] = counts
         // Danach im Hintergrund die Cover der bevorzugten Sprache (z. B. erst alle deutschen, dann türkischen
         // Kategorien), dann der Rest – in kleinen Portionen, damit die Leitung frei bleibt.
         val pref = app.vodLang
@@ -398,7 +494,51 @@ private fun Browse(
         if (at >= 0) at else shownCats.indexOfFirst { it.id == CAT_CONTINUE || !it.id.startsWith("@") }.coerceAtLeast(0)
     }
     val selCat = shownCats.getOrNull(selected)
-    mem.selected = selected
+    // ---- Kategorienliste über alle Playlists (Aziz 27.11.) ----
+    val catCacheNow = mem.catCache.toMap()
+    val collapsedNow = app.vodCollapsed
+    val otherLists = remember(catCacheNow, hiddenVod, adultOff, dlEntries, series, sources, sourceId, app.vodContinue, app.vodWatch) {
+        sources.associate { s ->
+            s.id to if (s.id == sourceId) null else catCacheNow["${s.id}|${if (series) "s" else "m"}"]?.let { raw ->
+                val filtered = raw.filterNot { (adultOff && de.aze.iptv.data.AdultFilter.isAdult(it.name)) || app.isVodHidden(s.id, series, it.id) }
+                buildList {
+                    if (app.continueFor(s.id, series).isNotEmpty()) add(VodCategory(CAT_CONTINUE, "▶ Weiterschauen"))
+                    if (dlEntries.any { it.ref.sourceId == s.id && it.ref.series == series }) add(VodCategory(CAT_DL, "⬇ Heruntergeladen"))
+                    if (app.watchFor(s.id, series).isNotEmpty()) add(VodCategory(CAT_WATCH, "★ Merkliste"))
+                    if (filtered.isNotEmpty() && runCatching { app.vodProvider(s).supportsNew() }.getOrDefault(false)) add(VodCategory(CAT_NEW, "✦ Neu hinzugefügt"))
+                    addAll(filtered)
+                }
+            }
+        }
+    }
+    // Playlists ohne Filme/Serien (reine Live-Listen) erscheinen gar nicht; die aktive immer
+    val listedSources = sources.indices.filter { i ->
+        val s = sources[i]
+        s.id == sourceId || otherLists[s.id]?.isNotEmpty() != false
+    }
+    // Ab zwei Playlists: Kopfzeilen zum Auf-/Zuklappen; mit einer nur der Name obendrüber (Aziz 27.11.)
+    val multiShown = listedSources.size > 1
+    val catRows = remember(listedSources, otherLists, shownCats, catKeys, collapsedNow, multiShown, cats) {
+        val out = ArrayList<VodCatRow>()
+        for (i in listedSources) {
+            val s = sources[i]
+            val active = s.id == sourceId
+            val list: List<VodCategory>? = if (active) (if (cats == null) null else shownCats) else otherLists[s.id]
+            out += VodCatRow(i, s.id, null, "pl|${s.id}", active, list?.count { !it.id.startsWith("@") })
+            if (multiShown && "${s.id}|${if (series) "s" else "m"}" in collapsedNow) continue
+            if (active) shownCats.forEachIndexed { j, c -> out += VodCatRow(i, s.id, c, "${s.id}|${catKeys.getOrElse(j) { "$j|${c.id}" }}", true) }
+            else {
+                val seen = HashMap<String, Int>()
+                list?.forEach { c ->
+                    val n = (seen[c.id] ?: 0) + 1; seen[c.id] = n
+                    out += VodCatRow(i, s.id, c, "${s.id}|" + (if (n == 1) c.id else "${c.id}#$n"), false)
+                }
+            }
+        }
+        out
+    }
+    val selectedRow = catRows.indexOfFirst { it.active && it.cat != null && it.cat.id == selCat?.id }
+    mem.selected = selectedRow.coerceAtLeast(0)
     mem.selectedId = selCat?.id ?: selectedId
     LaunchedEffect(selCat?.id, cats) {
         if (cats != null && selCat != null && selCat.id != selectedId) selectedId = selCat.id
@@ -482,7 +622,6 @@ private fun Browse(
             TvButton("Filme", selected = !series, onClick = { query = null; onSwitch(false) })
             TvButton("Serien", selected = series, onClick = { query = null; onSwitch(true) })
             TvButton("🔍 $kind suchen", onClick = { askSearch = true })
-            if (multi) TvButton("Playlist: $sourceLabel", onClick = { query = null; onNextSource() })
             TvButton("⚙ Einstellungen", onClick = onOpenSettings)
         }
     }
@@ -491,7 +630,8 @@ private fun Browse(
             // Menü wie beim Fernsehen: schiebt sich links neben die Kategorien
             if (menu) {
                 SideMenu(
-                    multi = multi,
+                    // Playlists stehen jetzt alle in der Kategorienliste (Kopfzeilen) – kein Umschalten mehr nötig
+                    multi = false,
                     playlistLabel = sourceLabel,
                     onTv = onExit,
                     onVod = { s -> menu = false; query = null; onSwitch(s) },
@@ -499,7 +639,7 @@ private fun Browse(
                     // hier sucht „Suchen“ nur in Filmen bzw. Serien – so steht es auch da
                     searchLabel = "$kind suchen",
                     onSettings = onOpenSettings,
-                    onPlaylist = { menu = false; query = null; onNextSource() },
+                    onPlaylist = { menu = false },
                     onRight = { menu = false },
                     // dasselbe Menü wie beim Fernsehen – auch „Fußball heute“ und „App beenden“
                     onFootball = onFootball,
@@ -524,45 +664,61 @@ private fun Browse(
             ) {
                 Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)) {
                     Text(kind, color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                    if (multi) Text("  $sourceLabel", color = Palette.TextMuted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (cats == null) Text("Lade Kategorien …", color = Palette.TextMuted, fontSize = 13.sp)
                 error?.let { Text(it, color = Palette.Live, fontSize = 13.sp) }
-                if (cats != null && shownCats.isEmpty() && error == null) {
+                if (cats != null && shownCats.isEmpty() && error == null && !multiShown) {
                     Text("Keine $kind in dieser Playlist.", color = Palette.TextMuted, fontSize = 13.sp)
                     api.sourceInfo().takeIf { it.isNotBlank() }?.let { Text("Quelle: $it", color = Palette.TextMuted, fontSize = 11.sp) }
                 }
                 LazyColumn(state = catListState, verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     // Ganz oben: eigene Suche – ▲ aus der ersten Kategorie oder antippen
-                    if (cats != null && shownCats.isNotEmpty()) item(key = "suche") {
+                    if (cats != null && (shownCats.isNotEmpty() || multiShown)) item(key = "suche") {
                         VodSearchRow(kind = kind, query = query, modifier = Modifier.focusRequester(searchFocus)) { askSearch = true }
                     }
-                    // Schlüssel = id (manche Anbieter liefern eine id doppelt → mit Zähler); nicht die Stelle, die
-                    // verschiebt sich, wenn oben Weiterschauen/Merkliste dazukommen oder wegfallen
-                    itemsIndexed(shownCats, key = { i, c -> catKeys.getOrElse(i) { "$i|${c.id}" } }) { i, c ->
+                    // Je Playlist eine Kopfzeile (Name; ab zwei Playlists mit Anzahl und ▲/▼ zum Auf-/Zuklappen,
+                    // wie die Gruppen beim Fernsehen), darunter ihre Kategorien. Schlüssel = Playlist + Kategorie-id:
+                    // beim Wechsel in die andere Playlist bleibt die markierte Zeile dieselbe.
+                    itemsIndexed(catRows, key = { _, r -> r.key }) { ri, r ->
+                        val c = r.cat
+                        if (c == null) {
+                            VodPlaylistHeader(
+                                name = sources[r.src].name, active = r.active, multi = multiShown, count = r.count,
+                                collapsed = multiShown && app.isVodCollapsed(r.srcId, series),
+                                kind = kind,
+                                onToggle = { app.toggleVodCollapsed(r.srcId, series); qaLog("VOD_PLAYLIST_KLAPPEN ${sources[r.src].name}") },
+                            )
+                            return@itemsIndexed
+                        }
                         val own = c.id.startsWith("@")
+                        val isSel = r.active && ri == selectedRow
                         Focusable(
-                            modifier = Modifier.fillMaxWidth().then(if (i == selected) Modifier.focusRequester(catFocus) else Modifier),
-                            onClick = { selectedId = c.id; query = null },
+                            modifier = Modifier.fillMaxWidth().then(if (isSel) Modifier.focusRequester(catFocus) else Modifier),
+                            onClick = {
+                                if (r.active) { selectedId = c.id; query = null } else { query = null; onSelectSource(r.src, c.id) }
+                            },
                             // OK lang gedrückt: gleich die Suche (Aziz 25.11. – nicht erst nach oben zur Suchzeile)
                             onLongClick = openSearch,
                             // Nur beim Wechsel der Kategorie die Suche beenden (nicht wenn der Fokus nach der Suche zurückkommt)
-                            onFocus = { if (i != selected) { selectedId = c.id; query = null } },
+                            onFocus = {
+                                if (!r.active) { query = null; onSelectSource(r.src, c.id) }
+                                else if (!isSel) { selectedId = c.id; query = null }
+                            },
                             qaName = "K ${c.name}",
                         ) { focused ->
-                            val count = when (c.id) {
+                            val count = if (r.active) when (c.id) {
                                 CAT_CONTINUE -> contEntries.size
                                 CAT_WATCH -> watchRefs.size
                                 CAT_DL -> dlRefs.size
-                                else -> counts[c.id] ?: items?.size?.takeIf { i == selected }
-                            }
+                                else -> counts[c.id] ?: items?.size?.takeIf { isSel }
+                            } else mem.countCache["${r.srcId}|${if (series) "s" else "m"}"]?.get(c.id)
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(
                                         when {
                                             focused -> Palette.Accent
-                                            i == selected -> Palette.Highlight.copy(alpha = 0.16f)
+                                            isSel -> Palette.Highlight.copy(alpha = 0.16f)
                                             else -> Color.Transparent
                                         },
                                         RoundedCornerShape(10.dp),

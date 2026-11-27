@@ -420,6 +420,18 @@ class AppController(context: Context, outerScope: CoroutineScope) : de.aze.iptv.
 
     fun isVodHidden(sourceId: String, series: Boolean, catId: String): Boolean = vodKey(sourceId, series, catId) in vodHidden
 
+    // Mehrere Playlists in Filme & Serien (Aziz 27.11.): je Playlist eine Kopfzeile mit ▲/▼ wie bei den Live-Gruppen
+    var vodCollapsed by mutableStateOf(store.vodCollapsed)
+        private set
+
+    fun isVodCollapsed(sourceId: String, series: Boolean) = "$sourceId|${if (series) "s" else "m"}" in vodCollapsed
+
+    fun toggleVodCollapsed(sourceId: String, series: Boolean) {
+        val k = "$sourceId|${if (series) "s" else "m"}"
+        vodCollapsed = if (k in vodCollapsed) vodCollapsed - k else vodCollapsed + k
+        store.vodCollapsed = vodCollapsed
+    }
+
     /** Ausgeblendete Kategorien einer Playlist (Filme ODER Serien) auf einmal setzen. */
     fun setVodHidden(sourceId: String, series: Boolean, allIds: Collection<String>, hiddenIds: Set<String>) {
         val all = allIds.map { vodKey(sourceId, series, it) }.toSet()
