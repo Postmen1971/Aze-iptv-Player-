@@ -9,10 +9,15 @@ jobs:
         run: |
           try() { # $1 = Name, $2 = Datei
             code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -H 'Content-Type: text/plain; charset=utf-8' --data-binary @"$2" https://paste.rs/)
-            echo "::notice title=$1::Größe $(stat -c%s "$2") Byte → HTTP $code · $(head -c 200 r.txt | tr '\n' ' ')"
+            echo "::notice title=$1::Größe $(stat -c%s "$2") Byte → HTTP $code · $(sed 's/<[^>]*>//g' r.txt | tr -s ' \n' ' ' | head -c 300)"
             sleep 6
           }
           printf 'Aze test einfach\n' > a.txt; try "klein ASCII" a.txt
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://paste.rs/); echo "::notice title=ohne Content-Type::HTTP $code · $(sed 's/<[^>]*>//g' r.txt | tr -s ' \n' ' ' | head -c 400)"; sleep 6
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'content=Aze test' https://paste.rs/); echo "::notice title=Formular::HTTP $code · $(sed 's/<[^>]*>//g' r.txt | tr -s ' \n' ' ' | head -c 400)"; sleep 6
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -X PUT --data-binary @a.txt https://paste.rs/); echo "::notice title=PUT::HTTP $code · $(sed 's/<[^>]*>//g' r.txt | tr -s ' \n' ' ' | head -c 400)"; sleep 6
+          curl -sS -m 30 https://paste.rs/ | sed 's/<[^>]*>//g' | tr -s ' \n' ' ' | head -c 1500 > home.txt; echo "::notice title=Startseite::$(cat home.txt)"
+          curl -sS -m 30 -o r.txt -w '%{http_code}' -H 'Content-Type: text/plain; charset=utf-8' --data-binary @a.txt https://paste.rs/; echo; sed 's/<[^>]*>//g' r.txt | tr -s ' \n' ' ' | head -c 600; echo
           printf '27.11. 10:00:01  LUECKE 2 s · DE: Das Erste HD → Übergang „gut“ ✓ ★\n' > b.txt; try "klein Umlaute/Zeichen" b.txt
           python3 -c "
           import random
@@ -25,3 +30,11 @@ jobs:
           l='27.11. 10:00:01  LUECKE 2 s · DE: Das Erste HD Vorrat 12 s\n'
           open('e.txt','w').write(l*350)" ; try "25 KB" e.txt
           printf 'TRAILER_FEHLER abcdefghijk · Der Uploader stellt dieses Video in deinem Land nicht zur Verfügung\nhttps://www.youtube.com/watch?v=abc\n' > f.txt; try "mit Link" f.txt
+      - name: Ersatzdienste
+        run: |
+          printf 'Aze test Umlaute ÄÖÜ · → ✓\n' > a.txt
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -A 'Aze-IPTV' --data-urlencode "content@a.txt" -d syntax=text -d expiry_days=30 https://dpaste.com/api/v2/); echo "::notice title=dpaste.com::HTTP $code · $(head -c 200 r.txt)"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'file=@a.txt' https://0x0.st); echo "::notice title=0x0.st::HTTP $code · $(head -c 200 r.txt)"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://bpa.st/curl); echo "::notice title=bpa.st::HTTP $code · $(head -c 200 r.txt)"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'f:1=<a.txt' https://ix.io); echo "::notice title=ix.io::HTTP $code · $(head -c 200 r.txt)"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://paste.c-net.org/); echo "::notice title=paste.c-net.org::HTTP $code · $(head -c 200 r.txt)"
