@@ -44,3 +44,16 @@ jobs:
           code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'clbin=<a.txt' https://clbin.com 2>&1); t clbin.com "$code"
           code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' --data-binary @a.txt https://termbin.com 2>&1); t termbin "$code"
           curl -sS -m 30 https://paste.rs/web -o r.txt; echo "::notice title=paste.rs Formular::$(grep -io '<form[^>]*>' r.txt | head -3) $(grep -io '<textarea[^>]*>\|<input[^>]*>' r.txt | head -5 | tr '\n' ' ')"
+      - name: Feinheiten
+        run: |
+          set +e
+          printf 'AZE2:testinhalt-ascii-nur\n' > a.txt
+          curl -sS -m 30 https://paste.rs/web -o w.html; echo "::notice title=paste.rs web::$(grep -o '<textarea[^>]*>' w.html | head -2) $(grep -o 'name=\"[^\"]*\"' w.html | sort -u | tr '\n' ' ')"
+          for ex in never 2592000 604800; do
+            code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -F 'content=<a.txt' -F "expires=$ex" https://dpaste.org/api/ 2>&1)
+            echo "::notice title=dpaste.org expires=$ex::HTTP $code · $(head -c 200 r.txt)"
+          done
+          u=$(curl -sS -m 30 -F 'content=<a.txt' -F 'expires=2592000' -F 'format=url' https://dpaste.org/api/ | tr -d '"\n '); echo "::notice title=dpaste.org format=url::$u"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' "$u/raw"); echo "::notice title=dpaste.org raw::HTTP $code · $(head -c 100 r.txt)"
+          code=$(curl -sS -m 30 -o r.txt -w '%{http_code}' -L "$u/raw"); echo "::notice title=dpaste.org raw -L::HTTP $code · $(head -c 100 r.txt)"
+          curl -sS -m 30 https://paste.c-net.org/ | sed 's/<[^>]*>//g' | tr -s ' \n' ' ' | head -c 700 > c.txt; echo "::notice title=paste.c-net.org Seite::$(cat c.txt)"
