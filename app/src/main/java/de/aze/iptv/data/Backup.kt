@@ -79,7 +79,12 @@ object Backup {
             require(id.length in 3..12 && id.all { it.isLetterOrDigit() }) { "unerwartete Antwort" }
             return "$id-${secret.substring(0, 5)}-${secret.substring(5)}"
         }.onFailure { errors += "paste.rs: ${it.message}" }
-        // 2. Ersatz: dpaste.com (hält 1 Jahr)
+        // 2. Ersatz: dpaste.org (ohne Ablauf) – paste.rs nimmt seit 27.11. nichts mehr an (HTTP 400)
+        runCatching {
+            val id = HangLog.dpasteOrgId(HangLog.dpasteOrg(blob, "never")) ?: error("unerwartete Antwort")
+            return "do$id-${secret.substring(0, 5)}-${secret.substring(5)}"
+        }.onFailure { errors += "dpaste.org: ${it.message}" }
+        // 3. Ersatz: dpaste.com (hält 1 Jahr)
         runCatching {
             val id = dpasteUpload(blob)
             return "dp$id-${secret.substring(0, 5)}-${secret.substring(5)}"
@@ -88,6 +93,9 @@ object Backup {
     }
 
     private fun isDpaste(id: String) = id.startsWith("dp") && id.length > 7
+
+    /** dpaste.org-Kennungen haben 5 Zeichen, mit „do“ davor also 7 (paste.rs-Kennungen haben 5) */
+    private fun isDpasteOrg(id: String) = id.startsWith("do") && id.length == 7
 
     private fun dpasteUpload(blob: String): String {
         val body = "content=" + java.net.URLEncoder.encode(blob, "UTF-8") + "&syntax=text&expiry_days=365"
@@ -110,6 +118,7 @@ object Backup {
         val id = code.trim().replace(" ", "").split('-').firstOrNull { it.isNotEmpty() } ?: error("Code fehlt")
         require(id.all { it.isLetterOrDigit() }) { "Code stimmt nicht" }
         if (isDpaste(id)) return // dpaste kann man nicht löschen – läuft nach einem Jahr ab; der Code wird hier vergessen
+        if (isDpasteOrg(id)) return // dpaste.org: ebenso nicht löschbar; ohne Code ist der Inhalt nur unlesbarer Datensalat
         val conn = URL("https://paste.rs/$id").openConnection() as HttpURLConnection
         try {
             conn.requestMethod = "DELETE"; conn.connectTimeout = 15_000; conn.readTimeout = 20_000
@@ -125,7 +134,11 @@ object Backup {
         val id = parts[0]
         val secret = (parts[1] + parts[2]).uppercase()
         require(id.all { it.isLetterOrDigit() }) { "Code stimmt nicht" }
-        val url = if (isDpaste(id)) "https://dpaste.com/${id.removePrefix("dp")}.txt" else "https://paste.rs/$id"
+        val url = when {
+            isDpaste(id) -> "https://dpaste.com/${id.removePrefix("dp")}.txt"
+            isDpasteOrg(id) -> "https://dpaste.org/${id.removePrefix("do")}/raw"
+            else -> "https://paste.rs/$id"
+        }
         val conn = URL(url).openConnection() as HttpURLConnection
         val blob = try {
             conn.connectTimeout = 15_000; conn.readTimeout = 20_000

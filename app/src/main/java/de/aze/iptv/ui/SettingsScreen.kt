@@ -1686,7 +1686,7 @@ private fun HangLogSection(app: AppController) {
     Section("Hänger-Protokoll") {
         Text(
             "Die App merkt sich jede Bildlücke, jeden Eingriff des Wächters und jeden Fehler – mit Sender, Uhrzeit und Messwerten. " +
-                "„Hochladen“ legt das Protokoll als Text auf paste.rs ab (nur Sendernamen und Zeiten, keine Adressen oder Zugangsdaten) " +
+                "„Hochladen“ legt das Protokoll als Text im Internet ab (dpaste.org, 30 Tage; nur Sendernamen und Zeiten, keine Adressen oder Zugangsdaten) " +
                 "und zeigt einen kurzen Link – den kannst du Claude schicken.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
@@ -1763,7 +1763,7 @@ private fun LearnedChannelsSection(app: AppController) {
                 val text = app.losShareText()
                 scope.launch {
                     try {
-                        link = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.HangLog.uploadText(text) }
+                        link = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { de.aze.iptv.data.HangLog.uploadShare(text) }
                     } catch (e: Exception) {
                         app.message = "Teilen hat nicht geklappt: ${e.message ?: "keine Verbindung"}"
                     } finally {
@@ -2050,7 +2050,7 @@ private fun BackupSection(app: AppController) {
         Text("3. Auf dem neuen Gerät (oder nach dem Neuinstallieren): „Wiederherstellen“ drücken und genau diesen Code eingeben.", color = Palette.TextSoft, fontSize = 14.sp)
         Text(
             "Gesichert wird alles: Playlists mit Zugangsdaten, Favoriten, Senderliste und alle Einstellungen. " +
-                "Die Sicherung wird auf dem Gerät verschlüsselt und erst dann im Internet (paste.rs) abgelegt – ohne den Code kann sie niemand lesen.",
+                "Die Sicherung wird auf dem Gerät verschlüsselt und erst dann im Internet (paste.rs bzw. dpaste.org) abgelegt – ohne den Code kann sie niemand lesen.",
             color = Palette.TextMuted, fontSize = 13.sp,
         )
 
