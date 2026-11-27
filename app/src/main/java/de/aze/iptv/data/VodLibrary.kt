@@ -99,6 +99,17 @@ object VodLibrary {
     fun VodRef.same(o: VodRef) = sourceId == o.sourceId && series == o.series && id == o.id
 
     /** Die neuesten [n] Titel (nur mit Datum vom Anbieter), sichtbare zuerst gefiltert */
+    /**
+     * Kategorie für Erwachsene – bei „Neu hinzugefügt“ NIE dabei, egal ob der Erwachsenen-Filter an ist (Aziz 27.11.:
+     * „ausschließlich normale Filme; alle Kategorien weg, die mit X anfangen“). Auch mit Länder-Vorsatz („DE | XXX“).
+     */
+    fun adultCategory(name: String): Boolean {
+        if (AdultFilter.isAdult(name)) return true
+        val n = name.trim()
+        val tail = n.substringAfterLast('|').substringAfterLast(':').trim()
+        return n.startsWith("X", ignoreCase = true) || tail.startsWith("X", ignoreCase = true)
+    }
+
     fun newest(items: List<VodItem>, visible: (VodItem) -> Boolean, n: Int = NEW_COUNT): List<VodItem> =
         items.asSequence().filter { it.added > 0 && visible(it) }.sortedByDescending { it.added }.take(n).toList()
 

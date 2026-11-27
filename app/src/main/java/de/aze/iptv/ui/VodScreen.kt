@@ -575,11 +575,14 @@ private fun Browse(
                 CAT_WATCH -> watchRefs.map { it.toItem() }
                 CAT_DL -> dlRefs.map { it.toItem() }
                 CAT_NEW -> {
-                    // die neuesten Titel des Anbieters – ohne ausgeblendete Kategorien
+                    // die neuesten Titel des Anbieters – ohne ausgeblendete Kategorien und NIE Erwachsenen-Inhalte
+                    // (Aziz 27.11.: keine Kategorie, die mit X anfängt, auch wenn der Erwachsenen-Filter aus ist)
                     val all = api.all(series)
-                    val shown = catList.map { it.id }.toSet()
+                    val shown = catList.filterNot { de.aze.iptv.data.VodLibrary.adultCategory(it.name) }.map { it.id }.toSet()
                     withContext(kotlinx.coroutines.Dispatchers.Default) {
-                        de.aze.iptv.data.VodLibrary.newest(all, { it.cat == null || it.cat in shown })
+                        de.aze.iptv.data.VodLibrary.newest(all, {
+                            (it.cat == null || it.cat in shown) && !de.aze.iptv.data.AdultFilter.isAdult(it.name)
+                        })
                     }
                 }
                 else -> if (series) api.series(c.id) else api.movies(c.id)
